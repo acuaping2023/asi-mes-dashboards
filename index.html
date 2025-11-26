@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ASI — MES Portal</title>
+
+<style>
+:root{
+  --accent:#E41E26;
+  --burnt:#CC5500;
+  --ok:#2ecc71;
+  --bg:#f5f5f7;
+  --panel:#ffffff;
+  --panel-2:#f6f7f9;
+  --text:#111111;
+  --muted:#5b6573;
+  --border:#e5e8ef;
+  --shadow:0 14px 30px rgba(15,23,42,0.18);
+}
+
+*{box-sizing:border-box;}
+html,body{
+  margin:0;
+  padding:0;
+  font-family:"Times New Roman", Times, serif;
+  background:radial-gradient(circle at top left,#fff7f2 0,#f5f7fb 42%,#edf1f7 100%);
+  color:var(--text);
+  min-height:100vh;
+}
+
+/* Layout */
+.page{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+header{
+  padding:14px 20px;
+  border-bottom:3px solid var(--accent);
+  background:rgba(255,255,255,0.95);
+  backdrop-filter:blur(10px);
+  position:sticky;
+  top:0;
+  z-index:10;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.asi-logo{
+  width:40px;
+  height:auto;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:#fff;
+}
+.brand-text{
+  display:flex;
+  flex-direction:column;
+  line-height:1.1;
+}
+.brand-text strong{
+  font-size:21px;
+  font-weight:800;
+  color:var(--burnt);
+}
+.brand-text span{
+  font-size:13px;
+  color:var(--muted);
+}
+
+.header-meta{
+  text-align:right;
+  font-size:11px;
+  color:var(--muted);
+}
+
+/* Main hero */
+main{
+  flex:1;
+  padding:22px 18px 30px;
+  max-width:1050px;
+  margin:0 auto;
+}
+.hero{
+  margin-bottom:20px;
+}
+.hero-title{
+  font-size:26px;
+  font-weight:800;
+  letter-spacing:0.02em;
+}
+.hero-sub{
+  font-size:13px;
+  color:var(--muted);
+  margin-top:6px;
+}
+
+/* Grid of tiles */
+.tile-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:16px;
+  margin-top:10px;
+}
+.tile{
+  background:linear-gradient(135deg,#ffffff 0,#f7f8fc 50%,#ffffff 100%);
+  border-radius:18px;
+  border:1px solid rgba(229,232,239,0.9);
+  box-shadow:0 10px 22px rgba(15,23,42,0.08);
+  padding:12px 14px 14px;
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden;
+  transition:transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+  cursor:pointer;
+}
+.tile:hover{
+  transform:translateY(-3px);
+  box-shadow:var(--shadow);
+  border-color:rgba(204,85,0,0.35);
+}
+.tile-badge{
+  position:absolute;
+  top:10px;
+  right:12px;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  padding:2px 7px;
+  border-radius:999px;
+  border:1px solid rgba(148,163,184,0.4);
+  background:rgba(255,255,255,0.9);
+  color:var(--muted);
+}
+.tile-badge.live{
+  border-color:rgba(46,204,113,0.5);
+  color:#0f766e;
+  background:rgba(209,250,229,0.9);
+}
+.tile-badge.soon{
+  border-color:rgba(234,179,8,0.5);
+  color:#854d0e;
+  background:rgba(254,249,195,0.9);
+}
+
+.tile-title{
+  font-size:16px;
+  font-weight:700;
+  margin-top:8px;
+  margin-bottom:4px;
+}
+.tile-sub{
+  font-size:12px;
+  color:var(--muted);
+  margin-bottom:10px;
+}
+.kpi-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  font-size:11px;
+  margin-bottom:10px;
+}
+.kpi-pill{
+  padding:4px 8px;
+  border-radius:999px;
+  background:var(--panel-2);
+  border:1px solid rgba(209,213,219,0.8);
+  color:var(--muted);
+}
+
+.tile-footer{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:11px;
+  margin-top:auto;
+  padding-top:8px;
+  border-top:1px dashed rgba(203,213,225,0.9);
+}
+.tile-link{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  color:var(--burnt);
+  text-decoration:none;
+  font-weight:600;
+}
+.tile-link span.icon{
+  font-size:13px;
+}
+
+/* “Coming soon” disabled tile */
+.tile.disabled{
+  cursor:default;
+  opacity:0.78;
+}
+.tile.disabled:hover{
+  transform:none;
+  box-shadow:0 10px 22px rgba(15,23,42,0.08);
+  border-color:rgba(229,232,239,0.9);
+}
+.tile.disabled .tile-link{
+  color:var(--muted);
+  pointer-events:none;
+}
+
+/* Footer */
+.footer{
+  text-align:center;
+  font-size:11px;
+  color:var(--muted);
+  padding:12px 16px 18px;
+}
+.footer code{
+  font-size:10px;
+  background:rgba(15,23,42,0.06);
+  padding:2px 4px;
+  border-radius:4px;
+}
+@media (max-width:640px){
+  header{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:6px;
+  }
+  .header-meta{text-align:left;}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="brand">
+      <!-- you can swap this with your PNG later -->
+      <div class="asi-logo"></div>
+      <div class="brand-text">
+        <strong>ASI — MES Portal</strong>
+        <span>American Specialties Inc. · Production & Efficiency</span>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div style="font-weight:600;">Mirror Department (Pilot)</div>
+      <div>Owner: Alex Cuaping · Supabase + GitHub Pages</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-title">Live dashboards for the shop floor</div>
+      <div class="hero-sub">
+        Central place for MES-style visibility: real-time worker efficiency, mirror output, and a roadmap
+        to extend these tools across the rest of the plant.
+      </div>
+    </section>
+
+    <section class="tile-grid">
+
+      <!-- Worker Efficiency Dashboard (LIVE) -->
+      <article class="tile" onclick="window.open('Worker_Efficiency_Dashboard_v1.html','_blank')">
+        <div class="tile-badge live">Live</div>
+        <h2 class="tile-title">Worker Efficiency — Mirrors</h2>
+        <div class="tile-sub">
+          Per-employee and per-station efficiency by day, with weekly leaderboards and trend lines.
+          Built from the Daily_Log export into Supabase.
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-pill">✓ Role filters: assembler / packing</div>
+          <div class="kpi-pill">✓ 0620 / 0600 · standard / special</div>
+          <div class="kpi-pill">✓ Weekly top performers</div>
+        </div>
+        <div class="tile-footer">
+          <div>Data source: <strong>worker_daily_log</strong></div>
+          <a class="tile-link" href="Worker_Efficiency_Dashboard_v1.html" target="_blank" rel="noopener">
+            <span>Open dashboard</span>
+            <span class="icon">↗</span>
+          </a>
+        </div>
+      </article>
+
+      <!-- Mirror Efficiency Dashboard (placeholder / hook for Supabase or future GH-hosted) -->
+      <article class="tile disabled">
+        <div class="tile-badge soon">Next up</div>
+        <h2 class="tile-title">Mirror Output & Station Efficiency</h2>
+        <div class="tile-sub">
+          Daily mirrors made by station and shift, plus station efficiency vs target rate
+          (10 pcs/hr assembly, 50 pcs/hr packing). Uses the <code>v_mirrors_made_daily</code> view.
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-pill">Planned: Dept-level trend lines</div>
+          <div class="kpi-pill">Planned: Late vs on-time correlation</div>
+          <div class="kpi-pill">Planned: TV-ready view</div>
+        </div>
+        <div class="tile-footer">
+          <div>Data source: <strong>v_mirrors_made_daily</strong></div>
+          <a class="tile-link" href="javascript:void(0)">
+            <span>Coming soon</span>
+            <span class="icon">…</span>
+          </a>
+        </div>
+      </article>
+
+      <!-- Multi-department expansion -->
+      <article class="tile disabled">
+        <div class="tile-badge soon">Roadmap</div>
+        <h2 class="tile-title">Cross-Department MES Rollout</h2>
+        <div class="tile-sub">
+          Template for Laser, Weld, Polish and other lines using the same Supabase + dashboard pattern.
+          Aligned to the weekly KPI charts sent to upper management.
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-pill">Shared schema: jobs & stations</div>
+          <div class="kpi-pill">Department filters</div>
+          <div class="kpi-pill">Exec KPI summary</div>
+        </div>
+        <div class="tile-footer">
+          <div>Owner: <strong>Alex</strong> · with Eng. Manager</div>
+          <span class="tile-link">
+            <span>Design in progress</span>
+            <span class="icon">✎</span>
+          </span>
+        </div>
+      </article>
+
+    </section>
+  </main>
+
+  <footer class="footer">
+    Cloud-backed pilot for a lightweight MES at ASI. Frontend: static HTML/JS · Backend: Supabase
+    <br/>
+    Current live dashboards: <code>worker_daily_log</code> (people) · <code>v_mirrors_made_daily</code> (output, upcoming)
+  </footer>
+
+</div>
+</body>
+</html>
