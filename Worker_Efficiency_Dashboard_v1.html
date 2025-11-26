@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ASI — Worker Efficiency Dashboard</title>
+
+<style>
+:root{
+  --accent:#E41E26;
+  --burnt:#CC5500;
+  --ok:#2ecc71;
+  --warn:#ffd84d;
+  --danger:#ff6b6b;
+  --bg:#ffffff;
+  --panel:#ffffff;
+  --panel-2:#f6f7f9;
+  --text:#111111;
+  --muted:#5b6573;
+  --border:#e5e8ef;
+  --button:#f3f6fa;
+}
+
+*{box-sizing:border-box;}
+html,body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Times New Roman", Times, serif;
+}
+
+/* Header */
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 16px;
+  border-bottom:3px solid var(--accent);
+  background:var(--panel);
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.asi-logo{height:34px;width:auto;}
+.brand-text{display:flex;flex-direction:column;line-height:1.1;}
+.brand-text strong{font-size:20px;font-weight:800;color:var(--burnt);}
+.brand-text span{font-size:13px;color:var(--muted);}
+
+/* Filters */
+.filters{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:flex-end;
+}
+.filters label{
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+input[type="date"],
+select{
+  background:#ffffff;
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:6px 10px;
+  border-radius:10px;
+  font-size:14px;
+  outline:none;
+}
+input[type="date"]:focus,
+select:focus{
+  border-color:#b9c6d8;
+  box-shadow:0 0 0 2px rgba(204,85,0,.15);
+}
+.btn{
+  background:var(--button);
+  border:1px solid var(--border);
+  color:#1f2a37;
+  padding:7px 12px;
+  border-radius:10px;
+  font-size:14px;
+  cursor:pointer;
+}
+.btn:hover{
+  background:#e9edf3;
+  border-color:#b9c6d8;
+}
+
+/* Non-zero toggle */
+.toggle-inline{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  font-size:12px;
+  color:var(--muted);
+  margin-bottom:2px;
+}
+.toggle-inline input{
+  margin:0;
+}
+
+/* Layout */
+main{
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+/* Summary cards */
+.summary-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:12px;
+}
+.summary-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px 12px;
+  box-shadow:0 1px 3px rgba(16,24,40,.05);
+}
+.summary-label{
+  font-size:12px;
+  color:var(--muted);
+}
+.summary-value{
+  font-size:20px;
+  font-weight:800;
+  margin-top:4px;
+}
+.summary-sub{
+  font-size:11px;
+  color:var(--muted);
+  margin-top:2px;
+}
+
+/* Sections */
+.section{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px 12px;
+  box-shadow:0 1px 3px rgba(16,24,40,.05);
+  margin-top:4px;
+}
+.section-title{
+  font-size:14px;
+  font-weight:700;
+  margin-bottom:6px;
+  color:var(--burnt);
+}
+
+/* Chart sizing */
+.chart-wrapper{
+  position:relative;
+  width:100%;
+  height:280px;
+  margin-top:6px;
+}
+#workerBarChart,
+#workerTrendChart{
+  width:100% !important;
+  height:100% !important;
+  display:block;
+}
+
+/* Table */
+.table-wrap{
+  overflow-x:auto;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+th,td{
+  padding:6px 8px;
+  border-bottom:1px solid var(--border);
+  text-align:left;
+  white-space:nowrap;
+}
+th{
+  background:var(--panel-2);
+  font-weight:600;
+  font-size:12px;
+  color:var(--muted);
+}
+tbody tr:nth-child(even){
+  background:var(--panel-2);
+}
+
+/* Footer */
+.footer{
+  padding:10px 16px;
+  text-align:center;
+  font-size:12px;
+  color:var(--muted);
+  border-top:1px solid var(--border);
+}
+
+/* Dark mode (optional later) */
+html[data-theme="dark"]{
+  --bg:#121212;
+  --panel:#1b1b1b;
+  --panel-2:#161616;
+  --text:#f1f1f1;
+  --muted:#c0c6cf;
+  --border:#2e2e2e;
+  --button:#222428;
+}
+html[data-theme="dark"] body{background:var(--bg);}
+html[data-theme="dark"] header{background:#1b1b1b;}
+html[data-theme="dark"] .summary-card,
+html[data-theme="dark"] .section{box-shadow:none;}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select{
+  background:#101214;
+  border-color:#3a3f46;
+  color:#f1f1f1;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img class="asi-logo" src="asi_logo.png" alt="ASI Logo">
+    <div class="brand-text">
+      <strong>Worker Efficiency Dashboard</strong>
+      <span>American Specialties Inc. — Mirrors</span>
+    </div>
+  </div>
+
+  <div class="filters">
+    <label>
+      From date
+      <input type="date" id="fromDate">
+    </label>
+    <label>
+      To date
+      <input type="date" id="toDate">
+    </label>
+    <label>
+      Role
+      <select id="roleFilter">
+        <option value="all">All roles</option>
+        <option value="assembler">Assemblers</option>
+        <option value="packer">Packing</option>
+      </select>
+    </label>
+    <label>
+      Mirror type
+      <select id="mirrorTypeFilter">
+        <option value="all">All</option>
+        <option value="0620">0620</option>
+        <option value="0600">0600</option>
+      </select>
+    </label>
+    <label>
+      Category
+      <select id="mirrorClassFilter">
+        <option value="all">All</option>
+        <option value="standard">Standard</option>
+        <option value="special">Special</option>
+      </select>
+    </label>
+    <label>
+      Worker / Station
+      <select id="workerFilter">
+        <option value="all">All</option>
+      </select>
+    </label>
+    <label class="toggle-inline">
+      <input type="checkbox" id="nonZeroToggle">
+      <span>Hide 0% rows</span>
+    </label>
+    <button class="btn" id="quick7">Last 7 days</button>
+    <button class="btn" id="refreshBtn">Refresh</button>
+  </div>
+</header>
+
+<main>
+  <section class="summary-grid" id="summaryCards">
+    <!-- Filled by JS -->
+  </section>
+
+  <section class="section">
+    <div class="section-title" id="barTitle">
+      Average efficiency by worker / station (selected filters)
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="workerBarChart"></canvas>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-title" id="trendTitle">
+      Daily efficiency trend (select a worker / station)
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="workerTrendChart"></canvas>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-title" id="leaderTitle">
+      Weekly leaderboard (latest week in range)
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Week</th>
+            <th>Worker / Station</th>
+            <th style="text-align:right;">Avg efficiency %</th>
+            <th style="text-align:right;">Days counted</th>
+          </tr>
+        </thead>
+        <tbody id="leaderBody">
+          <!-- leaderboard rows -->
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-title">Detail by day &amp; worker / station</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Role</th>
+            <th>Worker / Station</th>
+            <th>Mirror type</th>
+            <th>Category</th>
+            <th style="text-align:right;">Daily total</th>
+            <th style="text-align:right;">Target</th>
+            <th style="text-align:right;">Efficiency %</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="footer">
+  Data source: Supabase table <code>worker_daily_log</code> • Exported from Daily_Log (Excel).
+</div>
+
+<!-- Supabase & Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+// ---------- BASIC HELPERS ----------
+function $(s){ return document.querySelector(s); }
+function uniq(arr){ return Array.from(new Set(arr)); }
+
+// ---------- SUPABASE CLIENT ----------
+const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ---------- DATE HELPERS ----------
+function todayIso(){
+  return new Date().toISOString().slice(0,10);
+}
+function isoNDaysAgo(n){
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0,10);
+}
+
+// ISO week key helper: YYYY-Www
+function getWeekKey(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00Z");
+  if(isNaN(d)) return null;
+
+  // Thursday of this week
+  const day = d.getUTCDay() || 7; // 1..7, Monday..Sunday
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  const year = d.getUTCFullYear();
+  return `${year}-W${String(weekNo).padStart(2,"0")}`;
+}
+
+// ---------- STATE ----------
+let lastRows = [];
+let barChartInstance   = null;
+let trendChartInstance = null;
+
+// ---------- MAIN LOAD ----------
+document.addEventListener("DOMContentLoaded", () => {
+  // default last 7 days
+  $("#toDate").value   = todayIso();
+  $("#fromDate").value = isoNDaysAgo(6);
+
+  $("#quick7").addEventListener("click", () => {
+    $("#toDate").value   = todayIso();
+    $("#fromDate").value = isoNDaysAgo(6);
+    loadAndRender();
+  });
+
+  $("#refreshBtn").addEventListener("click", loadAndRender);
+  $("#fromDate").addEventListener("change", loadAndRender);
+  $("#toDate").addEventListener("change", loadAndRender);
+
+  $("#roleFilter").addEventListener("change", () => {
+    populateWorkerFilter(lastRows);
+    renderAll(lastRows);
+  });
+  $("#mirrorTypeFilter").addEventListener("change", () => {
+    populateWorkerFilter(lastRows);
+    renderAll(lastRows);
+  });
+  $("#mirrorClassFilter").addEventListener("change", () => {
+    populateWorkerFilter(lastRows);
+    renderAll(lastRows);
+  });
+  $("#workerFilter").addEventListener("change", () => renderAll(lastRows));
+  $("#nonZeroToggle").addEventListener("change", () => renderAll(lastRows));
+
+  loadAndRender();
+});
+
+// ---------- DATA FETCH ----------
+async function loadAndRender(){
+  const from = $("#fromDate").value || null;
+  const to   = $("#toDate").value   || null;
+
+  let query = supabase
+    .from('worker_daily_log')
+    .select('*')
+    .order('log_date', { ascending: true })
+    .order('worker_name', { ascending: true });
+
+  if(from) query = query.gte('log_date', from);
+  if(to)   query = query.lte('log_date', to);
+
+  const { data, error } = await query;
+
+  if(error){
+    console.error("Supabase error:", error.message);
+    alert("Error loading worker efficiency data.\nCheck console for details.");
+    return;
+  }
+
+  lastRows = data || [];
+  populateWorkerFilter(lastRows);
+  renderAll(lastRows);
+}
+
+// ---------- BASE FILTERS (role + mirror type + class) ----------
+function applyBaseFilters(rows){
+  const role  = ($("#roleFilter").value || "all").toLowerCase();
+  const mType = $("#mirrorTypeFilter").value || "all";
+  const mCls  = ($("#mirrorClassFilter").value || "all").toLowerCase();
+
+  return (rows || []).filter(r => {
+    const roleVal  = (r.role || "").toLowerCase();
+    const typeVal  = r.mirror_type || "";
+    const classVal = (r.mirror_class || "").toLowerCase();
+
+    if(role !== "all" && roleVal !== role) return false;
+    if(mType !== "all" && typeVal !== mType) return false;
+    if(mCls  !== "all" && classVal !== mCls) return false;
+
+    return true;
+  });
+}
+
+// Apply non-zero efficiency toggle
+function applyNonZeroFilter(rows){
+  const toggle = $("#nonZeroToggle");
+  if(!toggle || !toggle.checked) return rows;
+  return (rows || []).filter(r => {
+    const e = Number(r.daily_efficiency_pct);
+    return !isNaN(e) && e > 0;
+  });
+}
+
+// ---------- FILTER: WORKER / STATION DROPDOWN ----------
+function populateWorkerFilter(rows){
+  const sel = $("#workerFilter");
+  if(!sel) return;
+
+  const prev = sel.value || "all";
+  const base = applyBaseFilters(rows || []);
+  const workers = uniq(base.map(r => r.worker_name || "Unknown")).sort();
+
+  sel.innerHTML = '<option value="all">All</option>';
+  workers.forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+
+  if(prev !== "all" && workers.includes(prev)){
+    sel.value = prev;
+  } else if(workers.length === 1){
+    sel.value = workers[0];
+  } else {
+    sel.value = "all";
+  }
+}
+
+// ---------- RENDER PIPELINE ----------
+function renderAll(rows){
+  const base0 = applyBaseFilters(rows || []);
+  const base  = applyNonZeroFilter(base0);
+
+  const workerFilter = $("#workerFilter").value;
+  let workerFiltered = base;
+
+  if(workerFilter && workerFilter !== "all"){
+    workerFiltered = base.filter(r => (r.worker_name || "") === workerFilter);
+  }
+
+  renderSummary(base);
+  renderWorkerBarChart(base);
+  renderWorkerTrendChart(workerFiltered, workerFilter);
+  renderWeeklyLeaderboard(base);
+  renderTable(workerFiltered.length ? workerFiltered : base);
+}
+
+// ---------- SUMMARY ----------
+function renderSummary(rows){
+  const box = $("#summaryCards");
+  if(!box) return;
+
+  if(!rows || !rows.length){
+    box.innerHTML = `
+      <div class="summary-card">
+        <div class="summary-label">No data</div>
+        <div class="summary-value">0%</div>
+        <div class="summary-sub">No records for this filter.</div>
+      </div>`;
+    return;
+  }
+
+  const effs = rows
+    .map(r => Number(r.daily_efficiency_pct))
+    .filter(v => !isNaN(v));
+
+  const avgEff = effs.length
+    ? (effs.reduce((t,v)=>t+v,0) / effs.length)
+    : 0;
+
+  const byWorker = {};
+  rows.forEach(r => {
+    const name = r.worker_name || "Unknown";
+    const e = Number(r.daily_efficiency_pct);
+    if(isNaN(e)) return;
+    if(!byWorker[name]) byWorker[name] = [];
+    byWorker[name].push(e);
+  });
+
+  let bestName  = "-";
+  let bestAvg   = 0;
+  let worstName = "-";
+  let worstAvg  = 0;
+
+  const workerNames = Object.keys(byWorker);
+  if(workerNames.length){
+    workerNames.forEach(name => {
+      const arr = byWorker[name];
+      const avg = arr.reduce((t,v)=>t+v,0) / arr.length;
+      if(bestName === "-" || avg > bestAvg){
+        bestName = name;
+        bestAvg  = avg;
+      }
+      if(worstName === "-" || avg < worstAvg){
+        worstName = name;
+        worstAvg  = avg;
+      }
+    });
+  }
+
+  box.innerHTML = `
+    <div class="summary-card">
+      <div class="summary-label">Average efficiency (filtered rows)</div>
+      <div class="summary-value">${avgEff.toFixed(1)}%</div>
+      <div class="summary-sub">Across ${rows.length} worker/station-days</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Best performer</div>
+      <div class="summary-value">${bestName}</div>
+      <div class="summary-sub">${bestAvg ? bestAvg.toFixed(1) + '%' : '—'}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Lowest performer</div>
+      <div class="summary-value">${worstName}</div>
+      <div class="summary-sub">${worstAvg ? worstAvg.toFixed(1) + '%' : '—'}</div>
+    </div>
+  `;
+}
+
+// ---------- BAR CHART: EFFICIENCY BY WORKER / STATION ----------
+function renderWorkerBarChart(rows){
+  const ctx   = $("#workerBarChart");
+  const title = $("#barTitle");
+  if(!ctx) return;
+
+  if(!rows || !rows.length){
+    if(barChartInstance){
+      barChartInstance.destroy();
+      barChartInstance = null;
+    }
+    if(title){
+      title.textContent = "Average efficiency by worker / station (no data)";
+    }
+    return;
+  }
+
+  const byWorker = {};
+  rows.forEach(r => {
+    const name = r.worker_name || "Unknown";
+    const e = Number(r.daily_efficiency_pct);
+    if(isNaN(e)) return;
+    if(!byWorker[name]) byWorker[name] = [];
+    byWorker[name].push(e);
+  });
+
+  const labels = Object.keys(byWorker).sort();
+  const dataVals = labels.map(name => {
+    const arr = byWorker[name];
+    const avg = arr.reduce((t,v)=>t+v,0) / arr.length;
+    return Math.round(avg * 10) / 10;
+  });
+
+  if(title){
+    title.textContent = "Average efficiency by worker / station (selected filters)";
+  }
+
+  const data = {
+    labels,
+    datasets:[{
+      label:"Avg efficiency (%)",
+      data:dataVals
+    }]
+  };
+
+  const options = {
+    responsive:true,
+    maintainAspectRatio:false,
+    scales:{
+      y:{ beginAtZero:true, max:120 }
+    },
+    plugins:{
+      legend:{ display:false }
+    }
+  };
+
+  if(barChartInstance){
+    barChartInstance.data    = data;
+    barChartInstance.options = options;
+    barChartInstance.update();
+  }else{
+    barChartInstance = new Chart(ctx, {
+      type:'bar',
+      data,
+      options
+    });
+  }
+}
+
+// ---------- LINE CHART: TREND FOR SELECTED WORKER / STATION ----------
+function renderWorkerTrendChart(rows, workerFilter){
+  const ctx   = $("#workerTrendChart");
+  const title = $("#trendTitle");
+  if(!ctx) return;
+
+  if(!rows || !rows.length || !workerFilter || workerFilter === "all"){
+    if(trendChartInstance){
+      trendChartInstance.destroy();
+      trendChartInstance = null;
+    }
+    if(title){
+      title.textContent = "Daily efficiency trend (select a worker / station)";
+    }
+    return;
+  }
+
+  const sorted = [...rows].sort((a,b) => {
+    return (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0);
+  });
+
+  const labels = sorted.map(r => r.log_date);
+  const effs   = sorted.map(r => Number(r.daily_efficiency_pct) || 0);
+
+  if(title){
+    title.textContent = `Daily efficiency trend — ${workerFilter}`;
+  }
+
+  const data = {
+    labels,
+    datasets:[{
+      label:"Efficiency (%)",
+      data:effs,
+      tension:0.3
+    }]
+  };
+
+  const options = {
+    responsive:true,
+    maintainAspectRatio:false,
+    scales:{
+      y:{ beginAtZero:true, max:120 }
+    },
+    plugins:{
+      legend:{ display:false }
+    }
+  };
+
+  if(trendChartInstance){
+    trendChartInstance.data    = data;
+    trendChartInstance.options = options;
+    trendChartInstance.update();
+  }else{
+    trendChartInstance = new Chart(ctx, {
+      type:'line',
+      data,
+      options
+    });
+  }
+}
+
+// ---------- WEEKLY LEADERBOARD ----------
+function renderWeeklyLeaderboard(rows){
+  const tbody = $("#leaderBody");
+  const title = $("#leaderTitle");
+  if(!tbody) return;
+
+  if(!rows || !rows.length){
+    tbody.innerHTML =
+      '<tr><td colspan="5" style="text-align:center;padding:8px;">No data for this filter.</td></tr>';
+    if(title){
+      title.textContent = "Weekly leaderboard (latest week in range)";
+    }
+    return;
+  }
+
+  const groups = {};
+  rows.forEach(r => {
+    const dateStr = r.log_date || r.day || "";
+    const weekKey = getWeekKey(dateStr);
+    if(!weekKey) return;
+
+    const name = r.worker_name || "Unknown";
+    const eff  = Number(r.daily_efficiency_pct);
+    if(isNaN(eff)) return;
+
+    const gKey = weekKey + "||" + name;
+    if(!groups[gKey]){
+      groups[gKey] = { week: weekKey, name, effs: [] };
+    }
+    groups[gKey].effs.push(eff);
+  });
+
+  const arr = Object.values(groups).map(g => {
+    const avg = g.effs.reduce((t,v)=>t+v,0) / g.effs.length;
+    return {
+      week: g.week,
+      name: g.name,
+      avg,
+      days: g.effs.length
+    };
+  });
+
+  if(!arr.length){
+    tbody.innerHTML =
+      '<tr><td colspan="5" style="text-align:center;padding:8px;">No efficiency data for leaderboard.</td></tr>';
+    if(title){
+      title.textContent = "Weekly leaderboard (latest week in range)";
+    }
+    return;
+  }
+
+  // latest week by key
+  let latestWeek = null;
+  arr.forEach(g => {
+    if(!latestWeek || g.week > latestWeek){
+      latestWeek = g.week;
+    }
+  });
+
+  const latestRows = arr.filter(g => g.week === latestWeek);
+  latestRows.sort((a,b) => b.avg - a.avg);
+
+  const top = latestRows.slice(0,5);
+
+  if(title){
+    title.textContent = `Weekly leaderboard — ${latestWeek}`;
+  }
+
+  let html = "";
+  top.forEach((g, idx) => {
+    html += `
+      <tr>
+        <td>${idx+1}</td>
+        <td>${g.week}</td>
+        <td>${g.name.replace(/</g,"&lt;")}</td>
+        <td style="text-align:right;">${g.avg.toFixed(1)}</td>
+        <td style="text-align:right;">${g.days}</td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
+}
+
+// ---------- TABLE ----------
+function renderTable(rows){
+  const tbody = $("#detailBody");
+  if(!tbody) return;
+
+  if(!rows || !rows.length){
+    tbody.innerHTML =
+      '<tr><td colspan="8" style="text-align:center;padding:10px;">No rows for this filter.</td></tr>';
+    return;
+  }
+
+  let html = "";
+  rows.forEach(r => {
+    const eff = Number(r.daily_efficiency_pct);
+    html += `
+      <tr>
+        <td>${r.log_date || '-'}</td>
+        <td>${(r.role || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.worker_name || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.mirror_type || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.mirror_class || '').replace(/</g,"&lt;")}</td>
+        <td style="text-align:right;">${(Number(r.daily_total)||0).toLocaleString()}</td>
+        <td style="text-align:right;">${(Number(r.target)||0).toLocaleString()}</td>
+        <td style="text-align:right;">${isNaN(eff) ? '-' : eff.toFixed(2)}</td>
+      </tr>
+    `;
+  });
+  tbody.innerHTML = html;
+}
+</script>
+</body>
+</html>
