@@ -241,7 +241,6 @@ main{
 
   <header>
     <div class="brand">
-      <!-- you can swap this with your PNG later -->
       <div class="asi-logo"></div>
       <div class="brand-text">
         <strong>ASI — MES Portal</strong>
@@ -258,8 +257,8 @@ main{
     <section class="hero">
       <div class="hero-title">Live dashboards for the shop floor</div>
       <div class="hero-sub">
-        Central place for MES-style visibility: real-time worker efficiency, mirror output, and a roadmap
-        to extend these tools across the rest of the plant.
+        Phase 1 pilot in Mirrors is live. Next step is to reuse this pattern for other departments,
+        then roll it into a plant-wide MES portal aligned to the weekly KPI pack.
       </div>
     </section>
 
@@ -271,7 +270,7 @@ main{
         <h2 class="tile-title">Worker Efficiency — Mirrors</h2>
         <div class="tile-sub">
           Per-employee and per-station efficiency by day, with weekly leaderboards and trend lines.
-          Built from the Daily_Log export into Supabase.
+          Built from the Daily_Log export into Supabase for the Mirror department pilot.
         </div>
         <div class="kpi-row">
           <div class="kpi-pill">✓ Role filters: assembler / packing</div>
@@ -298,7 +297,7 @@ main{
         <div class="kpi-row">
           <div class="kpi-pill">Dept-level trend lines</div>
           <div class="kpi-pill">Late vs on-time correlation</div>
-          <div class="kpi-pill">TV-ready view</div>
+          <div class="kpi-pill">TV-ready view for the shop floor</div>
         </div>
         <div class="tile-footer">
           <div>Data source: <strong>v_mirrors_made_daily</strong></div>
@@ -309,18 +308,19 @@ main{
         </div>
       </article>
 
-      <!-- Multi-department expansion -->
+      <!-- Multi-department expansion / plant-wide roadmap -->
       <article class="tile disabled">
         <div class="tile-badge soon">Roadmap</div>
         <h2 class="tile-title">Cross-Department MES Rollout</h2>
         <div class="tile-sub">
-          Template for Laser, Weld, Polish and other lines using the same Supabase + dashboard pattern.
-          Aligned to the weekly KPI charts sent to upper management.
+          Phase 2 and 3 roadmap: reuse the same Supabase + dashboard pattern for Laser, Weld, Polish
+          and other lines, then consolidate into a single plant-wide MES portal aligned to the weekly
+          executive KPI charts.
         </div>
         <div class="kpi-row">
-          <div class="kpi-pill">Shared schema: jobs & stations</div>
-          <div class="kpi-pill">Department filters</div>
-          <div class="kpi-pill">Exec KPI summary</div>
+          <div class="kpi-pill">Phase 1: Mirrors pilot (live)</div>
+          <div class="kpi-pill">Phase 2: Next department rollout</div>
+          <div class="kpi-pill">Phase 3: Plant-wide exec KPI view</div>
         </div>
         <div class="tile-footer">
           <div>Owner: <strong>Alex</strong> · with Eng. Manager</div>
@@ -337,7 +337,8 @@ main{
   <footer class="footer">
     Cloud-backed pilot for a lightweight MES at ASI. Frontend: static HTML/JS · Backend: Supabase
     <br/>
-    Current live dashboards: <code>worker_daily_log</code> (people) · <code>v_mirrors_made_daily</code> (output, upcoming)
+    Phase 1 live: <code>worker_daily_log</code> (people) · <code>v_mirrors_made_daily</code> (output).
+    Next phases: reuse this pattern across departments and into a plant-wide KPI hub.
   </footer>
 
 </div>
