@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ASI — Mirror Assembly TV (v43 • Exact 14-Row Fit)</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --text:#CC5500;   /* ASI burnt/orange */
+    --done:#2ecc71;   /* green */
+    --todo:#ffd84d;   /* yellow */
+    --asi-red:#E41E26;
+  }
+  html,body{
+    margin:0; height:100%;
+    background:var(--bg); color:var(--text);
+    font-family:"Times New Roman", Times, serif;
+    overflow:hidden;
+  }
+  canvas{ display:block; width:100%; height:100vh; background:#fff; }
+
+  #shiftBadge{
+    position:fixed; top:10px; right:18px;
+    background:#fff; border:2px solid var(--asi-red);
+    border-radius:12px; padding:5px 10px;
+    font-weight:700; color:#CC5500;
+    box-shadow:0 4px 10px rgba(0,0,0,.15); z-index:9999;
+  }
+  #hint{
+    position:fixed; right:14px; bottom:12px;
+    background:#ffffffee; border:1px solid #ccc; border-radius:10px;
+    padding:5px 9px; color:#000; white-space:nowrap;
+    box-shadow:0 3px 8px rgba(0,0,0,.12); z-index:9999;
+  }
+</style>
+</head>
+<body>
+<div id="shiftBadge">Shift: Day</div>
+<div id="hint">D/N = Shift • A = Auto-Fit: On • [ / ] = Zoom • 0 = Reset • F = Fullscreen • R = Refresh</div>
+<canvas id="tv"></canvas>
+
+<script>
+(()=>{
+
+  /* ------------ Shift / Data ------------ */
+  let tvShift = localStorage.getItem("asi.activeShift") || "day";
+  function STORAGE_KEYS_FOR(shift){
+    return shift==="night"
+      ? ["mirror.v3h.data.staticgraph.night","mirror.v3h.data.desktop.night"]
+      : ["mirror.v3h.data.staticgraph.day","mirror.v3h.data.desktop.day"];
+  }
+  function safeParse(s){ try{ return JSON.parse(s); }catch{return null} }
+  function loadState(){
+    const keys = STORAGE_KEYS_FOR(tvShift);
+    for(const k of keys){
+      const raw = localStorage.getItem(k);
+      if(raw){ const parsed = safeParse(raw); if(Array.isArray(parsed)) return parsed; }
+    }
+    const names = Array.from({length:14}, (_,i)=> i<12 ? `Table ${i+1}` : `Packing Station #${i-11}`);
+    return names.map((n,i)=>({
+      name:n,
+      now:{job:"1695"+(40+i), part:"0620-"+(2400+i), total:100, left:Math.max(0,100 - i*7)},
+      next:{job:"J"+(100+i), part:"P"+(300+i), qty: (i%3?80:160)}
+    }));
+  }
+
+  /* ------------ Logo ------------ */
+  const LOGO_PATH = "asi_logo.png";
+  let logoImage=null, logoReady=false;
+  function ensureLogoLoaded(cb){
+    if(logoImage && (logoReady || logoImage.complete)){ cb(); return; }
+    logoImage = new Image();
+    logoImage.onload = ()=>{ logoReady=true; cb(); };
+    logoImage.onerror=()=>{ logoReady=false; cb(); };
+    logoImage.src = LOGO_PATH;
+  }
+
+  /* ------------ Canvas helpers ------------ */
+  const COLORS={ text:"#CC5500", done:"#2ecc71", todo:"#ffd84d", red:"#E41E26" };
+  const canvas=document.getElementById('tv');
+  const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+
+  function setFontPx(px,bold=true){
+    ctx.font = (bold?'bold ':'') + Math.round(px) + 'px "Times New Roman"';
+  }
+  function measure(text, px, bold=true){
+    setFontPx(px,bold);
+    return ctx.measureText(text).width;
+  }
+  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+  function heavyFillText(text,x,y,color){
+    ctx.fillStyle=color; ctx.fillText(text,x,y);
+    ctx.save(); ctx.translate(0.45,0); ctx.fillText(text,x,y); ctx.restore();
+  }
+
+  /* ------------ Fit-by-Row logic ------------ */
+  let autoFit = (localStorage.getItem("asi.tv.autofit")||"on")==="on";
+  let manualScale = parseFloat(localStorage.getItem("asi.tv.manualScale")||"1");
+
+  function draw(){
+    const data = loadState();
+    const rows = data.length; // 14
+
+    const W=window.innerWidth|0, H=window.innerHeight|0;
+    canvas.width=W; canvas.height=H;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.textBaseline='alphabetic';
+
+    /* Paddings + header (compact) */
+    const padL=54, padR=54, padTop=50, padBot=64;
+    const CW=W-padL-padR, CH=H-padTop-padBot;
+
+    /* Header area */
+    const headerH = 68;          // px
+    const titleGapBelow = 8;     // px
+    const contentTop = padTop + headerH + titleGapBelow;
+
+    /* Background */
+    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
+
+    /* Header (logo + titles) */
+    const CX=padL, CY=padTop;
+    const logoH = 40; let titleLeft = CX;
+    if(logoReady){
+      try{
+        const lw = (logoImage.naturalWidth||200);
+        const lh = (logoImage.naturalHeight||100);
+        const s = logoH/lh;
+        const drawnW = lw*s;
+        ctx.drawImage(logoImage, CX, CY+6, drawnW, logoH);
+        titleLeft = CX + drawnW + 12;
+      }catch{}
+    }
+    ctx.fillStyle = COLORS.text;
+    setFontPx(36,true);  heavyFillText('American Specialties Inc.', titleLeft, CY + 34, COLORS.text);
+    setFontPx(24,true);  heavyFillText('Mirror Department — Day Shift Production', titleLeft, CY + 34 + 24 + 6, COLORS.text);
+    ctx.fillStyle = COLORS.red;
+    ctx.fillRect(CX, CY + headerH - 4, CW, 3);
+
+    /* EXACT PER-ROW HEIGHT so 14 always fit */
+    const availForRows = H - contentTop - padBot;
+    const perRow = Math.floor(availForRows / rows); // integer to prevent drift
+    const leftover = availForRows - perRow*rows;    // center vertically
+    const topOffset = Math.floor(leftover/2);
+
+    /* Left vs right column widths */
+    const stationCol = Math.max(Math.floor(CW*0.52), 520);
+    const gapCols    = 22;
+    const chartX     = CX + stationCol + gapCols;
+    const chartW     = CW - stationCol - gapCols - 20;
+
+    /* Text sizing as FRACTIONS of perRow (with floors for readability) */
+    const stationPx = clamp(perRow*0.28, 20, 40);     // Station title
+    const nextPx    = clamp(perRow*0.22, 16, 34);     // Next line
+    const metaPx    = clamp(perRow*0.22, 16, 34);     // Current job line
+    const barH      = clamp(perRow*0.18, 10, 26);     // Bar height
+
+    /* Vertical gaps inside a row (fractions) */
+    const gap_station_next = clamp(perRow*0.10, 6, 16);
+    const gap_before_meta  = clamp(perRow*0.08, 4, 14);
+    const gap_meta_to_bar  = clamp(perRow*0.12, 8, 18);
+    const bottomGap        = clamp(perRow*0.08, 6, 14);
+
+    /* Big number size (centered in bar) */
+    const qtyPx = clamp(barH*2.7, 38, 84);
+
+    /* Safety: ensure sum never exceeds perRow (trim bottom gap if needed) */
+    const budget = stationPx + gap_station_next + nextPx + gap_before_meta + metaPx + gap_meta_to_bar + barH + bottomGap;
+    const adjust = budget > perRow ? (budget - perRow) : 0;
+    const bottomGapFinal = Math.max(0, bottomGap - adjust); // shave only from bottom
+
+    /* Badges */
+    const badge=document.getElementById("shiftBadge");
+    const hint=document.getElementById("hint");
+    if(badge){ badge.textContent="Shift: "+(tvShift==="night"?"Night":"Day"); }
+    if(hint){  hint.textContent = `D/N = Shift • A = Auto-Fit: ${autoFit?"On":"Off"} • [ / ] = Zoom • 0 = Reset • F = Fullscreen • R = Refresh`; }
+
+    /* Draw each row */
+    const leftX = CX + 8;
+    const leftMaxW = stationCol - 16;
+
+    for(let i=0;i<rows;i++){
+      const st  = data[i]||{};
+      const now = st.now||{};
+      const nxt = st.next||{};
+
+      const total = +now.total || 0;
+      const left  = +now.left  || 0;
+      const pctTxt = total ? (Math.round((1-left/total)*100)+'%') : '0%';
+
+      const rowTop = contentTop + topOffset + i*perRow;
+
+      /* Station */
+      setFontPx(stationPx,true);
+      ctx.fillStyle = COLORS.text;
+      heavyFillText(String(st.name||'Table'), leftX, rowTop + stationPx, COLORS.text);
+
+      /* Next line */
+      setFontPx(nextPx,false);
+      ctx.fillStyle = COLORS.text;
+      const nextText = `Next: Job ${nxt.job||'-'}, Part ${nxt.part||'-'}, Qty ${+nxt.qty||0}`;
+      ctx.fillText(nextText, leftX, rowTop + stationPx + gap_station_next + nextPx);
+
+      /* Meta (above bar) */
+      setFontPx(metaPx,true);
+      ctx.fillStyle='#000';
+      ctx.textAlign='center';
+      const metaY = rowTop + stationPx + gap_station_next + nextPx + gap_before_meta + metaPx;
+      ctx.fillText(`Job ${now.job||'-'} • Part ${now.part||'-'} • ${pctTxt}`, chartX+chartW/2, metaY);
+      ctx.textAlign='start';
+
+      /* Bar */
+      const barTop = metaY + gap_meta_to_bar;
+      const doneW = total ? Math.round(chartW * (1 - left/total)) : 0;
+
+      ctx.fillStyle='#fff'; ctx.fillRect(chartX, barTop, chartW, barH);
+      ctx.strokeStyle='#00000018'; ctx.strokeRect(chartX, barTop, chartW, barH);
+
+      ctx.fillStyle=COLORS.done; ctx.fillRect(chartX, barTop, doneW, barH);
+      ctx.fillStyle=COLORS.todo; ctx.fillRect(chartX+doneW, barTop, chartW-doneW, barH);
+
+      /* Big remaining number — centered on bar, never collides with meta */
+      setFontPx(qtyPx,true);
+      ctx.fillStyle=COLORS.text;
+      ctx.textAlign='right';
+      ctx.textBaseline='middle';
+      ctx.fillText(String(left), chartX+chartW-6, barTop + barH/2);
+      ctx.textAlign='start';
+      ctx.textBaseline='alphabetic';
+
+      /* Bottom gap is implicit since next row starts at rowTop+perRow */
+      // If needed, you could draw subtle separators here.
+    }
+  }
+
+  function redraw(){ ensureLogoLoaded(draw); }
+
+  /* ------------ Events ------------ */
+  window.addEventListener('resize', ()=>requestAnimationFrame(redraw));
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) redraw(); });
+  window.addEventListener('storage', ()=>redraw());
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.key==='f'||e.key==='F'){
+      const el=document.documentElement;
+      (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen)?.call(el);
+    }else if(e.key==='r'||e.key==='R'){
+      redraw();
+    }else if(e.key==='d'||e.key==='D'){
+      tvShift='day'; localStorage.setItem("asi.activeShift","day"); redraw();
+    }else if(e.key==='n'||e.key==='N'){
+      tvShift='night'; localStorage.setItem("asi.activeShift","night"); redraw();
+    }else if(e.key==='a'||e.key==='A'){
+      autoFit = !autoFit;
+      localStorage.setItem("asi.tv.autofit", autoFit?"on":"off");
+      redraw();
+    }else if(e.key===']'){
+      autoFit = false;
+      manualScale = (parseFloat(manualScale)||1) + 0.08;
+      localStorage.setItem("asi.tv.autofit","off");
+      localStorage.setItem("asi.tv.manualScale", manualScale.toFixed(2));
+      redraw();
+    }else if(e.key==='['){
+      autoFit = false;
+      manualScale = (parseFloat(manualScale)||1) - 0.08;
+      localStorage.setItem("asi.tv.autofit","off");
+      localStorage.setItem("asi.tv.manualScale", manualScale.toFixed(2));
+      redraw();
+    }else if(e.key==='0'){
+      manualScale = 1;
+      autoFit = true;
+      localStorage.setItem("asi.tv.manualScale","1.00");
+      localStorage.setItem("asi.tv.autofit","on");
+      redraw();
+    }
+  });
+
+  /* DPR watcher */
+  let lastDPR = window.devicePixelRatio || 1;
+  setInterval(()=>{
+    const dpr = window.devicePixelRatio || 1;
+    if(Math.abs(dpr - lastDPR) > 0.001){
+      lastDPR = dpr;
+      requestAnimationFrame(redraw);
+    }
+  }, 300);
+
+  /* Initial draw */
+  redraw(); setTimeout(redraw, 300);
+})();
+</script>
+</body>
+</html>

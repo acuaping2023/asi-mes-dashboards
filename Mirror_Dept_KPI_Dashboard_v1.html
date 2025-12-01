@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASI — Mirror Department KPI Dashboard v2</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --accent:#E41E26;
+      --accent-soft:#ffe6e8;
+      --bg:#ffffff;
+      --panel:#ffffff;
+      --panel-2:#f6f7f9;
+      --text:#111111;
+      --muted:#5b6573;
+      --border:#e5e8ef;
+      --shadow:0 1px 4px rgba(15,23,42,.08);
+      --good:#22c55e;
+      --late:#ef4444;
+      --warn:#facc15;
+      --early:#38bdf8;
+    }
+    html[data-theme="dark"]{
+      --bg:#0b0f18;
+      --panel:#111827;
+      --panel-2:#020617;
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --border:#1f2937;
+      --shadow:0 1px 4px rgba(0,0,0,.6);
+    }
+
+    *{box-sizing:border-box;}
+    html,body{
+      margin:0;
+      padding:0;
+      font-family:"Times New Roman", Times, serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  padding:4px 16px 2px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  position:static;
+  z-index:10;
+}
+
+.brand{
+  display:flex;
+  align-items:flex-end;
+  gap:6px;
+}
+
+.asi-logo{
+  height:32px;
+  width:auto;
+  display:block;
+}
+
+.brand-text{
+  line-height:1.1;
+}
+
+/* Title + subtitle */
+.brand-title{
+  font-family:"Times New Roman", Times, serif;
+  font-size:20px;
+  font-weight:700;
+  letter-spacing:.2px;
+  color:#CC5500;  /* burnt orange */
+  line-height:1.1;
+}
+
+.brand-subtitle{
+  font-family:"Times New Roman", Times, serif;
+  font-size:11px;
+  color:#555555;
+}
+
+html[data-theme="dark"] .brand-subtitle{
+  color:#9ca3af;
+}
+
+.header-right{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:6px;
+}
+.top-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+}
+.smallnote{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.btn{
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:#f3f4f6;
+  color:#111827;
+  font-size:13px;
+  padding:7px 12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+}
+.btn.primary{
+  background:var(--accent);
+  border-color:#b91c1c;
+  color:#fff;
+  font-weight:700;
+}
+.btn.soft{
+  background:var(--accent-soft);
+  color:#7f1d1d;
+  border-color:#fecaca;
+}
+.btn.icon{
+  padding:6px 9px;
+  border-radius:999px;
+  font-size:13px;
+}
+.btn:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+.btn:hover{
+  filter:brightness(0.97);
+}
+
+    html[data-theme="dark"] .btn{
+      background:#111827;
+      color:#e5e7eb;
+      border-color:#1f2937;
+    }
+    html[data-theme="dark"] .btn.primary{
+      background:var(--accent);
+      border-color:#b91c1c;
+    }
+
+    main{
+      padding:10px 16px 40px;
+      max-width:1400px;
+      margin:0 auto;
+    }
+
+    .filters{
+      background:var(--panel);
+      box-shadow:var(--shadow);
+      border-radius:16px;
+      padding:10px 12px;
+      margin-bottom:10px;
+      display:grid;
+      grid-template-columns:repeat(6,minmax(0,1fr));
+      gap:8px;
+      align-items:flex-end;
+    }
+    @media (max-width:1050px){
+      .filters{grid-template-columns:repeat(3,minmax(0,1fr));}
+    }
+    @media (max-width:700px){
+      .filters{grid-template-columns:repeat(2,minmax(0,1fr));}
+    }
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .field input,
+    .field select{
+      border-radius:10px;
+      border:1px solid var(--border);
+      padding:6px 10px;
+      font-size:13px;
+      background:var(--panel-2);
+      color:var(--text);
+      outline:none;
+    }
+    .field input:focus,
+    .field select:focus{
+      border-color:#9ca3af;
+    }
+
+    .metrics-row{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:10px;
+      margin:8px 0 14px;
+    }
+    @media (max-width:1000px){
+      .metrics-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+    }
+    @media (max-width:650px){
+      .metrics-row{grid-template-columns:1fr;}
+    }
+
+    .metric-card{
+      background:var(--panel);
+      border-radius:14px;
+      box-shadow:var(--shadow);
+      border:1px solid var(--border);
+      padding:8px 10px;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .metric-label{
+      font-size:12px;
+      color:var(--muted);
+    }
+    .metric-value{
+      font-size:22px;
+      font-weight:800;
+    }
+    .metric-sub{
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    .layout-3{
+      display:grid;
+      grid-template-columns:2.1fr 2.2fr 2.2fr;
+      gap:12px;
+      margin-bottom:14px;
+    }
+    @media (max-width:1150px){
+      .layout-3{grid-template-columns:1fr;}
+    }
+
+    .card{
+      background:var(--panel);
+      border-radius:16px;
+      border:1px solid var(--border);
+      box-shadow:var(--shadow);
+      padding:10px 12px;
+      display:flex;
+      flex-direction:column;
+    }
+    .card h3{
+      margin:0 0 4px;
+      font-size:14px;
+      font-weight:700;
+      color:var(--muted);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .card canvas{
+      width:100%;
+      height:260px;
+    }
+
+    .trend-row{
+      display:grid;
+      grid-template-columns:3fr 2fr;
+      gap:12px;
+      margin-bottom:14px;
+    }
+    @media (max-width:1050px){
+      .trend-row{grid-template-columns:1fr;}
+    }
+
+    .trend-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-bottom:6px;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      border-radius:999px;
+      padding:2px 7px;
+      font-size:11px;
+      border:1px solid var(--border);
+      background:var(--panel-2);
+      color:var(--muted);
+    }
+
+    .detail-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+    }
+    .detail-table th,
+    .detail-table td{
+      padding:3px 6px;
+      border-bottom:1px dashed var(--border);
+      text-align:left;
+      white-space:nowrap;
+    }
+    .detail-table th{
+      font-weight:600;
+      color:var(--muted);
+    }
+
+    footer{
+      padding:10px 16px 18px;
+      text-align:center;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    /* Email modal */
+    .modal-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.45);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+    }
+    .modal-card{
+      background:var(--panel);
+      color:var(--text);
+      border-radius:14px;
+      border:1px solid var(--border);
+      box-shadow:0 12px 30px rgba(0,0,0,.35);
+      width:min(640px,96vw);
+      max-height:90vh;
+      display:flex;
+      flex-direction:column;
+    }
+    .modal-header{
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      font-weight:700;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+    }
+    .modal-body{
+      padding:10px 12px;
+      overflow-y:auto;
+      font-size:13px;
+    }
+    .modal-body textarea{
+      width:100%;
+      min-height:220px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      padding:8px 10px;
+      resize:vertical;
+      background:var(--panel-2);
+      color:var(--text);
+    }
+    .modal-footer{
+      padding:8px 12px 10px;
+      border-top:1px solid var(--border);
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      align-items:center;
+    }
+
+    .theme-fade *{
+      transition:background-color .25s ease,color .25s ease,border-color .25s ease,box-shadow .25s ease;
+    }
+    body.theme-opacity-fade{
+      transition:opacity .3s ease;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="asi_logo.png" class="asi-logo">
+    <div class="brand-text">
+      <div class="brand-title">Mirror Department KPI Dashboard</div>
+      <div class="brand-subtitle">American Specialties Inc. — Based on job completion logs</div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <div class="top-actions">
+      <button id="themeToggle" class="btn icon">🌙 Dark mode</button>
+      <button id="emailBtn" class="btn soft">✉️ Generate KPI email</button>
+      <button id="refreshBtn" class="btn primary">🔄 Refresh</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Filters -->
+  <section class="filters">
+    <div class="field">
+      <label for="fromDate">From (completed date)</label>
+      <input type="date" id="fromDate">
+    </div>
+    <div class="field">
+      <label for="toDate">To (completed date)</label>
+      <input type="date" id="toDate">
+    </div>
+    <div class="field">
+      <label for="shiftFilter">Shift</label>
+      <select id="shiftFilter">
+        <option value="all">All shifts</option>
+        <option value="day">Day shift</option>
+        <option value="night">Night shift</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="stationFilter">Station</label>
+      <select id="stationFilter">
+        <option value="all">All stations</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="jobFilter">Job # contains</label>
+      <input type="text" id="jobFilter" placeholder="e.g. 251234">
+    </div>
+    <div class="field">
+      <label for="partFilter">Part # contains</label>
+      <input type="text" id="partFilter" placeholder="e.g. 0620-2436">
+    </div>
+  </section>
+
+  <!-- Summary metrics -->
+  <section class="metrics-row">
+    <div class="metric-card">
+      <div class="metric-label">Total jobs completed</div>
+      <div class="metric-value" id="mTotal">0</div>
+      <div class="metric-sub" id="mTotalSub">Scheduled: 0</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">On-time jobs</div>
+      <div class="metric-value" id="mOnTime">0</div>
+      <div class="metric-sub" id="mOnTimeSub">On-time %: 0%</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Early / Late</div>
+      <div class="metric-sub">
+        Early: <span id="mEarly">0</span> • Late: <span id="mLate">0</span>
+      </div>
+      <div class="metric-sub">
+        Avg days early: <span id="mAvgEarly">0</span> • Avg days late: <span id="mAvgLate">0</span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Unscheduled jobs</div>
+      <div class="metric-value" id="mUnscheduled">0</div>
+      <div class="metric-sub" id="mUnscheduledSub">No due date</div>
+    </div>
+  </section>
+
+  <!-- Three main charts -->
+  <section class="layout-3">
+    <div class="card">
+      <h3>
+        Status mix
+        <span class="badge" id="statusBadge">Early vs on-time vs late vs unscheduled</span>
+      </h3>
+      <canvas id="statusChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>
+        Jobs completed per day
+        <span class="badge" id="jobsPerDayBadge">Completed date (filtered)</span>
+      </h3>
+      <canvas id="jobsPerDayChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>
+        On-time % by station
+        <span class="badge">Scheduled jobs only</span>
+      </h3>
+      <canvas id="stationBarChart"></canvas>
+    </div>
+  </section>
+
+  <!-- Trend & details -->
+  <section class="trend-row">
+    <div class="card">
+      <div class="trend-header">
+        <h3>Station trend — on-time % by day</h3>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="smallnote">Trend station:</span>
+          <select id="trendStationSelect" class="field-select">
+            <option value="__auto">Match main station filter</option>
+          </select>
+        </div>
+      </div>
+      <canvas id="stationTrendChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Job completions (detail) <span class="badge" id="detailBadge">Top 15 rows</span></h3>
+      <div style="overflow:auto;max-height:260px;">
+        <table class="detail-table" id="detailTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Job</th>
+              <th>Part</th>
+              <th>Station</th>
+              <th>Shift</th>
+              <th>Status</th>
+              <th>Δ days</th>
+              <th>Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- filled dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+    <!-- Mirror type / class performance (rolling 7 days) -->
+  <section class="card">
+    <h3>Mirror type performance <span class="badge">Rolling last 7 days (filtered)</span></h3>
+    <div style="overflow:auto;max-height:220px;">
+      <table class="detail-table" id="mirrorTypeTable">
+        <thead>
+          <tr>
+            <th>Type / class</th>
+            <th>Total jobs</th>
+            <th>Scheduled</th>
+            <th>On-time</th>
+            <th>On-time %</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- filled by JS -->
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  © 2025 American Specialties Inc. — Mirror Department • KPI v2 (Supabase-backed)
+</footer>
+
+<!-- KPI Email Modal -->
+<div id="emailModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>KPI summary email (draft)</span>
+      <button id="emailClose" class="btn icon">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="smallnote" style="margin-bottom:6px;">
+        Subject (copy into Outlook):
+      </div>
+      <input id="emailSubject" type="text"
+             style="width:100%;margin-bottom:8px;padding:6px 9px;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);">
+
+      <div class="smallnote" style="margin-bottom:4px;">
+        Body:
+      </div>
+      <textarea id="emailBody"></textarea>
+    </div>
+    <div class="modal-footer">
+      <span class="smallnote" id="emailHint">This is a plain-text draft. Adjust wording as needed before sending.</span>
+      <button id="copyEmail" class="btn">📋 Copy body</button>
+      <button id="emailOk" class="btn primary">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/************** SUPABASE CLIENT **************/
+const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/************** THEME **************/
+const THEME_KEY = 'mirror.kpi.theme';
+
+function applyTheme(t){
+  const html = document.documentElement;
+  html.classList.add('theme-fade');
+  if(t === 'dark') html.setAttribute('data-theme','dark');
+  else html.removeAttribute('data-theme');
+  localStorage.setItem(THEME_KEY,t);
+
+  const btn = document.getElementById('themeToggle');
+  if(btn){
+    btn.textContent = t === 'dark' ? '☀️ Light mode' : '🌙 Dark mode';
+  }
+}
+
+function toggleTheme(){
+  const cur = localStorage.getItem(THEME_KEY) || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.body.classList.add('theme-opacity-fade');
+  document.body.style.opacity = '0.4';
+  setTimeout(()=>{
+    applyTheme(next);
+    document.body.style.opacity = '1';
+    setTimeout(()=>document.body.classList.remove('theme-opacity-fade'),300);
+  },120);
+}
+
+/************** STATE **************/
+let rawData = [];          // rows from v_mirror_job_kpi
+let statusChart, jobsPerDayChart, stationBarChart, stationTrendChart;
+
+/************** HELPERS **************/
+function coerceNum(v,fb){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : (fb || 0);
+}
+function fmtDate(d){
+  if(!d) return '';
+  return d;
+}
+
+function getMirrorClass(part){
+  if(!part) return 'Unknown';
+
+  const p = String(part).trim();
+
+  // Tune these to match how you talk about mirrors internally
+  if(p.startsWith('0600')) return '0600 mirrors';
+  if(p.startsWith('0620')) return '0620 mirrors';
+
+  // crude example for specials – update to match your naming
+  if(/spec/i.test(p) || /spcl/i.test(p)) return 'Special mirrors';
+
+  // default: first 4 chars as a “family”
+  return p.slice(0,4) + ' series';
+}
+
+function calcSummary(data){
+  const out = {
+    total: data.length,
+    scheduled: 0,
+    on_time: 0,
+    early: 0,
+    late: 0,
+    unscheduled: 0,
+    sumEarlyDelta: 0,
+    countEarlyDelta: 0,
+    sumLateDelta: 0,
+    countLateDelta: 0
+  };
+
+  data.forEach(r=>{
+    const status = r.status || 'unscheduled';
+    if(status === 'unscheduled') out.unscheduled++;
+    else out.scheduled++;
+
+    if(status === 'on_time') out.on_time++;
+    if(status === 'early'){
+      out.early++;
+      const d = coerceNum(r.day_delta,0);
+      out.sumEarlyDelta += Math.abs(d);
+      out.countEarlyDelta++;
+    }
+    if(status === 'late'){
+      out.late++;
+      const d = coerceNum(r.day_delta,0);
+      out.sumLateDelta += Math.abs(d);
+      out.countLateDelta++;
+    }
+  });
+
+  out.onTimePct = out.scheduled ? Math.round(out.on_time * 100 / out.scheduled) : 0;
+  out.avgEarly = out.countEarlyDelta ? (out.sumEarlyDelta / out.countEarlyDelta).toFixed(1) : '0.0';
+  out.avgLate = out.countLateDelta ? (out.sumLateDelta / out.countLateDelta).toFixed(1) : '0.0';
+  return out;
+}
+
+/************** CHART HELPERS **************/
+function destroyChart(c){
+  if(c && typeof c.destroy === 'function') c.destroy();
+}
+
+/* Status pie */
+function buildStatusChart(data){
+  destroyChart(statusChart);
+  const summary = calcSummary(data);
+  const ctx = document.getElementById('statusChart');
+  if(!ctx) return;
+
+  statusChart = new Chart(ctx,{
+    type:'pie',
+    data:{
+      labels:['Early','On time','Late','Unscheduled'],
+      datasets:[{
+        data:[
+          summary.early,
+          summary.on_time,
+          summary.late,
+          summary.unscheduled
+        ],
+        backgroundColor:['#38bdf8','#22c55e','#ef4444','#9ca3af']
+      }]
+    },
+    options:{
+      plugins:{
+        legend:{position:'bottom',labels:{boxWidth:14}}
+      }
+    }
+  });
+}
+
+/* Jobs per day (bar) */
+function buildJobsPerDayChart(data){
+  destroyChart(jobsPerDayChart);
+  const byDay = {};
+  data.forEach(r=>{
+    const d = r.completed_date || r.completed_date_raw || r.completed_date_text || r.completed_date_iso || r.completed_date;
+    const key = d || (r.completed_date ?? '');
+    if(!key) return;
+    byDay[key] = (byDay[key] || 0) + 1;
+  });
+
+  const labels = Object.keys(byDay).sort();
+  const vals = labels.map(k=>byDay[k]);
+
+  const ctx = document.getElementById('jobsPerDayChart');
+  if(!ctx) return;
+  jobsPerDayChart = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{
+        label:'Jobs completed',
+        data:vals
+      }]
+    },
+    options:{
+      scales:{
+        x:{ticks:{autoSkip:true,maxTicksLimit:8}},
+        y:{beginAtZero:true}
+      },
+      plugins:{
+        legend:{display:false}
+      }
+    }
+  });
+}
+
+/* On-time % by station */
+function buildStationBarChart(data){
+  destroyChart(stationBarChart);
+  const byStation = {};
+  data.forEach(r=>{
+    if(!r.due_date) return; // scheduled only
+    const st = r.station_name || 'Unknown';
+    if(!byStation[st]){
+      byStation[st] = {total:0,on_time:0};
+    }
+    byStation[st].total++;
+    if(r.status === 'on_time') byStation[st].on_time++;
+  });
+
+  const labels = Object.keys(byStation).sort();
+  const vals = labels.map(s=>{
+    const obj = byStation[s];
+    return obj.total ? Math.round(obj.on_time * 100 / obj.total) : 0;
+  });
+
+  const ctx = document.getElementById('stationBarChart');
+  if(!ctx) return;
+  stationBarChart = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{
+        label:'On-time %',
+        data:vals
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      scales:{
+        x:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}},
+        y:{ticks:{autoSkip:false}}
+      },
+      plugins:{
+        legend:{display:false}
+      }
+    }
+  });
+}
+
+/* Station trend line (on-time % by day) */
+function buildStationTrendChart(data){
+  destroyChart(stationTrendChart);
+
+  const trendSelect = document.getElementById('trendStationSelect');
+  let stationName = trendSelect.value;
+  if(stationName === '__auto'){
+    const mainStation = document.getElementById('stationFilter').value;
+    stationName = mainStation === 'all' ? null : mainStation;
+  }
+  let filtered = data.slice();
+  if(stationName){
+    filtered = filtered.filter(r=> (r.station_name || '') === stationName);
+  }
+
+  const byDay = {};
+  filtered.forEach(r=>{
+    if(!r.due_date) return; // scheduled only
+    const d = r.completed_date || r.completed_date;
+    if(!d) return;
+    if(!byDay[d]) byDay[d] = {total:0,on_time:0};
+    byDay[d].total++;
+    if(r.status === 'on_time') byDay[d].on_time++;
+  });
+
+  const labels = Object.keys(byDay).sort();
+  const vals = labels.map(k=>{
+    const obj = byDay[k];
+    return obj.total ? Math.round(obj.on_time * 100 / obj.total) : 0;
+  });
+
+  const ctx = document.getElementById('stationTrendChart');
+  if(!ctx) return;
+  stationTrendChart = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'On-time %',
+        data:vals,
+        tension:0.25,
+        fill:false
+      }]
+    },
+    options:{
+      scales:{
+        y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}},
+        x:{ticks:{autoSkip:true,maxTicksLimit:10}}
+      }
+    }
+  });
+}
+
+/************** DETAIL TABLE **************/
+function renderDetailTable(data){
+  const tbody = document.querySelector('#detailTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+
+  const rows = data
+    .slice()
+    .sort((a,b)=>String(b.completed_date).localeCompare(String(a.completed_date)))
+    .slice(0,15);
+
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>'+ (r.completed_date || '') +'</td>'+
+      '<td>'+ (r.job || '') +'</td>'+
+      '<td>'+ (r.part || '') +'</td>'+
+      '<td>'+ (r.station_name || '') +'</td>'+
+      '<td>'+ (r.shift || '') +'</td>'+
+      '<td>'+ (r.status || '') +'</td>'+
+      '<td>'+ (r.day_delta != null ? r.day_delta : '') +'</td>'+
+      '<td>'+ (r.qty != null ? r.qty : '') +'</td>';
+    tbody.appendChild(tr);
+  });
+
+  const badge = document.getElementById('detailBadge');
+  if(badge){
+    badge.textContent = data.length
+      ? `Showing latest ${rows.length} of ${data.length} completions`
+      : 'No data';
+  }
+}
+function buildMirrorTypeTable(data){
+  const tbody = document.querySelector('#mirrorTypeTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+
+  if(!data || !data.length) return;
+
+  // Rolling last 7 days from TODAY, while still respecting current filters
+  const today = new Date();
+  const cutoff = new Date(today.getTime() - 6*24*3600*1000); // today + previous 6 days
+
+  const recent = data.filter(r=>{
+    if(!r.completed_date) return false;
+    const d = new Date(r.completed_date);
+    if(isNaN(d)) return false;
+    return d >= cutoff;
+  });
+
+  const byType = {};
+
+  recent.forEach(r=>{
+    const type = getMirrorClass(r.part);
+    if(!byType[type]){
+      byType[type] = {
+        total:0,
+        scheduled:0,
+        on_time:0
+      };
+    }
+    const bucket = byType[type];
+    bucket.total++;
+
+    const status = r.status || 'unscheduled';
+    if(status !== 'unscheduled'){
+      bucket.scheduled++;
+      if(status === 'on_time') bucket.on_time++;
+    }
+  });
+
+  const types = Object.keys(byType).sort();
+
+  types.forEach(t=>{
+    const b = byType[t];
+    const pct = b.scheduled ? Math.round(b.on_time * 100 / b.scheduled) : 0;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td>${t}</td>` +
+      `<td>${b.total}</td>` +
+      `<td>${b.scheduled}</td>` +
+      `<td>${b.on_time}</td>` +
+      `<td>${pct}%</td>`;
+    tbody.appendChild(tr);
+  });
+
+  if(!types.length){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="5">No jobs in the last 7 days with current filters.</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+
+/************** METRICS **************/
+function renderMetrics(data){
+  const s = calcSummary(data);
+  document.getElementById('mTotal').textContent = s.total;
+  document.getElementById('mTotalSub').textContent = `Scheduled: ${s.scheduled}`;
+  document.getElementById('mOnTime').textContent = s.on_time;
+  document.getElementById('mOnTimeSub').textContent = `On-time %: ${s.onTimePct}%`;
+  document.getElementById('mEarly').textContent = s.early;
+  document.getElementById('mLate').textContent = s.late;
+  document.getElementById('mAvgEarly').textContent = s.avgEarly;
+  document.getElementById('mAvgLate').textContent = s.avgLate;
+  document.getElementById('mUnscheduled').textContent = s.unscheduled;
+}
+
+/************** STATION OPTIONS **************/
+function populateStationFilters(data){
+  const mainSel = document.getElementById('stationFilter');
+  const trendSel = document.getElementById('trendStationSelect');
+  if(!mainSel || !trendSel) return;
+
+  const stations = Array.from(
+    new Set(data.map(r=>r.station_name || '').filter(Boolean))
+  ).sort();
+
+  // main filter
+  mainSel.innerHTML = '<option value="all">All stations</option>' +
+    stations.map(s=>`<option value="${s.replace(/"/g,'&quot;')}">${s}</option>`).join('');
+
+  // trend selector
+  trendSel.innerHTML =
+    '<option value="__auto">Match main station filter</option>' +
+    stations.map(s=>`<option value="${s.replace(/"/g,'&quot;')}">${s}</option>`).join('');
+}
+
+/************** EMAIL BUILDER **************/
+function buildKpiEmail(data){
+  if(!data || !data.length){
+    return {
+      subject:'Mirror Department KPI — No data in selected range',
+      body:'No completed jobs found for the selected filters.\n\nPlease adjust the date range or filters and try again.'
+    };
+  }
+  const s = calcSummary(data);
+  const from = document.getElementById('fromDate').value || '(start)';
+  const to   = document.getElementById('toDate').value   || '(today)';
+  const shift = document.getElementById('shiftFilter').value;
+  const station = document.getElementById('stationFilter').value;
+
+  let scope = `Completed jobs from ${from} to ${to}`;
+  if(shift !== 'all') scope += ` • Shift: ${shift}`;
+  if(station !== 'all') scope += ` • Station: ${station}`;
+
+  const subject =
+    `Mirror Dept KPI — ${from} to ${to} — ${s.onTimePct}% on-time (${s.scheduled} scheduled)`;
+
+  // Station ranking for email
+  const byStation = {};
+  data.forEach(r=>{
+    if(!r.due_date) return;
+    const st = r.station_name || 'Unknown';
+    if(!byStation[st]) byStation[st] = {total:0,on_time:0,late:0};
+    byStation[st].total++;
+    if(r.status === 'on_time') byStation[st].on_time++;
+    if(r.status === 'late') byStation[st].late++;
+  });
+  const stationLines = Object.keys(byStation)
+    .map(name=>{
+      const obj = byStation[name];
+      const pct = obj.total ? Math.round(obj.on_time*100/obj.total) : 0;
+      return `${name}: ${pct}% on-time (${obj.on_time}/${obj.total} scheduled; late ${obj.late})`;
+    })
+    .sort((a,b)=>b.localeCompare(a)); // simple order
+
+  const bodyLines = [
+    `Hi team,`,
+    ``,
+    `${scope}.`,
+    ``,
+    `Headline:`,
+    `• On-time % (scheduled only): ${s.onTimePct}%`,
+    `• Total jobs completed: ${s.total}`,
+    `• Scheduled jobs: ${s.scheduled}`,
+    `• Early: ${s.early} (avg ${s.avgEarly} days early)`,
+    `• On time: ${s.on_time}`,
+    `• Late: ${s.late} (avg ${s.avgLate} days late)`,
+    `• Unscheduled (no due date): ${s.unscheduled}`,
+    ``,
+    `On-time % by station (scheduled only):`,
+    ...(stationLines.length ? stationLines.map(l=>'• '+l) : ['• (no scheduled jobs in this range)']),
+    ``,
+    `Notes / actions:`,
+    `• [Add any observations about bottlenecks, repeat late jobs, or material issues here]`,
+    ``,
+    `Thanks,`,
+    `[Your name]`
+  ];
+
+  return {
+    subject,
+    body: bodyLines.join('\n')
+  };
+}
+
+function openEmailModal(){
+  const modal = document.getElementById('emailModal');
+  const sInput = document.getElementById('emailSubject');
+  const bArea  = document.getElementById('emailBody');
+  if(!modal || !sInput || !bArea) return;
+
+  const draft = buildKpiEmail(rawData);
+  sInput.value = draft.subject;
+  bArea.value  = draft.body;
+
+  modal.style.display = 'flex';
+}
+function closeEmailModal(){
+  const modal = document.getElementById('emailModal');
+  if(modal) modal.style.display = 'none';
+}
+
+/************** DATA LOAD **************/
+async function fetchData(){
+  const from = document.getElementById('fromDate').value;
+  const to   = document.getElementById('toDate').value;
+  const shift = document.getElementById('shiftFilter').value;
+  const station = document.getElementById('stationFilter').value;
+  const jobLike = document.getElementById('jobFilter').value.trim();
+  const partLike = document.getElementById('partFilter').value.trim();
+
+  let query = supabase.from('v_mirror_job_kpi').select('*');
+
+  if(from) query = query.gte('completed_date', from);
+  if(to)   query = query.lte('completed_date', to);
+  if(shift !== 'all') query = query.eq('shift', shift);
+  if(station !== 'all') query = query.eq('station_name', station);
+  if(jobLike) query = query.ilike('job', `%${jobLike}%`);
+  if(partLike) query = query.ilike('part', `%${partLike}%`);
+
+  query = query.order('completed_date', {ascending:true});
+
+  const { data, error } = await query;
+  if(error){
+    console.error('KPI fetch error:', error);
+    alert('Error loading KPI data: '+error.message);
+    return [];
+  }
+  return data || [];
+}
+
+/************** RENDER ALL **************/
+async function refreshAll(){
+  const btn = document.getElementById('refreshBtn');
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+  }
+  try{
+    rawData = await fetchData();
+    populateStationFilters(rawData);
+    renderMetrics(rawData);
+    buildStatusChart(rawData);
+    buildJobsPerDayChart(rawData);
+    buildStationBarChart(rawData);
+    buildStationTrendChart(rawData);
+    renderDetailTable(rawData);
+    buildMirrorTypeTable(rawData);   // ⬅ NEW
+  }finally{
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh';
+    }
+  }
+}
+
+/************** INIT **************/
+document.addEventListener('DOMContentLoaded', ()=>{
+  // theme
+  applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
+  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+  // default date range = last 30 days
+  const today = new Date();
+  const toIso = today.toISOString().slice(0,10);
+  const fromDate = new Date(today.getTime() - 29*24*3600*1000);
+  const fromIso = fromDate.toISOString().slice(0,10);
+  document.getElementById('toDate').value = toIso;
+  document.getElementById('fromDate').value = fromIso;
+
+  document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+
+  // Any filter change could auto-refresh; for now keep manual to avoid accidental spam.
+  ['fromDate','toDate','shiftFilter','stationFilter','jobFilter','partFilter'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){
+      el.addEventListener('keydown', e=>{
+        if(e.key === 'Enter') refreshAll();
+      });
+    }
+  });
+
+  // Trend station change
+  const trendSel = document.getElementById('trendStationSelect');
+  if(trendSel){
+    trendSel.addEventListener('change', ()=>buildStationTrendChart(rawData));
+  }
+
+  // Email modal
+  document.getElementById('emailBtn').addEventListener('click', openEmailModal);
+  document.getElementById('emailClose').addEventListener('click', closeEmailModal);
+  document.getElementById('emailOk').addEventListener('click', closeEmailModal);
+  document.getElementById('emailModal').addEventListener('click', e=>{
+    if(e.target.id === 'emailModal') closeEmailModal();
+  });
+  document.getElementById('copyEmail').addEventListener('click', ()=>{
+    const body = document.getElementById('emailBody').value;
+    navigator.clipboard.writeText(body).then(()=>{
+      const hint = document.getElementById('emailHint');
+      if(hint){
+        hint.textContent = 'Copied to clipboard — paste into Outlook.';
+        setTimeout(()=>hint.textContent='This is a plain-text draft. Adjust wording as needed before sending.',2500);
+      }
+    }).catch(()=>{
+      alert('Could not copy to clipboard; please select and copy manually.');
+    });
+  });
+
+  // initial load
+  refreshAll();
+});
+</script>
+</body>
+</html>

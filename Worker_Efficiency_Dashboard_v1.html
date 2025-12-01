@@ -21,6 +21,15 @@
   --button:#f3f6fa;
 }
 
+/* Completely hide the Hide 0% rows toggle */
+#nonZeroToggle,
+#nonZeroToggle + span,
+label.toggle-inline {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 *{box-sizing:border-box;}
 html,body{
   margin:0;
@@ -91,18 +100,14 @@ select:focus{
   border-color:#b9c6d8;
 }
 
-/* Non-zero toggle */
+/* Non-zero toggle (now always on + hidden) */
 .toggle-inline{
-  display:flex;
-  align-items:center;
-  gap:4px;
-  font-size:12px;
-  color:var(--muted);
-  margin-bottom:2px;
+  display:none; /* hide the label + checkbox */
 }
 .toggle-inline input{
   margin:0;
 }
+
 
 /* Layout */
 main{
@@ -410,6 +415,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#toDate").value   = todayIso();
   $("#fromDate").value = isoNDaysAgo(6);
 
+  // 🔒 Always hide 0% rows (force toggle ON)
+  const nz = $("#nonZeroToggle");
+  if(nz) nz.checked = true;
+
   $("#quick7").addEventListener("click", () => {
     $("#toDate").value   = todayIso();
     $("#fromDate").value = isoNDaysAgo(6);
@@ -433,10 +442,12 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll(lastRows);
   });
   $("#workerFilter").addEventListener("change", () => renderAll(lastRows));
+  // this listener is now harmless but can stay:
   $("#nonZeroToggle").addEventListener("change", () => renderAll(lastRows));
 
   loadAndRender();
 });
+
 
 // ---------- DATA FETCH ----------
 async function loadAndRender(){
@@ -486,11 +497,9 @@ function applyBaseFilters(rows){
 
 // Apply non-zero efficiency toggle
 function applyNonZeroFilter(rows){
-  const toggle = $("#nonZeroToggle");
-  if(!toggle || !toggle.checked) return rows;
   return (rows || []).filter(r => {
     const e = Number(r.daily_efficiency_pct);
-    return !isNaN(e) && e > 0;
+    return !isNaN(e) && e > 0; // always hide 0% rows
   });
 }
 
