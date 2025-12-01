@@ -257,8 +257,8 @@ main{
     <section class="hero">
       <div class="hero-title">Live dashboards for the shop floor</div>
       <div class="hero-sub">
-        Phase 1 pilot in Mirrors is live. Next step is to reuse this pattern for other departments,
-        then roll it into a plant-wide MES portal aligned to the weekly KPI pack.
+        Central place for MES-style visibility: real-time worker efficiency, mirror output, line control,
+        and a roadmap to extend these tools across the rest of the plant.
       </div>
     </section>
 
@@ -270,7 +270,7 @@ main{
         <h2 class="tile-title">Worker Efficiency — Mirrors</h2>
         <div class="tile-sub">
           Per-employee and per-station efficiency by day, with weekly leaderboards and trend lines.
-          Built from the Daily_Log export into Supabase for the Mirror department pilot.
+          Built from the Daily_Log export into Supabase.
         </div>
         <div class="kpi-row">
           <div class="kpi-pill">✓ Role filters: assembler / packing</div>
@@ -297,7 +297,7 @@ main{
         <div class="kpi-row">
           <div class="kpi-pill">Dept-level trend lines</div>
           <div class="kpi-pill">Late vs on-time correlation</div>
-          <div class="kpi-pill">TV-ready view for the shop floor</div>
+          <div class="kpi-pill">TV-ready view</div>
         </div>
         <div class="tile-footer">
           <div>Data source: <strong>v_mirrors_made_daily</strong></div>
@@ -308,19 +308,62 @@ main{
         </div>
       </article>
 
-      <!-- Multi-department expansion / plant-wide roadmap -->
+      <!-- Mirror Control Dashboard (LIVE) -->
+      <article class="tile" onclick="window.open('Mirror_Control_ASI_v25_shiftToggle_Test.html','_blank')">
+        <div class="tile-badge live">Live</div>
+        <h2 class="tile-title">Mirror Line — Live Control</h2>
+        <div class="tile-sub">
+          Supervisor control board for all mirror stations: current job, next jobs, and WIP.
+          Used to rebalance work, clear bottlenecks, and keep the line flowing.
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-pill">Real-time station queues</div>
+          <div class="kpi-pill">Day / Night shift toggle</div>
+          <div class="kpi-pill">TV / tablet friendly</div>
+        </div>
+        <div class="tile-footer">
+          <div>Inputs: <strong>station queues + job list</strong></div>
+          <a class="tile-link" href="Mirror_Control_ASI_v25_shiftToggle_Test.html" target="_blank" rel="noopener">
+            <span>Open Mirror Control Dashboard</span>
+            <span class="icon">↗</span>
+          </a>
+        </div>
+      </article>
+
+      <!-- ASI Master Ops Dashboard (Pilot) -->
+      <article class="tile" onclick="window.open('ASI_Master_Ops_Dashboard.html','_blank')">
+        <div class="tile-badge soon">Pilot</div>
+        <h2 class="tile-title">ASI Master Ops Dashboard</h2>
+        <div class="tile-sub">
+          Plant-level view that rolls up key KPIs across departments: output, labor, late jobs,
+          and efficiency. Uses the same MES pattern to support exec decision-making.
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-pill">Cross-department KPIs</div>
+          <div class="kpi-pill">Single exec snapshot</div>
+          <div class="kpi-pill">Aligned to weekly report</div>
+        </div>
+        <div class="tile-footer">
+          <div>Scope: <strong>All ASI production lines</strong></div>
+          <a class="tile-link" href="ASI_Master_Ops_Dashboard.html" target="_blank" rel="noopener">
+            <span>Open Master Ops Dashboard</span>
+            <span class="icon">↗</span>
+          </a>
+        </div>
+      </article>
+
+      <!-- Multi-department expansion roadmap (no direct link) -->
       <article class="tile disabled">
         <div class="tile-badge soon">Roadmap</div>
         <h2 class="tile-title">Cross-Department MES Rollout</h2>
         <div class="tile-sub">
-          Phase 2 and 3 roadmap: reuse the same Supabase + dashboard pattern for Laser, Weld, Polish
-          and other lines, then consolidate into a single plant-wide MES portal aligned to the weekly
-          executive KPI charts.
+          Template for Laser, Weld, Polish and other lines using the same Supabase + dashboard pattern.
+          Next steps are to align each line’s tables to the shared schema and plug them into the Master Ops view.
         </div>
         <div class="kpi-row">
-          <div class="kpi-pill">Phase 1: Mirrors pilot (live)</div>
-          <div class="kpi-pill">Phase 2: Next department rollout</div>
-          <div class="kpi-pill">Phase 3: Plant-wide exec KPI view</div>
+          <div class="kpi-pill">Shared schema: jobs & stations</div>
+          <div class="kpi-pill">Department filters</div>
+          <div class="kpi-pill">Exec KPI summary</div>
         </div>
         <div class="tile-footer">
           <div>Owner: <strong>Alex</strong> · with Eng. Manager</div>
@@ -337,8 +380,8 @@ main{
   <footer class="footer">
     Cloud-backed pilot for a lightweight MES at ASI. Frontend: static HTML/JS · Backend: Supabase
     <br/>
-    Phase 1 live: <code>worker_daily_log</code> (people) · <code>v_mirrors_made_daily</code> (output).
-    Next phases: reuse this pattern across departments and into a plant-wide KPI hub.
+    Current live dashboards: <code>worker_daily_log</code> (people) · <code>v_mirrors_made_daily</code> (output) ·
+    Mirror line control (queues) · Master Ops (pilot).
   </footer>
 
 </div>
