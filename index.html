@@ -241,6 +241,7 @@ main{
 
   <header>
     <div class="brand">
+      <!-- you can swap this with your PNG later -->
       <div class="asi-logo"></div>
       <div class="brand-text">
         <strong>ASI — MES Portal</strong>
@@ -257,8 +258,8 @@ main{
     <section class="hero">
       <div class="hero-title">Live dashboards for the shop floor</div>
       <div class="hero-sub">
-        Central place for MES-style visibility: real-time worker efficiency, mirror output, line control,
-        and a roadmap to extend these tools across the rest of the plant.
+        Central place for MES-style visibility: individual worker performance, live department control,
+        and mirror output KPIs — with a roadmap to extend this pattern across the rest of the plant.
       </div>
     </section>
 
@@ -267,15 +268,16 @@ main{
       <!-- Worker Efficiency Dashboard (LIVE) -->
       <article class="tile" onclick="window.open('Worker_Efficiency_Dashboard_v1.html','_blank')">
         <div class="tile-badge live">Live</div>
-        <h2 class="tile-title">Worker Efficiency — Mirrors</h2>
+        <h2 class="tile-title">Worker Performance — Mirrors</h2>
         <div class="tile-sub">
-          Per-employee and per-station efficiency by day, with weekly leaderboards and trend lines.
+          Individual performance dashboard for mirror assemblers and packers:
+          daily / weekly / monthly efficiency by person and station, with leaderboards and trend lines.
           Built from the Daily_Log export into Supabase.
         </div>
         <div class="kpi-row">
-          <div class="kpi-pill">✓ Role filters: assembler / packing</div>
-          <div class="kpi-pill">✓ 0620 / 0600 · standard / special</div>
-          <div class="kpi-pill">✓ Weekly top performers</div>
+          <div class="kpi-pill">✓ Individual efficiency by day</div>
+          <div class="kpi-pill">✓ Weekly & monthly leaderboards</div>
+          <div class="kpi-pill">✓ Annual trends by employee</div>
         </div>
         <div class="tile-footer">
           <div>Data source: <strong>worker_daily_log</strong></div>
@@ -291,13 +293,14 @@ main{
         <div class="tile-badge live">Live</div>
         <h2 class="tile-title">Mirror Output & Station Efficiency</h2>
         <div class="tile-sub">
-          Daily mirrors made by station and shift, plus station efficiency vs target rate
-          (10 pcs/hr assembly, 50 pcs/hr packing). Uses the <code>v_mirrors_made_daily</code> view.
+          Department-level KPI board for the mirror line: daily mirrors made by station and shift,
+          station efficiency vs target rates (10 pcs/hr assembly, 50 pcs/hr packing), and late vs on-time job performance.
+          Uses the <code>v_mirrors_made_daily</code> view.
         </div>
         <div class="kpi-row">
-          <div class="kpi-pill">Dept-level trend lines</div>
-          <div class="kpi-pill">Late vs on-time correlation</div>
-          <div class="kpi-pill">TV-ready view</div>
+          <div class="kpi-pill">Dept-level output trend lines</div>
+          <div class="kpi-pill">Late vs on-time job correlation</div>
+          <div class="kpi-pill">TV-ready department KPI view</div>
         </div>
         <div class="tile-footer">
           <div>Data source: <strong>v_mirrors_made_daily</strong></div>
@@ -308,21 +311,22 @@ main{
         </div>
       </article>
 
-      <!-- Mirror Control Dashboard (LIVE) -->
+      <!-- Mirror Department Live Control Dashboard (LIVE) -->
       <article class="tile" onclick="window.open('Mirror_Control_ASI_v25_shiftToggle_Test.html','_blank')">
         <div class="tile-badge live">Live</div>
-        <h2 class="tile-title">Mirror Line — Live Control</h2>
+        <h2 class="tile-title">Mirror Department — Live Control</h2>
         <div class="tile-sub">
-          Supervisor control board for all mirror stations: current job, next jobs, and WIP.
-          Used to rebalance work, clear bottlenecks, and keep the line flowing.
+          Supervisor control board for all mirror stations: current job, next jobs, queues, and WIP in real time.
+          Used to rebalance workloads, prevent bottlenecks, and keep the department flowing smoothly.
         </div>
         <div class="kpi-row">
           <div class="kpi-pill">Real-time station queues</div>
+          <div class="kpi-pill">Current & next-job visibility</div>
           <div class="kpi-pill">Day / Night shift toggle</div>
-          <div class="kpi-pill">TV / tablet friendly</div>
+          <div class="kpi-pill">TV & tablet friendly</div>
         </div>
         <div class="tile-footer">
-          <div>Inputs: <strong>station queues + job list</strong></div>
+          <div>Inputs: <strong>station queues</strong> + <strong>job list</strong></div>
           <a class="tile-link" href="Mirror_Control_ASI_v25_shiftToggle_Test.html" target="_blank" rel="noopener">
             <span>Open Mirror Control Dashboard</span>
             <span class="icon">↗</span>
@@ -330,21 +334,22 @@ main{
         </div>
       </article>
 
-      <!-- ASI Master Ops Dashboard (Pilot) -->
+      <!-- ASI Master Ops Dashboard (Concept / Pilot) -->
       <article class="tile" onclick="window.open('ASI_Master_Ops_Dashboard.html','_blank')">
-        <div class="tile-badge soon">Pilot</div>
-        <h2 class="tile-title">ASI Master Ops Dashboard</h2>
+        <div class="tile-badge live">Pilot</div>
+        <h2 class="tile-title">ASI — Master Ops Overview</h2>
         <div class="tile-sub">
-          Plant-level view that rolls up key KPIs across departments: output, labor, late jobs,
-          and efficiency. Uses the same MES pattern to support exec decision-making.
+          Concept view for an exec-level operations dashboard that rolls up KPIs across departments.
+          Today it is driven by mirror data; over time it becomes the plant-wide “single pane of glass”
+          for output, efficiency, and late/on-time performance.
         </div>
         <div class="kpi-row">
-          <div class="kpi-pill">Cross-department KPIs</div>
-          <div class="kpi-pill">Single exec snapshot</div>
-          <div class="kpi-pill">Aligned to weekly report</div>
+          <div class="kpi-pill">Multi-department KPI rollup (future)</div>
+          <div class="kpi-pill">Late / on-time summary</div>
+          <div class="kpi-pill">Capacity & WIP snapshot</div>
         </div>
         <div class="tile-footer">
-          <div>Scope: <strong>All ASI production lines</strong></div>
+          <div>Inputs: <strong>mirror KPIs</strong> · other depts later</div>
           <a class="tile-link" href="ASI_Master_Ops_Dashboard.html" target="_blank" rel="noopener">
             <span>Open Master Ops Dashboard</span>
             <span class="icon">↗</span>
@@ -352,13 +357,13 @@ main{
         </div>
       </article>
 
-      <!-- Multi-department expansion roadmap (no direct link) -->
+      <!-- Multi-department expansion (Roadmap) -->
       <article class="tile disabled">
         <div class="tile-badge soon">Roadmap</div>
         <h2 class="tile-title">Cross-Department MES Rollout</h2>
         <div class="tile-sub">
           Template for Laser, Weld, Polish and other lines using the same Supabase + dashboard pattern.
-          Next steps are to align each line’s tables to the shared schema and plug them into the Master Ops view.
+          Aligned to the weekly KPI charts sent to upper management, so every area talks the same KPI language.
         </div>
         <div class="kpi-row">
           <div class="kpi-pill">Shared schema: jobs & stations</div>
@@ -380,8 +385,9 @@ main{
   <footer class="footer">
     Cloud-backed pilot for a lightweight MES at ASI. Frontend: static HTML/JS · Backend: Supabase
     <br/>
-    Current live dashboards: <code>worker_daily_log</code> (people) · <code>v_mirrors_made_daily</code> (output) ·
-    Mirror line control (queues) · Master Ops (pilot).
+    Current live dashboards: <code>worker_daily_log</code> (people) ·
+    <code>v_mirrors_made_daily</code> (output) ·
+    <code>station queues + job list</code> (live control)
   </footer>
 
 </div>
