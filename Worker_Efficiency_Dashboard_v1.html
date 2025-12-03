@@ -275,6 +275,13 @@ html[data-theme="dark"] select{
         <option value="special">Special</option>
       </select>
     </label>
+        <label>
+      Baseline
+      <select id="baselineMode">
+        <option value="75" selected>75% standard</option>
+        <option value="100">100% standard</option>
+      </select>
+    </label>
     <label>
       Worker / Station
       <select id="workerFilter">
@@ -445,8 +452,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // this listener is now harmless but can stay:
   $("#nonZeroToggle").addEventListener("change", () => renderAll(lastRows));
 
+  const baselineSel = $("#baselineMode");
+  if (baselineSel){
+    baselineSel.addEventListener("change", () => renderAll(lastRows));
+  }
+
   loadAndRender();
 });
+
 
 
 // ---------- DATA FETCH ----------
@@ -501,6 +514,26 @@ function applyNonZeroFilter(rows){
     const e = Number(r.daily_efficiency_pct);
     return !isNaN(e) && e > 0; // always hide 0% rows
   });
+}
+
+// ---------- BASELINE MODE (75% vs 100%) ----------
+function getBaselineMode(){
+  const el = $("#baselineMode");
+  return el ? (el.value || "75") : "75";
+}
+
+// Stored efficiencies are vs 75% standard.
+// If baseline is set to 100, rescale to show vs 100% engineering standard.
+function adjustEff(e){
+  const val = Number(e);
+  if (isNaN(val)) return NaN;
+
+  const mode = getBaselineMode();
+  if (mode === "100"){
+    // 100% engineering ≈ 0.75 × (vs 75% efficiency)
+    return val * 0.75;
+  }
+  return val; // default: vs 75% baseline (as stored)
 }
 
 // ---------- FILTER: WORKER / STATION DROPDOWN ----------
@@ -563,8 +596,8 @@ function renderSummary(rows){
     return;
   }
 
-  const effs = rows
-    .map(r => Number(r.daily_efficiency_pct))
+   const effs = rows
+    .map(r => adjustEff(r.daily_efficiency_pct))
     .filter(v => !isNaN(v));
 
   const avgEff = effs.length
@@ -574,7 +607,7 @@ function renderSummary(rows){
   const byWorker = {};
   rows.forEach(r => {
     const name = r.worker_name || "Unknown";
-    const e = Number(r.daily_efficiency_pct);
+    const e = adjustEff(r.daily_efficiency_pct);
     if(isNaN(e)) return;
     if(!byWorker[name]) byWorker[name] = [];
     byWorker[name].push(e);
@@ -640,7 +673,7 @@ function renderWorkerBarChart(rows){
   const byWorker = {};
   rows.forEach(r => {
     const name = r.worker_name || "Unknown";
-    const e = Number(r.daily_efficiency_pct);
+    const e = adjustEff(r.daily_efficiency_pct);
     if(isNaN(e)) return;
     if(!byWorker[name]) byWorker[name] = [];
     byWorker[name].push(e);
@@ -711,7 +744,7 @@ function renderWorkerTrendChart(rows, workerFilter){
   });
 
   const labels = sorted.map(r => r.log_date);
-  const effs   = sorted.map(r => Number(r.daily_efficiency_pct) || 0);
+  const effs   = sorted.map(r => adjustEff(r.daily_efficiency_pct) || 0);
 
   if(title){
     title.textContent = `Daily efficiency trend — ${workerFilter}`;
@@ -772,7 +805,7 @@ function renderWeeklyLeaderboard(rows){
     if(!weekKey) return;
 
     const name = r.worker_name || "Unknown";
-    const eff  = Number(r.daily_efficiency_pct);
+    const eff  = adjustEff(r.daily_efficiency_pct);
     if(isNaN(eff)) return;
 
     const gKey = weekKey + "||" + name;
@@ -847,7 +880,7 @@ function renderTable(rows){
 
   let html = "";
   rows.forEach(r => {
-    const eff = Number(r.daily_efficiency_pct);
+    const eff = adjustEff(r.daily_efficiency_pct);
     html += `
       <tr>
         <td>${r.log_date || '-'}</td>
