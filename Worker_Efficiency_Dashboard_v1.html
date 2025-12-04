@@ -57,30 +57,55 @@ header{
 .brand-text strong{font-size:20px;font-weight:800;color:var(--burnt);}
 .brand-text span{font-size:13px;color:var(--muted);}
 
-/* Filters */
+/* Filters - compact flex layout */
 .filters{
-  display:grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-  gap:8px 12px;
+  display:flex;
+  flex-wrap:wrap;
   align-items:flex-end;
+  gap:8px 12px;
 }
 
-/* Grouped button area on the right */
+/* Each filter block */
+.filter-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:12px;
+}
+
+.filter-label{
+  font-size:12px;
+  color:var(--muted);
+}
+
+/* Inline layout for date range inputs */
+.filter-inline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.filter-separator{
+  font-size:12px;
+  color:var(--muted);
+}
+
+/* Date range gets a bit more width */
+.filter-range{
+  flex:1 1 260px;
+  min-width:240px;
+}
+
+/* Button group on the right */
 .filter-actions{
+  margin-left:auto;
   display:flex;
   gap:8px;
   flex-wrap:wrap;
-  justify-content:flex-end;
 }
 
-/* Make header more responsive on smaller screens */
-@media (max-width: 1024px){
-  .filters{
-    grid-template-columns: repeat(2, minmax(150px, 1fr));
-  }
-}
-
-@media (max-width: 640px){
+/* Small-screen behavior */
+@media (max-width: 900px){
   header{
     flex-direction:column;
     align-items:flex-start;
@@ -88,20 +113,14 @@ header{
   }
   .filters{
     width:100%;
-    grid-template-columns: 1fr;
+    flex-direction:column;
+    align-items:flex-start;
   }
   .filter-actions{
-    justify-content:flex-start;
+    margin-left:0;
   }
 }
 
-.filters label{
-  font-size:12px;
-  color:var(--muted);
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-}
 input[type="date"],
 select{
   background:#ffffff;
@@ -286,54 +305,61 @@ html[data-theme="dark"] .btn:hover{
     </div>
   </div>
 
-  <div class="filters">
-    <label>
-      From date
-      <input type="date" id="fromDate">
-    </label>
-    <label>
-      To date
-      <input type="date" id="toDate">
-    </label>
-    <label>
-      Role
+    <div class="filters">
+    <!-- Date range combined -->
+    <div class="filter-field filter-range">
+      <div class="filter-label">Date range</div>
+      <div class="filter-inline">
+        <input type="date" id="fromDate">
+        <span class="filter-separator">to</span>
+        <input type="date" id="toDate">
+      </div>
+    </div>
+
+    <label class="filter-field">
+      <span class="filter-label">Role</span>
       <select id="roleFilter">
         <option value="all">All roles</option>
         <option value="assembler">Assemblers</option>
         <option value="packer">Packing</option>
       </select>
     </label>
-    <label>
-      Mirror type
+
+    <label class="filter-field">
+      <span class="filter-label">Mirror type</span>
       <select id="mirrorTypeFilter">
         <option value="all">All</option>
         <option value="0620">0620</option>
         <option value="0600">0600</option>
       </select>
     </label>
-    <label>
-      Category
+
+    <label class="filter-field">
+      <span class="filter-label">Category</span>
       <select id="mirrorClassFilter">
         <option value="all">All</option>
         <option value="standard">Standard</option>
         <option value="special">Special</option>
       </select>
     </label>
-        <label>
-      Baseline
+
+    <label class="filter-field">
+      <span class="filter-label">Baseline</span>
       <select id="baselineMode">
         <option value="75" selected>75% engineering standard</option>
         <option value="100">100% engineering standard</option>
       </select>
     </label>
-    <label>
-      Worker / Station
+
+    <label class="filter-field">
+      <span class="filter-label">Worker / Station</span>
       <select id="workerFilter">
         <option value="all">All</option>
       </select>
     </label>
+
     <label class="toggle-inline">
-      <input type="checkbox" id="nonZeroToggle">
+      <input type="checkbox" id="nonZeroToggle" checked>
       <span>Hide 0% rows</span>
     </label>
 
@@ -506,47 +532,12 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#toDate").value   = todayIso();
   $("#fromDate").value = isoNDaysAgo(6);
 
-  // 🔒 Always hide 0% rows (force toggle ON)
+   // 🔒 Always hide 0% rows (force toggle ON)
   const nz = $("#nonZeroToggle");
-  if(nz) nz.checked = true;
-
-  $("#quick7").addEventListener("click", () => {
-    $("#toDate").value   = todayIso();
-    $("#fromDate").value = isoNDaysAgo(6);
-    loadAndRender();
-  });
-
-  $("#refreshBtn").addEventListener("click", loadAndRender);
-
-  // Admin: open the hourly log CSV uploader in a new tab
-  const uploaderBtn = $("#openUploaderBtn");
-  if (uploaderBtn) {
-    uploaderBtn.addEventListener("click", () => {
-      if (HOURLY_LOG_UPLOADER_URL) {
-        window.open(HOURLY_LOG_UPLOADER_URL, "_blank");
-      } else {
-        alert("Uploader URL is not configured yet.");
-      }
-    });
+  if (nz) {
+    nz.checked = true;
+    nz.addEventListener("change", () => renderAll(lastRows));
   }
-  $("#fromDate").addEventListener("change", loadAndRender);
-  $("#toDate").addEventListener("change", loadAndRender);
-
-  $("#roleFilter").addEventListener("change", () => {
-    populateWorkerFilter(lastRows);
-    renderAll(lastRows);
-  });
-  $("#mirrorTypeFilter").addEventListener("change", () => {
-    populateWorkerFilter(lastRows);
-    renderAll(lastRows);
-  });
-  $("#mirrorClassFilter").addEventListener("change", () => {
-    populateWorkerFilter(lastRows);
-    renderAll(lastRows);
-  });
-  $("#workerFilter").addEventListener("change", () => renderAll(lastRows));
-  // this listener is now harmless but can stay:
-  $("#nonZeroToggle").addEventListener("change", () => renderAll(lastRows));
 
   const baselineSel = $("#baselineMode");
   if (baselineSel){
@@ -995,7 +986,3 @@ function renderTable(rows){
 </script>
 </body>
 </html>
-
-
-
-
