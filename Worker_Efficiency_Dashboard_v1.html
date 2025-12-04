@@ -527,27 +527,71 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ---------- EXISTING INIT BELOW ----------
-  // default last 7 days
+  // ---------- DEFAULT DATE RANGE ----------
   $("#toDate").value   = todayIso();
   $("#fromDate").value = isoNDaysAgo(6);
 
-   // 🔒 Always hide 0% rows (force toggle ON)
+  // 🔒 Always hide 0% rows (force toggle ON, even though the control is hidden)
   const nz = $("#nonZeroToggle");
   if (nz) {
     nz.checked = true;
     nz.addEventListener("change", () => renderAll(lastRows));
   }
 
+  // ---------- BUTTONS ----------
+  // Last 7 days
+  $("#quick7").addEventListener("click", () => {
+    $("#toDate").value   = todayIso();
+    $("#fromDate").value = isoNDaysAgo(6);
+    loadAndRender();
+  });
+
+  // Refresh
+  $("#refreshBtn").addEventListener("click", loadAndRender);
+
+  // Admin uploader button
+  const uploaderBtn = $("#openUploaderBtn");
+  if (uploaderBtn) {
+    uploaderBtn.addEventListener("click", () => {
+      if (HOURLY_LOG_UPLOADER_URL) {
+        window.open(HOURLY_LOG_UPLOADER_URL, "_blank");
+      } else {
+        alert("Uploader URL is not configured yet.");
+      }
+    });
+  }
+
+  // ---------- FILTER CHANGE HANDLERS ----------
+  $("#fromDate").addEventListener("change", loadAndRender);
+  $("#toDate").addEventListener("change", loadAndRender);
+
+  $("#roleFilter").addEventListener("change", () => {
+    populateWorkerFilter(lastRows);
+    renderAll(lastRows);
+  });
+
+  $("#mirrorTypeFilter").addEventListener("change", () => {
+    populateWorkerFilter(lastRows);
+    renderAll(lastRows);
+  });
+
+  $("#mirrorClassFilter").addEventListener("change", () => {
+    populateWorkerFilter(lastRows);
+    renderAll(lastRows);
+  });
+
+  $("#workerFilter").addEventListener("change", () => {
+    renderAll(lastRows);
+  });
+
   const baselineSel = $("#baselineMode");
   if (baselineSel){
     baselineSel.addEventListener("change", () => renderAll(lastRows));
   }
 
+  // Initial load
   loadAndRender();
 });
-
-
 
 // ---------- DATA FETCH ----------
 async function loadAndRender(){
