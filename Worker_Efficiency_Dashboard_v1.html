@@ -59,11 +59,42 @@ header{
 
 /* Filters */
 .filters{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
+  display:grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap:8px 12px;
   align-items:flex-end;
 }
+
+/* Grouped button area on the right */
+.filter-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+/* Make header more responsive on smaller screens */
+@media (max-width: 1024px){
+  .filters{
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 640px){
+  header{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+  }
+  .filters{
+    width:100%;
+    grid-template-columns: 1fr;
+  }
+  .filter-actions{
+    justify-content:flex-start;
+  }
+}
+
 .filters label{
   font-size:12px;
   color:var(--muted);
@@ -292,11 +323,15 @@ html[data-theme="dark"] select{
       <input type="checkbox" id="nonZeroToggle">
       <span>Hide 0% rows</span>
     </label>
-    <button class="btn" id="quick7">Last 7 days</button>
-    <button class="btn" id="refreshBtn">Refresh</button>
-    <button class="btn" id="openUploaderBtn">
-      Admin: Open Hourly Log Uploader
-    </button>
+
+    <div class="filter-actions">
+      <button class="btn" id="quick7">Last 7 days</button>
+      <button class="btn" id="refreshBtn">Refresh</button>
+      <button class="btn" id="openUploaderBtn">
+        Admin: Hourly Log Uploader
+      </button>
+      <button class="btn" id="themeToggle">Dark mode</button>
+    </div>
   </div>
 </header>
 
@@ -426,6 +461,34 @@ let trendChartInstance = null;
 
 // ---------- MAIN LOAD ----------
 document.addEventListener("DOMContentLoaded", () => {
+
+  // ---------- THEME INIT ----------
+  const savedTheme = localStorage.getItem("asiTheme") || "light";
+  document.documentElement.setAttribute(
+    "data-theme",
+    savedTheme === "dark" ? "dark" : "light"
+  );
+
+  const themeToggle = $("#themeToggle");
+  function updateThemeButtonLabel(){
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    if (themeToggle){
+      themeToggle.textContent = isDark ? "Light mode" : "Dark mode";
+    }
+  }
+  updateThemeButtonLabel();
+
+  if (themeToggle){
+    themeToggle.addEventListener("click", () => {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      const next = isDark ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem("asiTheme", next);
+      updateThemeButtonLabel();
+    });
+  }
+
+  // ---------- EXISTING INIT BELOW ----------
   // default last 7 days
   $("#toDate").value   = todayIso();
   $("#fromDate").value = isoNDaysAgo(6);
@@ -919,5 +982,6 @@ function renderTable(rows){
 </script>
 </body>
 </html>
+
 
 
