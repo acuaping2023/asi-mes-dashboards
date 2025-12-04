@@ -122,6 +122,7 @@
   }
 
   input[type="date"],
+  input[type="number"],
   select{
     background:#ffffff;
     border:1px solid var(--border);
@@ -131,6 +132,7 @@
     font-size:14px;
     outline:none;
   }
+
   input[type="date"]:focus,
   select:focus{
     border-color:#b9c6d8;
@@ -269,9 +271,23 @@
     font-size: 1.15rem;
   }
 
-  .ws-stat-sub {
+    .ws-stat-sub {
     font-size: 0.75rem;
     color: var(--muted);
+  }
+
+  /* Efficiency color helpers */
+  .eff-good {
+    color: var(--ok);
+    font-weight: 700;
+  }
+  .eff-warn {
+    color: var(--warn);
+    font-weight: 700;
+  }
+  .eff-bad {
+    color: var(--danger);
+    font-weight: 700;
   }
 
   /* Summary cards */
@@ -667,7 +683,7 @@
     return value.toFixed(0).toString();
   }
 
-  function updateWorkerSnapshot(workerName, stats){
+    function updateWorkerSnapshot(workerName, stats){
     if(!workerSnapshotEl) return;
 
     if(!workerName || !stats){
@@ -681,17 +697,25 @@
     wsDateRangeEl.textContent =
       stats.dateRangeLabel || "Selected range";
 
+    // Today
     wsTodayEffEl.textContent   = formatPercent(stats.todayEfficiency);
     wsTodayUnitsEl.textContent = `${formatUnits(stats.todayUnits)} units today`;
+    applyEfficiencyClassToElement(wsTodayEffEl, stats.todayEfficiency);
 
+    // Weekly avg
     wsWeeklyAvgEl.textContent   = formatPercent(stats.weeklyAverageEfficiency);
     wsWeeklyUnitsEl.textContent = `${formatUnits(stats.weeklyTotalUnits)} total units`;
+    applyEfficiencyClassToElement(wsWeeklyAvgEl, stats.weeklyAverageEfficiency);
 
+    // Best day
     wsBestDayEffEl.textContent   = formatPercent(stats.bestDayEfficiency);
     wsBestDayLabelEl.textContent = stats.bestDayLabel || "—";
+    applyEfficiencyClassToElement(wsBestDayEffEl, stats.bestDayEfficiency);
 
+    // Worst day
     wsWorstDayEffEl.textContent   = formatPercent(stats.worstDayEfficiency);
     wsWorstDayLabelEl.textContent = stats.worstDayLabel || "—";
+    applyEfficiencyClassToElement(wsWorstDayEffEl, stats.worstDayEfficiency);
   }
 
   function computeWorkerSnapshotStats(rows){
@@ -1094,10 +1118,41 @@
   }
 
   // ---------- CHART THEME HELPERS ----------
-  function chartTextColor(){
-    const theme = document.documentElement.getAttribute("data-theme");
-    return theme === "dark" ? "#ffffff" : "#111111";
+function chartTextColor(){
+  const theme = document.documentElement.getAttribute("data-theme");
+  return theme === "dark" ? "#ffffff" : "#111111";
+}
+
+// ---------- EFFICIENCY THRESHOLDS ----------
+let EFF_GOOD_MIN = 95;  // green: ≥ this
+let EFF_WARN_MIN = 85;  // yellow: ≥ this and < good
+
+function getEfficiencyBand(value){
+  const v = Number(value);
+  if (isNaN(v)) return null;
+
+  if (v >= EFF_GOOD_MIN) return "good";
+  if (v >= EFF_WARN_MIN) return "warn";
+  return "bad";
+}
+
+function applyEfficiencyClassToElement(el, value){
+  if (!el) return;
+  el.classList.remove("eff-good", "eff-warn", "eff-bad");
+  const band = getEfficiencyBand(value);
+  if (!band) return;
+  el.classList.add("eff-" + band);
+}
+
+function getEfficiencyColor(value){
+  const band = getEfficiencyBand(value);
+  switch (band){
+    case "good": return "#2ecc71";  // same as --ok
+    case "warn": return "#ffd84d";  // same as --warn
+    case "bad":  return "#ff6b6b";  // same as --danger
+    default:     return "#4b5563";  // neutral gray
   }
+}
 
   /// ---------- BAR CHART: EFFICIENCY BY WORKER / STATION ----------
   function renderWorkerBarChart(rows){
@@ -1136,11 +1191,16 @@
       title.textContent = "Average efficiency by worker / station (selected filters)";
     }
 
+    const colors = dataVals.map(v => getEfficiencyColor(v));
+
     const data = {
       labels,
       datasets:[{
         label:"Avg efficiency (%)",
-        data:dataVals
+        data:dataVals,
+        backgroundColor: colors,
+        borderColor: colors,
+        borderWidth: 1
       }]
     };
 
@@ -1227,12 +1287,21 @@
       title.textContent = `Daily efficiency trend — ${workerFilter}`;
     }
 
+        const avgEff = effs.length
+      ? effs.reduce((t, v) => t + v, 0) / effs.length
+      : null;
+    const lineColor = getEfficiencyColor(avgEff);
+
     const data = {
       labels,
       datasets:[{
         label:"Efficiency (%)",
         data:effs,
-        tension:0.3
+        tension:0.3,
+        borderColor: lineColor,
+        backgroundColor: lineColor,
+        pointBackgroundColor: lineColor,
+        pointBorderColor: lineColor
       }]
     };
 
@@ -1362,7 +1431,7 @@
     tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
   }
 
-  // ---------- TABLE ----------
+    // ---------- TABLE ----------
   function renderTable(rows){
     const tbody = $("#detailBody");
     if(!tbody) return;
@@ -1376,6 +1445,10 @@
     let html = "";
     rows.forEach(r => {
       const eff = adjustEff(r.daily_efficiency_pct);
+      const effDisplay = isNaN(eff) ? '-' : eff.toFixed(2);
+      const band = getEfficiencyBand(eff);
+      const effClass = band ? `eff-${band}` : "";
+
       html += `
         <tr>
           <td>${r.log_date || '-'}</td>
@@ -1385,7 +1458,7 @@
           <td>${(r.mirror_class || '').replace(/</g,"&lt;")}</td>
           <td style="text-align:right;">${(Number(r.daily_total)||0).toLocaleString()}</td>
           <td style="text-align:right;">${(Number(r.target)||0).toLocaleString()}</td>
-          <td style="text-align:right;">${isNaN(eff) ? '-' : eff.toFixed(2)}</td>
+          <td style="text-align:right;" class="${effClass}">${effDisplay}</td>
         </tr>
       `;
     });
