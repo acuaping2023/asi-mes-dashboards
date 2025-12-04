@@ -498,7 +498,7 @@ let lastRows = [];
 let barChartInstance   = null;
 let trendChartInstance = null;
 
-// ---------- MAIN LOAD ----------
+/// ---------- MAIN LOAD ----------
 document.addEventListener("DOMContentLoaded", () => {
 
   // ---------- THEME INIT ----------
@@ -531,29 +531,37 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#toDate").value   = todayIso();
   $("#fromDate").value = isoNDaysAgo(6);
 
-  // 🔒 Always hide 0% rows (force toggle ON, even though the control is hidden)
+  // 🔒 Always hide 0% rows (force toggle ON)
   const nz = $("#nonZeroToggle");
   if (nz) {
     nz.checked = true;
     nz.addEventListener("change", () => renderAll(lastRows));
   }
 
-  // ---------- BUTTONS ----------
-  // Last 7 days
-  $("#quick7").addEventListener("click", () => {
-    $("#toDate").value   = todayIso();
-    $("#fromDate").value = isoNDaysAgo(6);
-    loadAndRender();
-  });
+  const baselineSel = $("#baselineMode");
+  if (baselineSel){
+    baselineSel.addEventListener("change", () => renderAll(lastRows));
+  }
 
-  // Refresh
-  $("#refreshBtn").addEventListener("click", loadAndRender);
+  // ---------- HEADER BUTTONS ----------
+  const quick7Btn = $("#quick7");
+  if (quick7Btn){
+    quick7Btn.addEventListener("click", () => {
+      $("#toDate").value   = todayIso();
+      $("#fromDate").value = isoNDaysAgo(6);
+      loadAndRender();
+    });
+  }
 
-  // Admin uploader button
+  const refreshBtn = $("#refreshBtn");
+  if (refreshBtn){
+    refreshBtn.addEventListener("click", loadAndRender);
+  }
+
   const uploaderBtn = $("#openUploaderBtn");
-  if (uploaderBtn) {
+  if (uploaderBtn){
     uploaderBtn.addEventListener("click", () => {
-      if (HOURLY_LOG_UPLOADER_URL) {
+      if (HOURLY_LOG_UPLOADER_URL){
         window.open(HOURLY_LOG_UPLOADER_URL, "_blank");
       } else {
         alert("Uploader URL is not configured yet.");
@@ -561,35 +569,40 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ---------- FILTER CHANGE HANDLERS ----------
-  $("#fromDate").addEventListener("change", loadAndRender);
-  $("#toDate").addEventListener("change", loadAndRender);
+  const fromInput = $("#fromDate");
+  const toInput   = $("#toDate");
+  if (fromInput) fromInput.addEventListener("change", loadAndRender);
+  if (toInput)   toInput.addEventListener("change", loadAndRender);
 
-  $("#roleFilter").addEventListener("change", () => {
-    populateWorkerFilter(lastRows);
-    renderAll(lastRows);
-  });
+  // ---------- FILTER DROPDOWNS ----------
+  const roleSel   = $("#roleFilter");
+  const mtSel     = $("#mirrorTypeFilter");
+  const clsSel    = $("#mirrorClassFilter");
+  const workerSel = $("#workerFilter");
 
-  $("#mirrorTypeFilter").addEventListener("change", () => {
-    populateWorkerFilter(lastRows);
-    renderAll(lastRows);
-  });
-
-  $("#mirrorClassFilter").addEventListener("change", () => {
-    populateWorkerFilter(lastRows);
-    renderAll(lastRows);
-  });
-
-  $("#workerFilter").addEventListener("change", () => {
-    renderAll(lastRows);
-  });
-
-  const baselineSel = $("#baselineMode");
-  if (baselineSel){
-    baselineSel.addEventListener("change", () => renderAll(lastRows));
+  if (roleSel){
+    roleSel.addEventListener("change", () => {
+      populateWorkerFilter(lastRows);
+      renderAll(lastRows);
+    });
+  }
+  if (mtSel){
+    mtSel.addEventListener("change", () => {
+      populateWorkerFilter(lastRows);
+      renderAll(lastRows);
+    });
+  }
+  if (clsSel){
+    clsSel.addEventListener("change", () => {
+      populateWorkerFilter(lastRows);
+      renderAll(lastRows);
+    });
+  }
+  if (workerSel){
+    workerSel.addEventListener("change", () => renderAll(lastRows));
   }
 
-  // Initial load
+  // ---------- INITIAL LOAD ----------
   loadAndRender();
 });
 
@@ -690,6 +703,31 @@ function populateWorkerFilter(rows){
     sel.value = workers[0];
   } else {
     sel.value = "all";
+  }
+}
+
+// ---------- CLICK FROM BAR → SELECT WORKER ----------
+function selectWorkerFromChart(workerName){
+  if (!workerName) return;
+
+  const sel = $("#workerFilter");
+  if (!sel) return;
+
+  const optionValues = Array.from(sel.options).map(o => o.value);
+  if (optionValues.includes(workerName)){
+    sel.value = workerName;
+  } else {
+    // if somehow not found, fall back to "all"
+    sel.value = "all";
+  }
+
+  // Re-render with this worker selected
+  renderAll(lastRows);
+
+  // Optional: scroll the trend chart into view
+  const trendTitle = $("#trendTitle");
+  if (trendTitle){
+    trendTitle.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
@@ -821,7 +859,7 @@ function renderWorkerBarChart(rows){
     title.textContent = "Average efficiency by worker / station (selected filters)";
   }
 
-  const data = {
+   const data = {
     labels,
     datasets:[{
       label:"Avg efficiency (%)",
@@ -837,6 +875,14 @@ function renderWorkerBarChart(rows){
     },
     plugins:{
       legend:{ display:false }
+    },
+    // NEW: click a bar → select that worker
+    onClick: (evt, elements) => {
+      if (!elements || !elements.length) return;
+      const first = elements[0];
+      const index = first.index;
+      const workerName = labels[index];
+      selectWorkerFromChart(workerName);
     }
   };
 
