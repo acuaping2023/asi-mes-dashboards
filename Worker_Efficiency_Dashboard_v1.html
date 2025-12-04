@@ -990,12 +990,9 @@
     // Re-render with this worker selected
     renderAll(lastRows);
 
-    // Optional: scroll the trend chart into view
-    const trendTitle = $("#trendTitle");
-    if (trendTitle){
-      trendTitle.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    // (Removed auto-scroll to trend chart)
   }
+
 
   // ---------- RENDER PIPELINE ----------
   function renderAll(rows){
