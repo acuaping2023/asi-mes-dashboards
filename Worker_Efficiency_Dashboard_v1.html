@@ -294,6 +294,9 @@ html[data-theme="dark"] select{
     </label>
     <button class="btn" id="quick7">Last 7 days</button>
     <button class="btn" id="refreshBtn">Refresh</button>
+    <button class="btn" id="openUploaderBtn">
+      Admin: Open Hourly Log Uploader
+    </button>
   </div>
 </header>
 
@@ -386,6 +389,11 @@ const SUPABASE_ANON_KEY =
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ---------- ADMIN UPLOADER URL ----------
+// TODO: replace this with your actual GitHub Pages URL for ADMIN_worker_hourly_log_upload_v2.html
+const HOURLY_LOG_UPLOADER_URL =
+  "https://acuaping2023.github.io/asi-mes-dashboards/ADMIN_worker_hourly_log_upload_v2.html";
+  
 // ---------- DATE HELPERS ----------
 function todayIso(){
   return new Date().toISOString().slice(0,10);
@@ -433,6 +441,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("#refreshBtn").addEventListener("click", loadAndRender);
+
+  // Admin: open the hourly log CSV uploader in a new tab
+  const uploaderBtn = $("#openUploaderBtn");
+  if (uploaderBtn) {
+    uploaderBtn.addEventListener("click", () => {
+      if (HOURLY_LOG_UPLOADER_URL) {
+        window.open(HOURLY_LOG_UPLOADER_URL, "_blank");
+      } else {
+        alert("Uploader URL is not configured yet.");
+      }
+    });
+  }
   $("#fromDate").addEventListener("change", loadAndRender);
   $("#toDate").addEventListener("change", loadAndRender);
 
@@ -899,4 +919,5 @@ function renderTable(rows){
 </script>
 </body>
 </html>
+
 
