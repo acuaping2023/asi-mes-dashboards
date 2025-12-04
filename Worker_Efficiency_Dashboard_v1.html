@@ -518,14 +518,19 @@ document.addEventListener("DOMContentLoaded", () => {
   updateThemeButtonLabel();
 
   if (themeToggle){
-    themeToggle.addEventListener("click", () => {
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-      const next = isDark ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      localStorage.setItem("asiTheme", next);
-      updateThemeButtonLabel();
-    });
-  }
+  themeToggle.addEventListener("click", () => {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const next = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("asiTheme", next);
+    updateThemeButtonLabel();
+
+    // 🔁 Re-render charts/tables so tick colors update
+    if (lastRows && lastRows.length){
+      renderAll(lastRows);
+    }
+  });
+}
 
   // ---------- DEFAULT DATE RANGE ----------
   $("#toDate").value   = todayIso();
@@ -822,7 +827,13 @@ function renderSummary(rows){
   `;
 }
 
-// ---------- BAR CHART: EFFICIENCY BY WORKER / STATION ----------
+// ---------- CHART THEME HELPERS ----------
+function chartTextColor(){
+  const theme = document.documentElement.getAttribute("data-theme");
+  return theme === "dark" ? "#ffffff" : "#111111";
+}
+
+/// ---------- BAR CHART: EFFICIENCY BY WORKER / STATION ----------
 function renderWorkerBarChart(rows){
   const ctx   = $("#workerBarChart");
   const title = $("#barTitle");
@@ -859,7 +870,7 @@ function renderWorkerBarChart(rows){
     title.textContent = "Average efficiency by worker / station (selected filters)";
   }
 
-   const data = {
+  const data = {
     labels,
     datasets:[{
       label:"Avg efficiency (%)",
@@ -871,12 +882,35 @@ function renderWorkerBarChart(rows){
     responsive:true,
     maintainAspectRatio:false,
     scales:{
-      y:{ beginAtZero:true, max:120 }
-    },
+  x: {
+    ticks: {
+      color: chartTextColor(),
+      maxRotation: 0,
+      minRotation: 0,
+      autoSkip: false   // show all names; remove this if it feels too crowded
+    }
+  },
+  y:{
+    beginAtZero:true,
+    max:120,
+    ticks: {
+      color: chartTextColor()
+    }
+  }
+},
+
     plugins:{
-      legend:{ display:false }
-    },
-    // NEW: click a bar → select that worker
+  legend:{ display:false },
+  tooltip: {
+    backgroundColor: "#111827",   // dark slate
+    borderColor: "#111827",
+    borderWidth: 1,
+    titleColor: "#f9fafb",        // white-ish
+    bodyColor: "#f9fafb",
+  }
+},
+
+    // click a bar → select that worker
     onClick: (evt, elements) => {
       if (!elements || !elements.length) return;
       const first = elements[0];
@@ -936,15 +970,33 @@ function renderWorkerTrendChart(rows, workerFilter){
     }]
   };
 
-  const options = {
+    const options = {
     responsive:true,
     maintainAspectRatio:false,
     scales:{
-      y:{ beginAtZero:true, max:120 }
+      x: {
+        ticks: {
+          color: chartTextColor()
+        }
+      },
+      y:{
+        beginAtZero:true,
+        max:120,
+        ticks: {
+          color: chartTextColor()
+        }
+      }
     },
     plugins:{
-      legend:{ display:false }
-    }
+  legend:{ display:false },
+  tooltip: {
+    backgroundColor: "#111827",
+    borderColor: "#111827",
+    borderWidth: 1,
+    titleColor: "#f9fafb",
+    bodyColor: "#f9fafb",
+  }
+}
   };
 
   if(trendChartInstance){
