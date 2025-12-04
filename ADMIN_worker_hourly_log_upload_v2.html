@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASI — Worker Hourly Log CSV Uploader (v2)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- PapaParse (CSV parser) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    :root{
+      --accent:#E41E26;
+      --bg:#f3f4f6;
+      --panel:#ffffff;
+      --text:#111827;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --shadow:0 10px 25px rgba(15,23,42,.15);
+      --ok:#16a34a;
+      --warn:#f97316;
+      --err:#dc2626;
+    }
+    *{box-sizing:border-box;}
+    html,body{
+      margin:0;
+      padding:0;
+      font-family:"Times New Roman", Times, serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .shell{
+      max-width:820px;
+      margin:32px auto;
+      padding:0 16px 40px;
+    }
+    .card{
+      background:var(--panel);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      border:1px solid var(--border);
+      padding:18px 20px 16px;
+    }
+    .brand{
+      display:flex;
+      align-items:flex-end;
+      gap:10px;
+      margin-bottom:14px;
+    }
+    .asi-logo{
+      height:32px;
+      width:auto;
+      display:block;
+    }
+    .brand-title{
+      font-size:20px;
+      font-weight:700;
+      color:#CC5500;
+      line-height:1.1;
+    }
+    .brand-subtitle{
+      font-size:12px;
+      color:var(--muted);
+    }
+    h2{
+      margin:10px 0 6px;
+      font-size:18px;
+    }
+    p{
+      margin:4px 0;
+      font-size:13px;
+      color:var(--muted);
+    }
+    label{
+      font-size:13px;
+      font-weight:600;
+      display:block;
+      margin-top:10px;
+      margin-bottom:4px;
+    }
+    input[type="file"]{
+      display:block;
+      margin-bottom:6px;
+      font-size:13px;
+    }
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-top:10px;
+      margin-bottom:12px;
+    }
+    .checkbox{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .btn{
+      border-radius:999px;
+      border:1px solid var(--border);
+      padding:8px 16px;
+      background:var(--accent);
+      color:#fff;
+      font-size:14px;
+      cursor:pointer;
+      font-weight:700;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .btn:disabled{
+      opacity:0.6;
+      cursor:not-allowed;
+    }
+    .pill{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      border:1px solid var(--border);
+      background:#f9fafb;
+      color:var(--muted);
+    }
+    .status{
+      margin-top:10px;
+      padding:8px 10px;
+      border-radius:10px;
+      font-size:13px;
+      border:1px dashed var(--border);
+      background:#f9fafb;
+      white-space:pre-line;
+    }
+    .status.ok{border-color:var(--ok);color:var(--ok);background:#ecfdf3;}
+    .status.warn{border-color:var(--warn);color:var(--warn);background:#fffbeb;}
+    .status.err{border-color:var(--err);color:var(--err);background:#fef2f2;}
+    ul{
+      margin:6px 0 4px 22px;
+      padding:0;
+      font-size:12px;
+      color:var(--muted);
+    }
+    code{
+      font-family:Consolas,monospace;
+      font-size:12px;
+      background:#f3f4f6;
+      padding:1px 4px;
+      border-radius:4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <div class="brand">
+        <img src="asi_logo.png" class="asi-logo" alt="ASI">
+        <div>
+          <div class="brand-title">Worker Hourly Log — CSV Uploader (v2)</div>
+          <div class="brand-subtitle">
+            Reads <code>Hourly_Log</code> export → groups by worker + date → loads into <code>worker_daily_log</code>
+          </div>
+        </div>
+      </div>
+
+      <h2>1. Choose Hourly_Log CSV</h2>
+      <p>
+        Export the <strong>Hourly_Log</strong> table from Excel as CSV. It should have these headers:
+      </p>
+      <ul>
+        <li><code>log_date</code>, <code>role</code>, <code>worker_name</code>, <code>part_number</code></li>
+        <li><code>mirror_type</code>, <code>mirror_class</code></li>
+        <li><code>hour_range</code>, <code>hour_block</code>, <code>block_fraction</code>, <code>qty</code></li>
+      </ul>
+
+      <label for="csvInput">CSV file</label>
+      <input type="file" id="csvInput" accept=".csv" />
+
+      <div class="row">
+        <label class="checkbox">
+          <input type="checkbox" id="truncateFirst" />
+          Replace everything: truncate <code>worker_daily_log</code> before upload
+          <span style="font-size:11px; color:#9ca3af; display:block;">
+            Leave this unchecked to <strong>append only</strong> (useful when loading multiple days).
+          </span>
+        </label>
+
+        <button id="uploadBtn" class="btn">
+          ⬆ Upload CSV (hourly → daily)
+        </button>
+      </div>
+
+      <div class="pill">
+        Source: <code>Hourly_Log</code> • Target: <code>worker_daily_log</code> • Standards from <code>mirror_standards</code>
+      </div>
+
+      <div id="statusBox" class="status">
+        Waiting for file…
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /************* SUPABASE CLIENT *************/
+    const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
+    const SUPABASE_ANON_KEY =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const uploadBtn   = document.getElementById('uploadBtn');
+    const csvInput    = document.getElementById('csvInput');
+    const truncateChk = document.getElementById('truncateFirst');
+    const statusBox   = document.getElementById('statusBox');
+
+    function setStatus(msg, type){
+      statusBox.textContent = msg;
+      statusBox.className = 'status ' + (type || '');
+    }
+
+    // 🔒 Set to true for testing (no DB writes).
+// When you're confident everything looks correct, change to false.
+const DRY_RUN = false;
+
+
+          /************* MIRROR STANDARDS LOOKUP *************/
+    // key 1: mirror_family|size_code  (e.g., "0620|ALL")  – fallback
+    // key 2: part_number              (e.g., "10-0620-4836") – primary
+    const mirrorStandards = {};
+    const mirrorStandardsByPart = {};
+
+    // Normalize Excel-style ="0600" / ="10-0620-4836" etc.
+    function normalizeQuoted(value) {
+      if (value == null) return '';
+      let s = String(value).trim();
+      if (s.startsWith('="') && s.endsWith('"')) {
+        s = s.slice(2, -1);
+      }
+      return s;
+    }
+
+    // 🔍 Detect duplicate per-part and family-level standards
+    function detectDuplicateStandards(rawRows) {
+      const perPartMap = new Map();   // part_number → [stds]
+      const familyMap  = new Map();   // fam|size     → [stds]
+      const issues     = [];
+
+      (rawRows || []).forEach(row => {
+        if (row.active === false) return;
+
+        const part = normalizeQuoted(row.part_number);
+        const fam  = normalizeQuoted(row.mirror_family);
+        let size   = normalizeQuoted(row.size_code);
+        if (!size) size = 'ALL';
+
+        const keyFamily = `${fam}|${size}`;
+        const std = Number(row.std_per_hour_100);
+        if (!std || isNaN(std)) return;
+
+        // Track per-part
+        if (part) {
+          if (!perPartMap.has(part)) perPartMap.set(part, []);
+          perPartMap.get(part).push(std);
+        }
+
+        // Track family-level
+        if (fam) {
+          if (!familyMap.has(keyFamily)) familyMap.set(keyFamily, []);
+          familyMap.get(keyFamily).push(std);
+        }
+      });
+
+      // Look for conflicting duplicates
+      perPartMap.forEach((arr, part) => {
+        const unique = [...new Set(arr)];
+        if (unique.length > 1) {
+          issues.push(`Duplicate per-part standards for ${part}: ${unique.join(' vs ')}`);
+        }
+      });
+
+      familyMap.forEach((arr, key) => {
+        const unique = [...new Set(arr)];
+        if (unique.length > 1) {
+          issues.push(`Duplicate family standards for ${key}: ${unique.join(' vs ')}`);
+        }
+      });
+
+      return issues;
+    }
+
+    async function loadMirrorStandards() {
+      const { data, error } = await supabase
+        .from('mirror_standards')
+        .select('mirror_family, size_code, part_number, std_per_hour_100, active');
+
+      if (error) {
+        console.error('Error loading mirror_standards:', error);
+        throw new Error('Could not load mirror standards — check Supabase.');
+      }
+
+      // 🔍 Detect duplicate standards BEFORE building maps
+      const duplicateIssues = detectDuplicateStandards(data);
+      if (duplicateIssues.length > 0) {
+        const msg = 'Warning: duplicate standards detected:\n\n' +
+          duplicateIssues.map(i => '• ' + i).join('\n');
+        setStatus(msg, 'warn');
+        console.warn(msg);
+      }
+
+      // Clear existing maps
+      Object.keys(mirrorStandards).forEach(k => delete mirrorStandards[k]);
+      Object.keys(mirrorStandardsByPart).forEach(k => delete mirrorStandardsByPart[k]);
+
+      (data || []).forEach(row => {
+        if (row.active === false) return;
+
+        const famRaw  = row.mirror_family;
+        const sizeRaw = row.size_code;
+        const partRaw = row.part_number;
+
+        const fam  = normalizeQuoted(famRaw);
+        let size   = normalizeQuoted(sizeRaw);
+        const part = normalizeQuoted(partRaw);
+        const std  = Number(row.std_per_hour_100);
+
+        if (!std || isNaN(std)) return;
+
+        // 1) Primary: per-part standard (ALWAYS wins over family)
+        if (part) {
+          mirrorStandardsByPart[part] = std;
+        }
+
+        // 2) Fallback: family-level standard (e.g., 0600|ALL)
+        if (fam) {
+          if (!size) size = 'ALL';
+          const key = `${fam}|${size}`;
+          mirrorStandards[key] = std;
+        }
+      });
+
+      console.log('mirrorStandards (family):', mirrorStandards);
+      console.log('mirrorStandardsByPart:', mirrorStandardsByPart);
+    }
+
+    function getStandardRate100(partNumber, mirrorType) {
+      // 1) Try per-part standard first (hard override)
+      const pn = normalizeQuoted(partNumber);
+      if (pn && Object.prototype.hasOwnProperty.call(mirrorStandardsByPart, pn)) {
+        return mirrorStandardsByPart[pn];
+      }
+
+      // 2) Fallback to mirror_type family (0600 / 0620)
+      const fam = normalizeQuoted(mirrorType);
+      if (!fam) return null;
+
+      const key = `${fam}|ALL`;
+      if (Object.prototype.hasOwnProperty.call(mirrorStandards, key)) {
+        return mirrorStandards[key];
+      }
+
+      return null;
+    }
+
+
+    /************* TABLE TRUNCATION *************/
+    async function truncateWorkerDailyLogIfNeeded(){
+  // In dry-run mode, NEVER touch the table
+  if (DRY_RUN) return;
+
+  if (!truncateChk.checked) return;
+  setStatus('Truncating table worker_daily_log…', 'warn');
+
+  const { error } = await supabase
+    .from('worker_daily_log')
+    .delete()
+    .neq('id', 0);
+
+  if (error) throw error;
+}
+
+
+    /************* HOURLY → DAILY AGGREGATION LOGIC *************/
+
+       // Quickly scan the hourly CSV for part_numbers / mirror_types that
+    // do NOT have a matching standard (per-part or family).
+    function listMissingStandardsFromHourly(rows) {
+      const missingMap = new Map();
+
+      (rows || []).forEach(raw => {
+        const part = normalizeQuoted(raw.part_number);
+        const mtype = normalizeQuoted(raw.mirror_type);
+
+        // If there's no mirror_type at all, we can't look up a family standard;
+        // aggregator will track those separately.
+        if (!mtype) return;
+
+        const std = getStandardRate100(part, mtype);
+        if (std == null) {
+          const key = part ? `part:${part}` : `family:${mtype}|ALL`;
+          if (!missingMap.has(key)) {
+            missingMap.set(key, { part, mtype });
+          }
+        }
+      });
+
+      return Array.from(missingMap.values());
+    }
+    
+    function getBaseHourWeight(hourBlock) {
+      // 1=7-8, 2=8-9, 3=9-10 (15m break, 0.75), 4=10-11, 5=11-12,
+      // 6=12:30-1:30, 7=1:30-2:30 (10m break, 5/6), 8=2:30-3:30
+      switch (hourBlock) {
+        case 1: return 1;
+        case 2: return 1;
+        case 3: return 0.75;
+        case 4: return 1;
+        case 5: return 1;
+        case 6: return 1;
+        case 7: return 5/6;
+        case 8: return 1;
+        default: return 0;
+      }
+    }
+
+    /**
+     * Convert the raw hourly rows into aggregated daily rows.
+     * Input: rows from Hourly_Log CSV
+     * Output: array of rows for worker_daily_log
+     */
+    function aggregateHourlyToDaily(rows) {
+      const groups = {};
+      let skippedNoMirrorType = 0;
+      let skippedNoStandard   = 0;
+
+      (rows || []).forEach(raw => {
+        const log_date    = (raw.log_date || '').trim();
+        const role        = (raw.role || '').trim();
+        const worker_name = (raw.worker_name || '').trim();
+        const part_number_raw = raw.part_number != null ? String(raw.part_number) : '';
+        const mirror_type_raw  = raw.mirror_type != null ? String(raw.mirror_type) : '';
+        const mirror_class_raw = raw.mirror_class != null ? String(raw.mirror_class) : '';
+        const hour_block_raw   = raw.hour_block;
+        const block_frac_raw   = raw.block_fraction;
+        const qty_raw          = raw.qty;
+
+
+        if (!log_date || !worker_name) {
+          // If missing fundamental info, skip row.
+          return;
+        }
+
+        // Parse hour_block
+        const hourBlock = Number(hour_block_raw);
+        if (!hourBlock || isNaN(hourBlock)) {
+          // No valid hour block -> skip
+          return;
+        }
+
+        const baseWeight = getBaseHourWeight(hourBlock);
+        if (baseWeight <= 0) {
+          // Unknown hour mapping
+          return;
+        }
+
+        // block_fraction default 1 if blank
+        let blockFraction = 1;
+        if (block_frac_raw !== null && block_frac_raw !== undefined && block_frac_raw !== '') {
+          const bf = Number(block_frac_raw);
+          if (!isNaN(bf) && bf > 0) {
+            blockFraction = bf;
+          }
+        }
+
+        // qty
+        const qty = Number(qty_raw);
+        if (!qty || isNaN(qty)) {
+          // No quantity -> skip
+          return;
+        }
+
+        // Mirror type
+        let mirrorType = mirror_type_raw.trim();
+        if (mirrorType.startsWith('="') && mirrorType.endsWith('"')) {
+          mirrorType = mirrorType.slice(2, -1);
+        }
+
+        if (!mirrorType) {
+          skippedNoMirrorType++;
+          return;
+        }
+
+        const stdRate100 = getStandardRate100(part_number_raw, mirrorType);
+        if (!stdRate100) {
+          skippedNoStandard++;
+          return;
+        }
+
+        // 75% realistic standard
+        const stdRate75 = stdRate100 * 0.75;
+
+        const effectiveHours = baseWeight * blockFraction;
+        const expectedUnits  = stdRate75 * effectiveHours;
+
+        const key = `${log_date}||${role}||${worker_name}`;
+
+        if (!groups[key]) {
+          groups[key] = {
+            log_date,
+            role,
+            worker_name,
+            totalQty: 0,
+            totalExpected: 0,
+            mirrorTypes: new Set(),
+            mirrorClasses: new Set()
+          };
+        }
+
+        const g = groups[key];
+        g.totalQty      += qty;
+        g.totalExpected += expectedUnits;
+        g.mirrorTypes.add(mirrorType || '');
+        g.mirrorClasses.add(mirror_class_raw.trim() || '');
+      });
+
+      const results = [];
+
+      Object.values(groups).forEach(g => {
+        const daily_total = g.totalQty;
+        const target = g.totalExpected;
+        const effPct = (target > 0 && daily_total > 0)
+          ? (daily_total / target) * 100
+          : null;
+
+        // mirror_type aggregation: if single type, use it; else "mixed"
+        let mirror_type_agg = '';
+        const mtArr = Array.from(g.mirrorTypes).filter(v => v);
+        if (mtArr.length === 1) {
+          mirror_type_agg = mtArr[0];
+        } else if (mtArr.length > 1) {
+          mirror_type_agg = 'mixed';
+        }
+
+        // mirror_class aggregation
+        let mirror_class_agg = '';
+        const mcArr = Array.from(g.mirrorClasses).filter(v => v);
+        if (mcArr.length === 1) {
+          mirror_class_agg = mcArr[0];
+        } else if (mcArr.length > 1) {
+          mirror_class_agg = 'mixed';
+        }
+
+        results.push({
+          log_date: g.log_date,
+          role: g.role || null,
+          worker_name: g.worker_name,
+          mirror_type: mirror_type_agg || null,
+          mirror_class: mirror_class_agg || null,
+          daily_total: daily_total,
+          target: target,
+          daily_efficiency_pct: effPct
+        });
+      });
+
+      return {
+        dailyRows: results,
+        skippedNoMirrorType,
+        skippedNoStandard
+      };
+    }
+
+    /************* INSERT DAILY ROWS *************/
+    async function insertDailyRows(dailyRows, chunkSize = 500) {
+      let inserted = 0;
+      for (let i = 0; i < dailyRows.length; i += chunkSize) {
+        const chunk = dailyRows.slice(i, i + chunkSize);
+        setStatus(
+          `Uploading daily rows ${i+1}–${Math.min(i+chunkSize, dailyRows.length)} of ${dailyRows.length}…`,
+          'warn'
+        );
+
+        const { error } = await supabase
+          .from('worker_daily_log')
+          .insert(chunk);
+
+        if (error) throw error;
+        inserted += chunk.length;
+      }
+      return inserted;
+    }
+
+    /************* MAIN HANDLER *************/
+    async function handleUpload(){
+      const file = csvInput.files[0];
+      if(!file){
+        setStatus('Please choose a CSV file first.', 'err');
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Uploading…';
+
+      try{
+        setStatus('Parsing CSV (Hourly_Log)…', 'warn');
+
+        const parsed = await new Promise((resolve, reject)=>{
+          Papa.parse(file, {
+            header:true,
+            skipEmptyLines:true,
+            complete: results => resolve(results),
+            error: err => reject(err)
+          });
+        });
+
+        if(parsed.errors && parsed.errors.length){
+          console.error(parsed.errors);
+          setStatus('Error while parsing CSV. Check console for details.', 'err');
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = '⬆ Upload CSV (hourly → daily)';
+          return;
+        }
+
+        const rows = parsed.data;
+        if(!rows.length){
+          setStatus('CSV contained no data rows.', 'err');
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = '⬆ Upload CSV (hourly → daily)';
+          return;
+        }
+
+        setStatus('Loading mirror standards…', 'warn');
+        await loadMirrorStandards();
+
+                // 🔍 Check which part_numbers / mirror_types are missing standards
+        const missing = listMissingStandardsFromHourly(rows);
+        if (missing.length) {
+          const preview = missing.slice(0, 20).map(m => {
+            if (m.part && m.mtype) {
+              return `• part ${m.part} (mirror_type ${m.mtype})`;
+            }
+            if (m.part) {
+              return `• part ${m.part} (no mirror_type in CSV)`;
+            }
+            return `• mirror_type ${m.mtype} (family ALL)`;
+          }).join('\n');
+
+          let extra = '';
+          if (missing.length > 20) {
+            extra = `\n…and ${missing.length - 20} more.`;
+          }
+
+          setStatus(
+            'Warning: some rows in this CSV do not have any matching standard ' +
+            '(neither per-part nor family). These rows will be skipped during aggregation.\n\n' +
+            preview + extra,
+            'warn'
+          );
+        }
+
+        await truncateWorkerDailyLogIfNeeded();
+
+        setStatus('Aggregating hourly rows into daily worker performance…', 'warn');
+               const { dailyRows, skippedNoMirrorType, skippedNoStandard } = aggregateHourlyToDaily(rows);
+
+        if (!dailyRows.length) {
+          setStatus(
+            'No valid hourly rows to aggregate.\n' +
+            `Skipped for missing mirror_type: ${skippedNoMirrorType}\n` +
+            `Skipped for missing mirror_standards: ${skippedNoStandard}`,
+            'err'
+          );
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = '⬆ Upload CSV (hourly → daily)';
+          return;
+        }
+
+        // 🧪 DRY RUN: show what *would* happen, but do NOT write to Supabase
+        if (DRY_RUN) {
+          let msg = 'DRY RUN ONLY — no database changes were made.\n\n' +
+                    `Would aggregate ${rows.length} hourly rows → ${dailyRows.length} daily rows.\n` +
+                    `Skipped for missing mirror_type: ${skippedNoMirrorType}\n` +
+                    `Skipped for missing mirror_standards: ${skippedNoStandard}`;
+          setStatus(msg, 'ok');
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = '⬆ Upload CSV (hourly → daily)';
+          return;
+        }
+
+        // REAL RUN: actually insert into worker_daily_log
+        const inserted = await insertDailyRows(dailyRows);
+
+        let msg = `✅ Done.\nAggregated ${rows.length} hourly rows → ${inserted} daily rows in worker_daily_log.`;
+
+        if (skippedNoMirrorType || skippedNoStandard) {
+          msg += `\n\nNote:\nSkipped rows (no mirror_type): ${skippedNoMirrorType}\nSkipped rows (no standard in mirror_standards): ${skippedNoStandard}`;
+        }
+        msg += `\nYou can now refresh your Worker Efficiency dashboard.`;
+        setStatus(msg, 'ok');
+      }catch(err){
+        console.error(err);
+        setStatus('Upload failed: ' + (err.message || String(err)), 'err');
+      }finally{
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = '⬆ Upload CSV (hourly → daily)';
+      }
+    }
+
+    uploadBtn.addEventListener('click', handleUpload);
+  </script>
+</body>
+</html>
