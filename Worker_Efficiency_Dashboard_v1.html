@@ -1280,6 +1280,7 @@ function renderSummary(rows){
     return;
   }
 
+  // Overall average across the filtered rows
   const effs = rows
     .map(r => adjustEff(r.daily_efficiency_pct))
     .filter(v => !isNaN(v));
@@ -1288,35 +1289,46 @@ function renderSummary(rows){
     ? (effs.reduce((t,v)=>t+v,0) / effs.length)
     : 0;
 
+  // Group efficiencies by worker
   const byWorker = {};
   rows.forEach(r => {
     const name = r.worker_name || "Unknown";
-    const e = adjustEff(r.daily_efficiency_pct);
-    if(isNaN(e)) return;
-    if(!byWorker[name]) byWorker[name] = [];
+    const e    = adjustEff(r.daily_efficiency_pct);
+    if (isNaN(e)) return;
+    if (!byWorker[name]) byWorker[name] = [];
     byWorker[name].push(e);
   });
 
   let bestName  = "-";
-  let bestAvg   = 0;
+  let bestAvg   = null;
   let worstName = "-";
-  let worstAvg  = 0;
+  let worstAvg  = null;
 
   const workerNames = Object.keys(byWorker);
-  if(workerNames.length){
+
+  if (workerNames.length){
     workerNames.forEach(name => {
       const arr = byWorker[name];
+      if (!arr.length) return;
+
       const avg = arr.reduce((t,v)=>t+v,0) / arr.length;
-      if(bestName === "-" || avg > bestAvg){
+
+      // Best performer
+      if (bestAvg === null || avg > bestAvg){
         bestName = name;
         bestAvg  = avg;
       }
-      if(worstName === "-" || avg < worstAvg){
+
+      // Lowest performer
+      if (worstAvg === null || avg < worstAvg){
         worstName = name;
         worstAvg  = avg;
       }
     });
   }
+
+  const bestAvgDisplay  = bestAvg  != null ? bestAvg.toFixed(1)  + "%" : "—";
+  const worstAvgDisplay = worstAvg != null ? worstAvg.toFixed(1) + "%" : "—";
 
   box.innerHTML = `
     <div class="summary-card">
@@ -1327,12 +1339,12 @@ function renderSummary(rows){
     <div class="summary-card">
       <div class="summary-label">Best performer</div>
       <div class="summary-value">${bestName}</div>
-      <div class="summary-sub">${bestAvg ? bestAvg.toFixed(1) + '%' : '—'}</div>
+      <div class="summary-sub">${bestAvgDisplay}</div>
     </div>
     <div class="summary-card">
       <div class="summary-label">Lowest performer</div>
       <div class="summary-value">${worstName}</div>
-      <div class="summary-sub">${worstAvg ? worstAvg.toFixed(1) + '%' : '—'}</div>
+      <div class="summary-sub">${worstAvgDisplay}</div>
     </div>
   `;
 }
@@ -2030,83 +2042,6 @@ function renderTable(rows){
   });
   tbody.innerHTML = html;
 }
-
-// ---------- CSV EXPORT ----------
-function exportRowsToCSV(rows) {
-  if (!rows || !rows.length) {
-    alert("No data available to export.");
-    return;
-  }
-
-  // Define the columns you want exported
-  const headers = [
-    "Date",
-    "Role",
-    "Worker / Station",
-    "Mirror type",
-    "Category",
-    "Daily total",
-    "Target",
-    "Efficiency % (adjusted)"
-  ];
-
-  const csvRows = [];
-  csvRows.push(headers.join(",")); // header row
-
-  rows.forEach(r => {
-    const eff = adjustEff(r.daily_efficiency_pct);
-    const row = [
-      r.log_date || "",
-      r.role || "",
-      r.worker_name || "",
-      r.mirror_type || "",
-      r.mirror_class || "",
-      Number(r.daily_total) || 0,
-      Number(r.target) || 0,
-      isNaN(eff) ? "" : eff.toFixed(2)
-    ];
-    csvRows.push(row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
-  });
-
-  const csvContent = csvRows.join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-
-  const from = $("#fromDate").value || "start";
-  const to = $("#toDate").value || "end";
-
-  const worker = $("#workerFilter").value;
-  const workerLabel = worker === "all" ? "ALL_WORKERS" : worker.replace(/\s+/g, "_");
-
-  const filename = `efficiency_export_${workerLabel}_${from}_to_${to}.csv`;
-
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-// Button event
-document.addEventListener("DOMContentLoaded", () => {
-  const btn = document.getElementById("exportCsvBtn");
-  if (btn) {
-    btn.addEventListener("click", () => {
-      // Export the rows currently rendered in the detail table
-      const worker = $("#workerFilter").value;
-
-      // apply filters again to match the detail table exactly
-      const base0 = applyBaseFilters(lastRows || []);
-      const base = applyNonZeroFilter(base0);
-
-      let data = base;
-      if (worker !== "all") {
-        data = base.filter(r => r.worker_name === worker);
-      }
-
-      exportRowsToCSV(data);
-    });
-  }
-});
 
 </script>
 </body>
