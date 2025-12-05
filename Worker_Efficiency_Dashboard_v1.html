@@ -491,6 +491,9 @@
         Admin: Hourly Log Uploader
       </button>
       <button class="btn" id="themeToggle">Dark mode</button>
+      <!-- NEW -->
+      <button class="btn" id="exportCsvBtn">Export CSV</button>
+      <button class="btn" id="exportPdfBtn">Export PDF (1:1)</button>
     </div>
   </div>
 </header>
@@ -623,6 +626,10 @@
 <!-- Supabase & Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- NEW: jsPDF for PDF export -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
 <script>
 // ---------- BASIC HELPERS ----------
@@ -1005,6 +1012,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const refreshBtn = $("#refreshBtn");
   if (refreshBtn){
     refreshBtn.addEventListener("click", loadAndRender);
+  }
+
+  // CSV export button
+  const exportCsvBtn = document.getElementById("exportCsvBtn");
+  if (exportCsvBtn) {
+    exportCsvBtn.addEventListener("click", () => {
+      const { rows } = getCurrentFilteredRows();
+      exportRowsToCSV(rows);
+    });
+  }
+
+  // PDF export button (1:1)
+  const exportPdfBtn = document.getElementById("exportPdfBtn");
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener("click", () => {
+      exportWorkerPdf();
+    });
   }
 
   const uploaderBtn = $("#openUploaderBtn");
@@ -1716,6 +1740,214 @@ function renderWeeklyLeaderboard(rows){
   tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
 }
 
+// ---------- HELPER: GET CURRENT FILTERED ROWS (MATCHES DETAIL TABLE) ----------
+function getCurrentFilteredRows() {
+  const worker = $("#workerFilter").value || "all";
+
+  const base0 = applyBaseFilters(lastRows || []);
+  const base = applyNonZeroFilter(base0);
+
+  let data = base;
+  if (worker !== "all") {
+    data = base.filter(r => (r.worker_name || "") === worker);
+  }
+
+  return { worker, rows: data };
+}
+
+// ---------- CSV EXPORT ----------
+function exportRowsToCSV(rows) {
+  if (!rows || !rows.length) {
+    alert("No data available to export.");
+    return;
+  }
+
+  const headers = [
+    "Date",
+    "Role",
+    "Worker / Station",
+    "Mirror type",
+    "Category",
+    "Daily total",
+    "Target",
+    "Efficiency % (adjusted)"
+  ];
+
+  const csvRows = [];
+  csvRows.push(headers.join(",")); // header row
+
+  rows.forEach(r => {
+    const eff = adjustEff(r.daily_efficiency_pct);
+    const row = [
+      r.log_date || "",
+      r.role || "",
+      r.worker_name || "",
+      r.mirror_type || "",
+      r.mirror_class || "",
+      Number(r.daily_total) || 0,
+      Number(r.target) || 0,
+      isNaN(eff) ? "" : eff.toFixed(2)
+    ];
+    // escape quotes, wrap each cell
+    csvRows.push(row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  });
+
+  const csvContent = csvRows.join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+  const from = $("#fromDate").value || "start";
+  const to = $("#toDate").value || "end";
+
+  const workerSelect = $("#workerFilter").value || "all";
+  const workerLabel =
+    workerSelect === "all"
+      ? "ALL_WORKERS"
+      : workerSelect.replace(/\s+/g, "_");
+
+  const filename = `efficiency_export_${workerLabel}_${from}_to_${to}.csv`;
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+// ---------- PDF EXPORT (1:1 COACHING) ----------
+async function exportWorkerPdf() {
+  const { worker, rows } = getCurrentFilteredRows();
+
+  if (!rows.length) {
+    alert("No data available to export.");
+    return;
+  }
+
+  if (!worker || worker === "all") {
+    alert("PDF export is designed for 1:1s.\nPlease select a single worker / station first.");
+    return;
+  }
+
+  // Compute snapshot stats for header (reuse your existing function)
+  const stats = computeWorkerSnapshotStats(rows);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+
+  const from = $("#fromDate").value || "start";
+  const to = $("#toDate").value || "end";
+  const baselineMode = getBaselineMode(); // "75" or "100"
+
+  // ---------- HEADER ----------
+  doc.setFont("Times", "Bold");
+  doc.setFontSize(16);
+  doc.text("Worker Efficiency 1:1 Report", 40, 40);
+
+  doc.setFont("Times", "Normal");
+  doc.setFontSize(11);
+  doc.text(`Worker / Station: ${worker}`, 40, 65);
+  doc.text(`Date range: ${from} to ${to}`, 40, 80);
+  doc.text(
+    `Baseline: ${baselineMode === "100" ? "100% engineering standard" : "75% engineering standard"}`,
+    40,
+    95
+  );
+
+  // Snapshot quick stats
+  let y = 120;
+  if (stats) {
+    doc.text(
+      `Range avg efficiency: ${stats.weeklyAverageEfficiency != null ? stats.weeklyAverageEfficiency.toFixed(1) + "%" : "—"}`,
+      40,
+      y
+    ); y += 15;
+
+    doc.text(
+      `Total units (range): ${stats.weeklyTotalUnits != null ? stats.weeklyTotalUnits.toLocaleString() : "—"}`,
+      40,
+      y
+    ); y += 15;
+
+    doc.text(
+      `Consistency: ${stats.consistencyLabel || "—"}${stats.consistencyStd != null ? ` (Std dev: ${stats.consistencyStd.toFixed(1)} pts)` : ""}`,
+      40,
+      y
+    ); y += 15;
+
+    if (stats.onTargetPct != null) {
+      doc.text(
+        `On-target days (≥ ${EFF_WARN_MIN}%): ${stats.onTargetDays} of ${stats.daysCount} days (${stats.onTargetPct.toFixed(0)}%)`,
+        40,
+        y
+      ); y += 15;
+    }
+
+    if (stats.topType) {
+      doc.text(
+        `Top mirror type: ${stats.topType} — ${stats.topTypeUnits.toLocaleString()} units (${stats.topTypeShare != null ? stats.topTypeShare.toFixed(0) + "%" : "—"})`,
+        40,
+        y
+      ); y += 15;
+    }
+
+    if (stats.topClass) {
+      doc.text(
+        `Top mirror category: ${stats.topClass} — ${stats.topClassUnits.toLocaleString()} units (${stats.topClassShare != null ? stats.topClassShare.toFixed(0) + "%" : "—"})`,
+        40,
+        y
+      ); y += 15;
+    }
+
+    if (stats.trendLabel && stats.trendLabel !== "Trend: —") {
+      doc.text(stats.trendLabel, 40, y);
+      y += 20;
+    } else {
+      y += 10;
+    }
+  } else {
+    y += 10;
+  }
+
+  // ---------- DETAIL TABLE ----------
+  const tableHead = [[
+    "Date",
+    "Role",
+    "Mirror type",
+    "Category",
+    "Daily total",
+    "Target",
+    "Eff %"
+  ]];
+
+  const tableBody = rows.map(r => {
+    const eff = adjustEff(r.daily_efficiency_pct);
+    return [
+      r.log_date || "",
+      r.role || "",
+      r.mirror_type || "",
+      r.mirror_class || "",
+      (Number(r.daily_total) || 0).toLocaleString(),
+      (Number(r.target) || 0).toLocaleString(),
+      isNaN(eff) ? "" : eff.toFixed(1)
+    ];
+  });
+
+  doc.autoTable({
+    startY: y + 5,
+    head: tableHead,
+    body: tableBody,
+    styles: {
+      font: "Times",
+      fontSize: 9,
+      cellPadding: 4
+    },
+    headStyles: {
+      fontStyle: "bold"
+    }
+  });
+
+  const filename = `worker_1on1_${worker.replace(/\s+/g, "_")}_${from}_to_${to}.pdf`;
+  doc.save(filename);
+}
+
 // ---------- DETAIL TABLE ----------
 function renderTable(rows){
   const tbody = $("#detailBody");
@@ -1749,6 +1981,84 @@ function renderTable(rows){
   });
   tbody.innerHTML = html;
 }
+
+// ---------- CSV EXPORT ----------
+function exportRowsToCSV(rows) {
+  if (!rows || !rows.length) {
+    alert("No data available to export.");
+    return;
+  }
+
+  // Define the columns you want exported
+  const headers = [
+    "Date",
+    "Role",
+    "Worker / Station",
+    "Mirror type",
+    "Category",
+    "Daily total",
+    "Target",
+    "Efficiency % (adjusted)"
+  ];
+
+  const csvRows = [];
+  csvRows.push(headers.join(",")); // header row
+
+  rows.forEach(r => {
+    const eff = adjustEff(r.daily_efficiency_pct);
+    const row = [
+      r.log_date || "",
+      r.role || "",
+      r.worker_name || "",
+      r.mirror_type || "",
+      r.mirror_class || "",
+      Number(r.daily_total) || 0,
+      Number(r.target) || 0,
+      isNaN(eff) ? "" : eff.toFixed(2)
+    ];
+    csvRows.push(row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  });
+
+  const csvContent = csvRows.join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+  const from = $("#fromDate").value || "start";
+  const to = $("#toDate").value || "end";
+
+  const worker = $("#workerFilter").value;
+  const workerLabel = worker === "all" ? "ALL_WORKERS" : worker.replace(/\s+/g, "_");
+
+  const filename = `efficiency_export_${workerLabel}_${from}_to_${to}.csv`;
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+// Button event
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("exportCsvBtn");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      // Export the rows currently rendered in the detail table
+      const worker = $("#workerFilter").value;
+
+      // apply filters again to match the detail table exactly
+      const base0 = applyBaseFilters(lastRows || []);
+      const base = applyNonZeroFilter(base0);
+
+      let data = base;
+      if (worker !== "all") {
+        data = base.filter(r => r.worker_name === worker);
+      }
+
+      exportRowsToCSV(data);
+    });
+  }
+});
+
 </script>
 </body>
 </html>
