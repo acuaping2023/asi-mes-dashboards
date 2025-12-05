@@ -532,11 +532,18 @@
         <div id="wsWorstDayLabel" class="ws-stat-sub">—</div>
       </div>
 
-      <!-- NEW: Top mirror type -->
+      <!-- Top mirror type -->
       <div class="ws-stat">
         <div class="ws-stat-label">Top mirror type</div>
         <div id="wsTopTypeValue" class="ws-stat-value">—</div>
         <div id="wsTopTypeLabel" class="ws-stat-sub">—</div>
+      </div>
+
+      <!-- Top mirror category -->
+      <div class="ws-stat">
+        <div class="ws-stat-label">Top mirror category</div>
+        <div id="wsTopClassValue" class="ws-stat-value">—</div>
+        <div id="wsTopClassLabel" class="ws-stat-sub">—</div>
       </div>
     </div>
   </div>
@@ -676,6 +683,8 @@ const wsWorstDayEffEl   = document.getElementById("wsWorstDayEff");
 const wsWorstDayLabelEl = document.getElementById("wsWorstDayLabel");
 const wsTopTypeValueEl  = document.getElementById("wsTopTypeValue");
 const wsTopTypeLabelEl  = document.getElementById("wsTopTypeLabel");
+const wsTopClassValueEl = document.getElementById("wsTopClassValue");
+const wsTopClassLabelEl = document.getElementById("wsTopClassLabel");
 
 function formatPercent(value){
   if(value == null || isNaN(value)) return "—";
@@ -749,6 +758,21 @@ function updateWorkerSnapshot(workerName, stats){
     wsTopTypeValueEl.textContent = "—";
     wsTopTypeLabelEl.textContent = "—";
   }
+
+  // Top mirror category
+  if (stats.topClass){
+    wsTopClassValueEl.textContent = stats.topClass;
+    if (stats.topClassShare != null){
+      wsTopClassLabelEl.textContent =
+        `${stats.topClassUnits.toLocaleString()} units (${stats.topClassShare.toFixed(0)}% of range)`;
+    } else {
+      wsTopClassLabelEl.textContent =
+        `${stats.topClassUnits.toLocaleString()} units`;
+    }
+  } else {
+    wsTopClassValueEl.textContent = "—";
+    wsTopClassLabelEl.textContent = "—";
+  }
 }
 
 function computeWorkerSnapshotStats(rows){
@@ -765,23 +789,27 @@ function computeWorkerSnapshotStats(rows){
   const todayEff   = adjustEff(last.daily_efficiency_pct);
   const todayUnits = Number(last.daily_total) || 0;
 
-  // all efficiencies + units + mirror-type breakdown
+  // all efficiencies + units + mirror-type/category breakdown
   const effValues = [];
   let totalUnits = 0;
-  const typeUnits = {}; // mirror_type -> total units
+  const typeUnits  = {}; // mirror_type -> total units
+  const classUnits = {}; // mirror_class -> total units
 
   sorted.forEach(r => {
     const e = adjustEff(r.daily_efficiency_pct);
     const u = Number(r.daily_total) || 0;
-    const type = (r.mirror_type || "Unknown").toString();
+    const type = (r.mirror_type  || "Unknown").toString();
+    const cls  = (r.mirror_class || "Unknown").toString();
 
     totalUnits += u;
     if (!isNaN(e)){
       effValues.push(e);
     }
 
-    if (!typeUnits[type]) typeUnits[type] = 0;
-    typeUnits[type] += u;
+    if (!typeUnits[type])  typeUnits[type]  = 0;
+    if (!classUnits[cls])  classUnits[cls]  = 0;
+    typeUnits[type]  += u;
+    classUnits[cls]  += u;
   });
 
   const daysCount = effValues.length;
@@ -863,9 +891,24 @@ function computeWorkerSnapshotStats(rows){
     }
   });
 
+  // ---------- Top mirror category ----------
+  let topClass = null;
+  let topClassUnits = 0;
+  Object.keys(classUnits).forEach(cls => {
+    if (classUnits[cls] > topClassUnits){
+      topClassUnits = classUnits[cls];
+      topClass = cls;
+    }
+  });
+
   let topTypeShare = null;
   if (topType && totalUnits > 0){
     topTypeShare = (typeUnits[topType] / totalUnits) * 100;
+  }
+
+  let topClassShare = null;
+  if (topClass && totalUnits > 0){
+    topClassShare = (classUnits[topClass] / totalUnits) * 100;
   }
 
   const from = document.getElementById("fromDate")?.value;
@@ -891,6 +934,10 @@ function computeWorkerSnapshotStats(rows){
     topType: topType,
     topTypeShare: topTypeShare,
     topTypeUnits: topUnits,
+
+    topClass: topClass,
+    topClassShare: topClassShare,
+    topClassUnits: topClassUnits,
 
     dateRangeLabel: rangeLabel
   };
@@ -974,7 +1021,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const fromInput = $("#fromDate");
   const toInput   = $("#toDate");
   if (fromInput) fromInput.addEventListener("change", loadAndRender);
-  if (toInput)   addEventListener("change", loadAndRender);
+  if (toInput)   toInput.addEventListener("change", loadAndRender);
 
   // FILTER DROPDOWNS
   const roleSel   = $("#roleFilter");
