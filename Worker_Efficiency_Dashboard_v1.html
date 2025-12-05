@@ -604,6 +604,7 @@
             <th>Date</th>
             <th>Role</th>
             <th>Worker / Station</th>
+            <th>Part #</th> <!-- NEW -->
             <th>Mirror type</th>
             <th>Category</th>
             <th style="text-align:right;">Daily total</th>
@@ -1113,8 +1114,40 @@ document.addEventListener("DOMContentLoaded", () => {
       renderAll(lastRows);
     });
   }
-  if (workerSel){
+    if (workerSel){
     workerSel.addEventListener("change", () => renderAll(lastRows));
+  }
+
+  // CLICK-TO-DRILL: detail table row -> focus worker + date
+  const detailBody = document.getElementById("detailBody");
+  if (detailBody) {
+    detailBody.addEventListener("click", (e) => {
+      const tr = e.target.closest("tr.detail-row-drill");
+      if (!tr) return;
+
+      const date = tr.dataset.date;
+      const worker = tr.dataset.worker || "all";
+      if (!date) return;
+
+      console.log("Drill into", worker, "on", date); // debug line
+
+      // Set date range to that single day
+      const fromInput = document.getElementById("fromDate");
+      const toInput   = document.getElementById("toDate");
+      if (fromInput && toInput) {
+        fromInput.value = date;
+        toInput.value   = date;
+      }
+
+      // Set worker filter to that worker
+      const workerSelect = document.getElementById("workerFilter");
+      if (workerSelect && worker !== "all") {
+        workerSelect.value = worker;
+      }
+
+      // Reload data for this worker + date
+      loadAndRender();
+    });
   }
 
   // INITIAL LOAD
@@ -2028,10 +2061,16 @@ function renderTable(rows){
     const effClass = band ? `eff-${band}` : "";
 
     html += `
-      <tr>
+      <tr
+        class="detail-row-drill"
+        data-date="${r.log_date || ''}"
+        data-worker="${(r.worker_name || '').replace(/"/g,'&quot;')}"
+        style="cursor:pointer;"
+      >
         <td>${r.log_date || '-'}</td>
         <td>${(r.role || '').replace(/</g,"&lt;")}</td>
         <td>${(r.worker_name || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.part_number || '').replace(/</g,"&lt;")}</td> <!-- NEW -->
         <td>${(r.mirror_type || '').replace(/</g,"&lt;")}</td>
         <td>${(r.mirror_class || '').replace(/</g,"&lt;")}</td>
         <td style="text-align:right;">${(Number(r.daily_total)||0).toLocaleString()}</td>
