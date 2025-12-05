@@ -1260,52 +1260,41 @@ function getEfficiencyColor(value){
   }
 
   // ---------- LINE CHART: TREND FOR SELECTED WORKER / STATION ----------
-function renderWorkerTrendChart(rows, workerFilter){
-  const ctx   = $("#workerTrendChart");
-  const title = $("#trendTitle");
-  if(!ctx) return;
+  function renderWorkerTrendChart(rows, workerFilter){
+    const ctx   = $("#workerTrendChart");
+    const title = $("#trendTitle");
+    if(!ctx) return;
 
-  // If no worker is selected or no rows, clear chart
-  if(!rows || !rows.length || !workerFilter || workerFilter === "all"){
-    if(trendChartInstance){
-      trendChartInstance.destroy();
-      trendChartInstance = null;
+    if(!rows || !rows.length || !workerFilter || workerFilter === "all"){
+      if(trendChartInstance){
+        trendChartInstance.destroy();
+        trendChartInstance = null;
+      }
+      if(title){
+        title.textContent = "Daily efficiency trend (select a worker / station)";
+      }
+      return;
     }
+
+    const sorted = [...rows].sort((a,b) => {
+      return (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0);
+    });
+
+    const labels = sorted.map(r => r.log_date);
+    const effs   = sorted.map(r => adjustEff(r.daily_efficiency_pct) || 0);
+
     if(title){
-      title.textContent = "Daily efficiency trend (select a worker / station)";
+      title.textContent = `Daily efficiency trend — ${workerFilter}`;
     }
-    return;
-  }
 
-  // Sort by date so the line is in order
-  const sorted = [...rows].sort((a,b) => {
-    return (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0);
-  });
+        const avgEff = effs.length
+      ? effs.reduce((t, v) => t + v, 0) / effs.length
+      : null;
+    const lineColor = getEfficiencyColor(avgEff);
 
-  const labels = sorted.map(r => r.log_date);
-  const effs   = sorted.map(r => adjustEff(r.daily_efficiency_pct) || 0);
-
-  if(title){
-    title.textContent = `Daily efficiency trend — ${workerFilter}`;
-  }
-
-  // Color the main line based on average efficiency
-  const avgEff = effs.length
-    ? effs.reduce((t, v) => t + v, 0) / effs.length
-    : null;
-  const lineColor = getEfficiencyColor(avgEff);
-
-  // 🔹 Target line logic
-  // Baseline "75" = show data vs 75% standard → target = 100 on that scale
-  // Baseline "100" = show data vs 100% engineering → target = 75 on that scale
-  const baselineMode = getBaselineMode();
-  const targetValue  = (baselineMode === "100") ? 75 : 100;
-  const targetValues = labels.map(() => targetValue);
-
-  const data = {
-    labels,
-    datasets:[
-      {
+    const data = {
+      labels,
+      datasets:[{
         label:"Efficiency (%)",
         data:effs,
         tension:0.3,
@@ -1313,63 +1302,50 @@ function renderWorkerTrendChart(rows, workerFilter){
         backgroundColor: lineColor,
         pointBackgroundColor: lineColor,
         pointBorderColor: lineColor
-      },
-      {
-        label:"Target (engineering)",
-        data: targetValues,
-        tension: 0,              // straight line
-        borderColor: "#ffd84d",  // matches --warn
-        borderWidth: 1.5,
-        borderDash: [6, 4],      // dotted
-        pointRadius: 0,
-        fill: false
-      }
-    ]
-  };
+      }]
+    };
 
-  const options = {
-    responsive:true,
-    maintainAspectRatio:false,
-    scales:{
-      x: {
-        ticks: {
-          color: chartTextColor()
+      const options = {
+      responsive:true,
+      maintainAspectRatio:false,
+      scales:{
+        x: {
+          ticks: {
+            color: chartTextColor()
+          }
+        },
+        y:{
+          beginAtZero:true,
+          max:120,
+          ticks: {
+            color: chartTextColor()
+          }
         }
       },
-      y:{
-        beginAtZero:true,
-        max:120,
-        ticks: {
-          color: chartTextColor()
-        }
-      }
-    },
-    plugins:{
-      legend:{ 
-        display:true   // show both "Efficiency" and "Target" in legend
-      },
-      tooltip: {
-        backgroundColor: "#111827",
-        borderColor: "#111827",
-        borderWidth: 1,
-        titleColor: "#f9fafb",
-        bodyColor: "#f9fafb",
-      }
+      plugins:{
+    legend:{ display:false },
+    tooltip: {
+      backgroundColor: "#111827",
+      borderColor: "#111827",
+      borderWidth: 1,
+      titleColor: "#f9fafb",
+      bodyColor: "#f9fafb",
     }
-  };
-
-  if(trendChartInstance){
-    trendChartInstance.data    = data;
-    trendChartInstance.options = options;
-    trendChartInstance.update();
-  }else{
-    trendChartInstance = new Chart(ctx, {
-      type:'line',
-      data,
-      options
-    });
   }
-}
+    };
+
+    if(trendChartInstance){
+      trendChartInstance.data    = data;
+      trendChartInstance.options = options;
+      trendChartInstance.update();
+    }else{
+      trendChartInstance = new Chart(ctx, {
+        type:'line',
+        data,
+        options
+      });
+    }
+  }
 
   // ---------- WEEKLY LEADERBOARD ----------
   function renderWeeklyLeaderboard(rows){
@@ -1491,6 +1467,7 @@ function renderWorkerTrendChart(rows, workerFilter){
   </script>
   </body>
   </html>
+
 
 
 
