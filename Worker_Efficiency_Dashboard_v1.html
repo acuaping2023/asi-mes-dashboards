@@ -728,10 +728,29 @@ function updateWorkerSnapshot(workerName, stats){
   wsTodayUnitsEl.textContent = `${formatUnits(stats.todayUnits)} units today`;
   applyEfficiencyClassToElement(wsTodayEffEl, stats.todayEfficiency);
 
-  // Range average
-  wsWeeklyAvgEl.textContent   = formatPercent(stats.weeklyAverageEfficiency);
-  wsWeeklyUnitsEl.textContent = `${formatUnits(stats.weeklyTotalUnits)} total units`;
+    // Range average + department comparison
+  wsWeeklyAvgEl.textContent = formatPercent(stats.weeklyAverageEfficiency);
   applyEfficiencyClassToElement(wsWeeklyAvgEl, stats.weeklyAverageEfficiency);
+
+  let unitsText = `${formatUnits(stats.weeklyTotalUnits)} total units`;
+
+  if (stats.deptAvgEff != null) {
+    const deptVal = stats.deptAvgEff.toFixed(1);
+    const delta = stats.deltaFromDept ?? 0;
+    const absDelta = Math.abs(delta);
+    let compareText = "";
+
+    if (absDelta < 0.5) {
+      compareText = `Dept avg this range: ${deptVal}% (about at dept avg)`;
+    } else {
+      const sign = delta > 0 ? "+" : "−";
+      compareText = `Dept avg this range: ${deptVal}% (${sign}${absDelta.toFixed(1)} pts vs dept)`;
+    }
+
+    unitsText += ` • ${compareText}`;
+  }
+
+  wsWeeklyUnitsEl.textContent = unitsText;
 
   // Consistency
   wsBestDayEffEl.textContent =
@@ -782,7 +801,7 @@ function updateWorkerSnapshot(workerName, stats){
   }
 }
 
-function computeWorkerSnapshotStats(rows){
+function computeWorkerSnapshotStats(rows, deptRows){
   if(!rows || !rows.length) return null;
 
   // sort by date
@@ -823,6 +842,24 @@ function computeWorkerSnapshotStats(rows){
   const weeklyAvg = daysCount
     ? effValues.reduce((t,v) => t + v, 0) / daysCount
     : null;
+      // ---------- Department average (same filters, all workers) ----------
+  let deptAvgEff = null;
+  let deltaFromDept = null;
+
+  if (deptRows && deptRows.length) {
+    const deptEffs = deptRows
+      .map(r => adjustEff(r.daily_efficiency_pct))
+      .filter(v => !isNaN(v));
+
+    if (deptEffs.length) {
+      deptAvgEff = deptEffs.reduce((t, v) => t + v, 0) / deptEffs.length;
+    }
+
+    if (weeklyAvg != null && deptAvgEff != null) {
+      deltaFromDept = weeklyAvg - deptAvgEff; // + = above dept, - = below
+    }
+  }
+
 
   // ---------- Consistency (std dev) ----------
   let consistencyStd = null;
@@ -946,8 +983,13 @@ function computeWorkerSnapshotStats(rows){
     topClassShare: topClassShare,
     topClassUnits: topClassUnits,
 
-    dateRangeLabel: rangeLabel
+    dateRangeLabel: rangeLabel,
+
+    // NEW:
+    deptAvgEff: deptAvgEff,
+    deltaFromDept: deltaFromDept
   };
+
 }
 
 // ---------- MAIN LOAD ----------
@@ -1213,8 +1255,10 @@ function renderAll(rows){
   renderWeeklyLeaderboard(base);
   renderTable(workerFiltered.length ? workerFiltered : base);
 
-  if(workerFilter && workerFilter !== "all" && workerFiltered.length){
-    const stats = computeWorkerSnapshotStats(workerFiltered);
+  if (workerFilter && workerFilter !== "all" && workerFiltered.length) {
+    // dept-level rows = same filters, all workers (base)
+    const deptRows = base;
+    const stats = computeWorkerSnapshotStats(workerFiltered, deptRows);
     updateWorkerSnapshot(workerFilter, stats);
   } else {
     updateWorkerSnapshot(null, null);
@@ -1827,8 +1871,13 @@ async function exportWorkerPdf() {
     return;
   }
 
-  // Compute snapshot stats for header (reuse your existing function)
-  const stats = computeWorkerSnapshotStats(rows);
+  // Compute snapshot stats for header (reuse existing function)
+  const base0 = applyBaseFilters(lastRows || []);
+  const base = applyNonZeroFilter(base0);
+  const deptRows = base; // same filters, all workers
+
+  const stats = computeWorkerSnapshotStats(rows, deptRows);
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
