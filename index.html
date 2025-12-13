@@ -264,13 +264,13 @@ main{
     <section class="tile-grid">
 
       <!-- Worker Efficiency Dashboard (LIVE) -->
-      <article class="tile" onclick="window.open('Worker_Efficiency_Dashboard_v1.html','_blank')">
+      <article class="tile" onclick="window.open('Worker_Efficiency_Dashboard_v2.html','_blank')">
         <div class="tile-badge live">Live</div>
         <h2 class="tile-title">Worker Performance — Mirrors</h2>
         <div class="tile-sub">
           Individual performance dashboard for mirror assemblers and packers:
           daily / weekly / monthly efficiency by person and station, with leaderboards and trend lines.
-          Built from the Daily_Log export into Supabase.
+          Built from supervised hourly logging and streamed into Supabase in near real time.
         </div>
         <div class="kpi-row">
           <div class="kpi-pill">✓ Individual efficiency by day</div>
@@ -279,10 +279,16 @@ main{
         </div>
         <div class="tile-footer">
           <div>Data source: <strong>worker_daily_log</strong></div>
-          <a class="tile-link" href="Worker_Efficiency_Dashboard_v1.html" target="_blank" rel="noopener">
-            <span>Open Worker Efficiency Dashboard</span>
-            <span class="icon">↗</span>
-          </a>
+          <div style="display:flex; gap:10px;">
+            <a class="tile-link" href="ADMIN_worker_hourly_logger_v1.html" target="_blank" rel="noopener">
+              <span>Open Admin Logger</span>
+              <span class="icon">↗</span>
+            </a>
+            <a class="tile-link" href="Worker_Efficiency_Dashboard_v2.html" target="_blank" rel="noopener">
+              <span>Open Worker Efficiency Dashboard</span>
+              <span class="icon">↗</span>
+            </a>
+          </div>
         </div>
       </article>
 
