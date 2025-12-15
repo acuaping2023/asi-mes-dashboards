@@ -162,12 +162,8 @@
       margin-top:6px;
       min-height:16px;
     }
-    .status-ok{
-      color:var(--ok);
-    }
-    .status-err{
-      color:var(--danger);
-    }
+    .status-ok{ color:var(--ok); }
+    .status-err{ color:var(--danger); }
 
     .quick-qty-row{
       display:flex;
@@ -207,9 +203,7 @@
       color:var(--muted);
     }
 
-    .table-wrap{
-      overflow-x:auto;
-    }
+    .table-wrap{ overflow-x:auto; }
 
     .tag{
       display:inline-block;
@@ -228,12 +222,9 @@
       padding:12px;
     }
 
-    /* Highlight rows that include a break block */
     tr.row-break td{
-      background:#fff7ed;          /* soft orange */
+      background:#fff7ed;
     }
-
-    /* Little pill for break info in the time column */
     .break-badge{
       display:inline-block;
       margin-left:6px;
@@ -245,7 +236,6 @@
       color:#9a3412;
     }
 
-    /* Simple invalid field highlight */
     .input-invalid{
       border-color:#dc2626 !important;
       box-shadow:0 0 0 1px rgba(220,38,38,0.25);
@@ -270,18 +260,19 @@
       <span>American Specialties Inc. — Mirror Department</span>
     </div>
   </div>
+
   <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
-  <div class="tag">v1 • Real-time input → Supabase</div>
+    <div class="tag">v1 • Real-time input → Supabase</div>
 
-  <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);">
-    <input type="checkbox" id="demoModeToggle" />
-    Demo mode
-  </label>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);">
+      <input type="checkbox" id="demoModeToggle" />
+      Demo mode
+    </label>
 
-  <div class="tag" id="freshnessTag">Last updated: —</div>
+    <div class="tag" id="freshnessTag">Last updated: —</div>
 
-  <button class="btn" id="howItWorksBtn" type="button">How it works</button>
-</div>
+    <button class="btn" id="howItWorksBtn" type="button">How it works</button>
+  </div>
 </header>
 
 <main>
@@ -324,14 +315,13 @@
         <label for="workerName">Worker / Station</label>
         <select id="workerName">
           <option value="">Select...</option>
-          <!-- Options will be injected from Supabase -->
         </select>
       </div>
 
-
       <div class="field">
         <label for="partNumber">Part #</label>
-        <input type="text" id="partNumber" placeholder="e.g. 0600-2436">
+        <input type="text" id="partNumber" placeholder="e.g. 0600-2436" list="partSuggestions">
+        <datalist id="partSuggestions"></datalist>
       </div>
 
       <div class="field">
@@ -364,15 +354,12 @@
       </div>
     </div>
 
-     <div class="btn-row">
-      <button class="btn btn-primary" id="submitBtn">Save entry</button>
-      <button class="btn" id="saveAndStayBtn">Save &amp; stay on worker / hour</button>
-      <button class="btn" id="todayFilterBtn">Show today’s entries</button>
-    
-      <!-- NEW -->
+    <div class="btn-row">
+      <button class="btn btn-primary" id="submitBtn" type="button">Save entry</button>
+      <button class="btn" id="saveAndStayBtn" type="button">Save &amp; stay on worker / hour</button>
+      <button class="btn" id="todayFilterBtn" type="button">Show today’s entries</button>
       <button class="btn" id="printTemplateBtn" type="button">Print blank log</button>
     </div>
-
 
     <div id="statusLine" class="status-line"></div>
   </section>
@@ -397,9 +384,7 @@
             <th style="text-align:right;">Qty</th>
           </tr>
         </thead>
-        <tbody id="entriesBody">
-          <!-- Rows injected by JS -->
-        </tbody>
+        <tbody id="entriesBody"></tbody>
       </table>
     </div>
   </section>
@@ -418,6 +403,19 @@
     return new Date().toISOString().slice(0,10);
   }
 
+  function nowStamp(){
+    return new Date().toLocaleString();
+  }
+
+  function escapeHtml(str){
+    return String(str || "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
   // ---------- HOUR BLOCK ORDER & HELPERS ----------
   const HOUR_BLOCK_ORDER = {
     "7am-8am": 1,
@@ -434,22 +432,12 @@
     return HOUR_BLOCK_ORDER[block] || 999;
   }
 
-  // Auto-select the current hour block based on local time
   function autoSelectHourBlock(){
     const select = $("#hourBlock");
     if(!select) return;
 
-    const now   = new Date();
-    const h     = now.getHours(); // 0–23
-    const m     = now.getMinutes();
-    const total = h * 60 + m;     // minutes since midnight
-
-    // helper to make minutes from 12h time
-    const toMin = (hour12, minute, isPM) => {
-      let h24 = hour12 % 12;
-      if(isPM) h24 += 12;
-      return h24 * 60 + minute;
-    };
+    const now = new Date();
+    const total = now.getHours() * 60 + now.getMinutes();
 
     const blocks = [
       { label: "7am-8am",                   start: 7*60,        end: 8*60        },
@@ -462,18 +450,8 @@
       { label: "2:30pm-3:30pm",             start: 14*60 + 30,  end: 15*60 + 30  }
     ];
 
-
-    let match = null;
-    for(const b of blocks){
-      if(total >= b.start && total < b.end){
-        match = b.label;
-        break;
-      }
-    }
-
-    if(match){
-      select.value = match;
-    }
+    const match = blocks.find(b => total >= b.start && total < b.end);
+    if(match) select.value = match.label;
   }
 
   // ---------- SUPABASE CLIENT ----------
@@ -481,232 +459,20 @@
   const SUPABASE_ANON_KEY =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
 
-  if (!window.supabase) {
-  console.error("Supabase library failed to load. Check your script tag / internet access.");
-  alert("Supabase failed to load. Fix the Supabase script tag first.");
-  } 
+  if(!window.supabase){
+    console.error("Supabase library failed to load. Check your script tag / internet access.");
+    alert("Supabase failed to load. Fix the Supabase script tag first.");
+  }
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ---------- DEMO MODE (portfolio-safe) ----------
+  // ---------- DEMO MODE ----------
   const DEMO_KEY = "WHL_DEMO_MODE_v1";
   const DEMO_STORAGE_KEY = "WHL_DEMO_ENTRIES_v1";
-
   let demoMode = false;
 
   function setFreshness(text){
     const el = document.getElementById("freshnessTag");
     if(el) el.textContent = text;
-  }
-
-  function nowStamp(){
-    const d = new Date();
-    return d.toLocaleString();
-  }
-
-  // ---------- PRINT TEMPLATE ----------
-function escapeHtml(str){
-  return String(str || "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
-function getWorkerListForPrint(){
-  const sel = document.getElementById("workerName");
-  if(!sel) return [];
-
-  const opts = Array.from(sel.options)
-    .map(o => ({
-      value: (o.value || "").trim(),
-      text: (o.textContent || "").trim()
-    }))
-    .filter(o =>
-      o.value !== "" &&                      // ignore placeholder value=""
-      o.text.toLowerCase() !== "select..."   // extra safety
-    )
-    .map(o => o.value);
-
-  return Array.from(new Set(opts));
-}
-
-function buildPrintTemplateHtml({ date, roleLabel, workers }){
-  const hourBlocks = [
-    "7am-8am",
-    "8am-9am",
-    "9am-10am (15m break)",
-    "10am-11am",
-    "11am-12pm",
-    "12:30pm-1:30pm",
-    "1:30pm-2:30pm (10m break)",
-    "2:30pm-3:30pm"
-  ];
-
-  const header = `
-    <div class="print-header">
-      <div class="title">Worker Hourly Log — Blank Template</div>
-      <div class="meta">
-        <div><b>Date:</b> ${escapeHtml(date)}</div>
-        <div><b>Role:</b> ${escapeHtml(roleLabel)}</div>
-        <div><b>Supervisor:</b> __________________________</div>
-      </div>
-      <div class="note">Use this sheet while walking the floor. Fill in Part # and Qty for each worker per hour block.</div>
-    </div>
-  `;
-
-  const workerRows = (workers || []).map(w => `
-    <tr>
-      <td class="wcol">${escapeHtml(w)}</td>
-      <td class="pcol"></td>
-      <td class="qcol"></td>
-      <td class="ncol"></td>
-    </tr>
-  `).join("");
-
-  const sections = hourBlocks.map((hb, idx) => `
-    <section class="block ${idx === 0 ? "" : "page-break"}">
-      <div class="block-title">
-        <span>${escapeHtml(hb.replace(/\s*\(.*\)/,"").trim())}</span>
-        ${/\(([^)]+)\)/.test(hb) ? `<span class="break-pill">${escapeHtml(hb.match(/\(([^)]+)\)/)[1])}</span>` : ""}
-      </div>
-
-      <table class="pt">
-        <thead>
-          <tr>
-            <th>Worker / Station</th>
-            <th>Part #</th>
-            <th style="text-align:right;">Qty</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${workerRows || `<tr><td colspan="4" class="empty">No workers loaded. (Make sure the dropdown is populated.)</td></tr>`}
-        </tbody>
-      </table>
-
-      <div class="totals">
-        <div><b>Hour total:</b> ____________</div>
-        <div><b>Issues / downtime:</b> ________________________________________________</div>
-      </div>
-    </section>
-  `).join("");
-
-  return `
-  <!doctype html>
-  <html>
-  <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Print — Worker Hourly Log</title>
-    <style>
-      :root{
-        --text:#111;
-        --muted:#555;
-        --border:#ddd;
-      }
-      html,body{ margin:0; padding:0; color:var(--text); font-family:"Times New Roman", Times, serif; }
-      .wrap{ padding:18px 18px 28px 18px; }
-      .print-header{
-        border-bottom:2px solid #000;
-        padding-bottom:10px;
-        margin-bottom:12px;
-      }
-      .title{ font-size:20px; font-weight:800; }
-      .meta{
-        margin-top:6px;
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:6px 18px;
-        font-size:12px;
-      }
-      .note{ margin-top:8px; font-size:12px; color:var(--muted); }
-      .block{ margin-top:14px; }
-      .block-title{
-        display:flex; align-items:center; gap:10px;
-        font-size:14px; font-weight:800;
-        margin:10px 0 6px 0;
-      }
-      .break-pill{
-        font-size:11px;
-        border:1px solid #999;
-        padding:1px 8px;
-        border-radius:999px;
-        font-weight:600;
-        color:#333;
-      }
-
-      table.pt{ width:100%; border-collapse:collapse; font-size:12px; }
-      table.pt th, table.pt td{ border:1px solid var(--border); padding:6px 8px; vertical-align:top; }
-      table.pt th{ background:#f3f3f3; font-weight:800; }
-      .wcol{ width:34%; }
-      .pcol{ width:22%; }
-      .qcol{ width:10%; text-align:right; }
-      .ncol{ width:34%; }
-      .empty{ text-align:center; color:var(--muted); padding:18px !important; }
-
-      .totals{
-        margin-top:8px;
-        font-size:12px;
-        display:flex;
-        flex-direction:column;
-        gap:6px;
-      }
-
-      .page-break{ page-break-before: always; }
-
-      @media print{
-        .wrap{ padding:0; }
-        .page-break{ page-break-before: always; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      ${header}
-      ${sections}
-    </div>
-
-    <script>
-      // Auto-print after render
-      window.addEventListener('load', () => {
-        setTimeout(() => window.print(), 50);
-      });
-    <\/script>
-  </body>
-  </html>
-  `;
-}
-
-  function openPrintTemplate(){
-    const date = (document.getElementById("logDate")?.value || todayIso());
-    const roleVal = (document.getElementById("role")?.value || "").trim();
-    const roleLabel = roleVal ? (roleVal.charAt(0).toUpperCase() + roleVal.slice(1)) : "All";
-    const workers = getWorkerListForPrint();
-
-    const html = buildPrintTemplateHtml({ date, roleLabel, workers });
-
-    // Hidden iframe print (no pop-ups)
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.style.visibility = "hidden";
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    iframe.onload = () => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => document.body.removeChild(iframe), 1000);
-    };
   }
 
   function loadDemoEntries(){
@@ -731,12 +497,222 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
     ];
   }
 
+  // ---------- PART # AUTOFILL (datalist) ----------
+  let PART_CACHE = [];
+
+  function setPartSuggestions(parts){
+    PART_CACHE = Array.from(new Set((parts || []).filter(Boolean))).sort();
+    const dl = document.getElementById("partSuggestions");
+    if(!dl) return;
+
+    dl.innerHTML = PART_CACHE
+      .map(p => `<option value="${escapeHtml(p)}"></option>`)
+      .join("");
+  }
+
+  async function refreshPartSuggestions(){
+    const date = document.getElementById("logDate")?.value || todayIso();
+
+    if(demoMode){
+      const all = loadDemoEntries();
+      const parts = (all || [])
+        .filter(r => r.log_date === date)
+        .map(r => (r.part_number || "").trim())
+        .filter(Boolean);
+
+      setPartSuggestions(parts);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("worker_hourly_log")
+      .select("part_number")
+      .eq("log_date", date);
+
+    if(error){
+      console.error("Part suggestion load error:", error.message);
+      return;
+    }
+
+    const parts = (data || [])
+      .map(r => (r.part_number || "").trim())
+      .filter(Boolean);
+
+    setPartSuggestions(parts);
+  }
+
+  // ---------- PRINT TEMPLATE ----------
+  function getWorkerListForPrint(){
+    const sel = document.getElementById("workerName");
+    if(!sel) return [];
+
+    const opts = Array.from(sel.options)
+      .map(o => ({
+        value: (o.value || "").trim(),
+        text: (o.textContent || "").trim()
+      }))
+      .filter(o => o.value !== "" && o.text.toLowerCase() !== "select...")
+      .map(o => o.value);
+
+    return Array.from(new Set(opts));
+  }
+
+  function buildPrintTemplateHtml({ date, roleLabel, workers }){
+    const hourBlocks = [
+      "7am-8am",
+      "8am-9am",
+      "9am-10am (15m break)",
+      "10am-11am",
+      "11am-12pm",
+      "12:30pm-1:30pm",
+      "1:30pm-2:30pm (10m break)",
+      "2:30pm-3:30pm"
+    ];
+
+    const header = `
+      <div class="print-header">
+        <div class="title">Worker Hourly Log — Blank Template</div>
+        <div class="meta">
+          <div><b>Date:</b> ${escapeHtml(date)}</div>
+          <div><b>Role:</b> ${escapeHtml(roleLabel)}</div>
+          <div><b>Supervisor:</b> __________________________</div>
+        </div>
+        <div class="note">Use this sheet while walking the floor. Fill in Part # and Qty for each worker per hour block.</div>
+      </div>
+    `;
+
+    const workerRows = (workers || []).map(w => `
+      <tr>
+        <td class="wcol">${escapeHtml(w)}</td>
+        <td class="pcol"></td>
+        <td class="qcol"></td>
+        <td class="ncol"></td>
+      </tr>
+    `).join("");
+
+    const sections = hourBlocks.map((hb, idx) => `
+      <section class="block ${idx === 0 ? "" : "page-break"}">
+        <div class="block-title">
+          <span>${escapeHtml(hb.replace(/\s*\(.*\)/,"").trim())}</span>
+          ${/\(([^)]+)\)/.test(hb) ? `<span class="break-pill">${escapeHtml(hb.match(/\(([^)]+)\)/)[1])}</span>` : ""}
+        </div>
+
+        <table class="pt">
+          <thead>
+            <tr>
+              <th>Worker / Station</th>
+              <th>Part #</th>
+              <th style="text-align:right;">Qty</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${workerRows || `<tr><td colspan="4" class="empty">No workers loaded. (Make sure the dropdown is populated.)</td></tr>`}
+          </tbody>
+        </table>
+
+        <div class="totals">
+          <div><b>Hour total:</b> ____________</div>
+          <div><b>Issues / downtime:</b> ________________________________________________</div>
+        </div>
+      </section>
+    `).join("");
+
+    return `
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Print — Worker Hourly Log</title>
+      <style>
+        :root{ --text:#111; --muted:#555; --border:#ddd; }
+        html,body{ margin:0; padding:0; color:var(--text); font-family:"Times New Roman", Times, serif; }
+        .wrap{ padding:18px 18px 28px 18px; }
+        .print-header{ border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:12px; }
+        .title{ font-size:20px; font-weight:800; }
+        .meta{
+          margin-top:6px;
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:6px 18px;
+          font-size:12px;
+        }
+        .note{ margin-top:8px; font-size:12px; color:var(--muted); }
+        .block{ margin-top:14px; }
+        .block-title{ display:flex; align-items:center; gap:10px; font-size:14px; font-weight:800; margin:10px 0 6px 0; }
+        .break-pill{ font-size:11px; border:1px solid #999; padding:1px 8px; border-radius:999px; font-weight:600; color:#333; }
+
+        table.pt{ width:100%; border-collapse:collapse; font-size:12px; }
+        table.pt th, table.pt td{ border:1px solid var(--border); padding:6px 8px; vertical-align:top; }
+        table.pt th{ background:#f3f3f3; font-weight:800; }
+        .wcol{ width:34%; }
+        .pcol{ width:22%; }
+        .qcol{ width:10%; text-align:right; }
+        .ncol{ width:34%; }
+        .empty{ text-align:center; color:var(--muted); padding:18px !important; }
+
+        .totals{ margin-top:8px; font-size:12px; display:flex; flex-direction:column; gap:6px; }
+
+        .page-break{ page-break-before: always; }
+
+        @media print{
+          .wrap{ padding:0; }
+          .page-break{ page-break-before: always; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        ${header}
+        ${sections}
+      </div>
+
+      <script>
+        window.addEventListener('load', () => {
+          setTimeout(() => window.print(), 50);
+        });
+      <\/script>
+    </body>
+    </html>
+    `;
+  }
+
+  function openPrintTemplate(){
+    const date = (document.getElementById("logDate")?.value || todayIso());
+    const roleVal = (document.getElementById("role")?.value || "").trim();
+    const roleLabel = roleVal ? (roleVal.charAt(0).toUpperCase() + roleVal.slice(1)) : "All";
+    const workers = getWorkerListForPrint();
+
+    const html = buildPrintTemplateHtml({ date, roleLabel, workers });
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.visibility = "hidden";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    };
+  }
+
   // ---------- WORKER DIRECTORY DROPDOWN ----------
   async function loadWorkerDirectory(){
     const selectEl = document.getElementById("workerName");
     if(!selectEl) return;
 
-    // Reset options with default "Select..."
     selectEl.innerHTML = '<option value="">Select...</option>';
 
     if(demoMode){
@@ -769,22 +745,19 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
       });
   }
 
-
-  // ---------- FORM + TABLE LOGIC ----------
+  // ---------- TABLE LOGIC ----------
   async function loadTodayEntries(){
     const date = $("#logDate").value || todayIso();
 
     const tbody = $("#entriesBody");
     const tag   = $("#todayTag");
 
-    // DEMO MODE: read from localStorage instead of Supabase
     if(demoMode){
       const all = loadDemoEntries();
       const data = (all || []).filter(r => r.log_date === date);
 
       if(!data.length){
-        tbody.innerHTML =
-          '<tr><td colspan="7" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
         if(tag) tag.textContent = date;
         setFreshness(`Last updated: ${nowStamp()} (Demo)`);
         return;
@@ -799,7 +772,7 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
 
       let html = "";
       data.forEach(row => {
-        const blockRaw  = row.hour_block || "";
+        const blockRaw   = row.hour_block || "";
         const breakMatch = blockRaw.match(/\(([^)]+)\)/);
         const hasBreak   = !!breakMatch;
         const baseLabel  = blockRaw.replace(/\s*\(.*\)/, "").trim();
@@ -808,14 +781,14 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
         html += `
           <tr class="${hasBreak ? "row-break" : ""}">
             <td>
-              ${baseLabel ? baseLabel.replace(/</g,"&lt;") : ""}
-              ${hasBreak ? '<span class="break-badge">' + breakText.replace(/</g,"&lt;") + '</span>' : ""}
+              ${escapeHtml(baseLabel)}
+              ${hasBreak ? '<span class="break-badge">' + escapeHtml(breakText) + '</span>' : ""}
             </td>
-            <td>${(row.worker_name || "").replace(/</g,"&lt;")}</td>
-            <td>${(row.role || "").replace(/</g,"&lt;")}</td>
-            <td>${(row.part_number || "").replace(/</g,"&lt;")}</td>
-            <td>${(row.mirror_type || "").replace(/</g,"&lt;")}</td>
-            <td>${(row.mirror_class || "").replace(/</g,"&lt;")}</td>
+            <td>${escapeHtml(row.worker_name)}</td>
+            <td>${escapeHtml(row.role)}</td>
+            <td>${escapeHtml(row.part_number)}</td>
+            <td>${escapeHtml(row.mirror_type)}</td>
+            <td>${escapeHtml(row.mirror_class)}</td>
             <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
           </tr>
         `;
@@ -827,7 +800,6 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
       return;
     }
 
-    // LIVE MODE: Supabase
     const { data, error } = await supabase
       .from("worker_hourly_log")
       .select("*")
@@ -835,16 +807,14 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
 
     if(error){
       console.error("Error loading entries:", error.message);
-      tbody.innerHTML =
-        '<tr><td colspan="7" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
       if(tag) tag.textContent = "";
       setFreshness(`Last updated: ${nowStamp()} (Error)`);
       return;
     }
 
     if(!data || !data.length){
-      tbody.innerHTML =
-        '<tr><td colspan="7" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
       if(tag) tag.textContent = date;
       setFreshness(`Last updated: ${nowStamp()}`);
       return;
@@ -854,16 +824,12 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
       const oa = getHourBlockSortValue(a.hour_block || "");
       const ob = getHourBlockSortValue(b.hour_block || "");
       if(oa !== ob) return oa - ob;
-
-      const na = (a.worker_name || "").toLowerCase();
-      const nb = (b.worker_name || "").toLowerCase();
-      return na.localeCompare(nb);
+      return (a.worker_name || "").toLowerCase().localeCompare((b.worker_name || "").toLowerCase());
     });
 
     let html = "";
     data.forEach(row => {
-      const blockRaw  = row.hour_block || "";
-
+      const blockRaw   = row.hour_block || "";
       const breakMatch = blockRaw.match(/\(([^)]+)\)/);
       const hasBreak   = !!breakMatch;
       const baseLabel  = blockRaw.replace(/\s*\(.*\)/, "").trim();
@@ -872,14 +838,14 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
       html += `
         <tr class="${hasBreak ? "row-break" : ""}">
           <td>
-            ${baseLabel ? baseLabel.replace(/</g,"&lt;") : blockRaw.replace(/</g,"&lt;")}
-            ${hasBreak ? '<span class="break-badge">' + breakText.replace(/</g,"&lt;") + '</span>' : ""}
+            ${escapeHtml(baseLabel || blockRaw)}
+            ${hasBreak ? '<span class="break-badge">' + escapeHtml(breakText) + '</span>' : ""}
           </td>
-          <td>${(row.worker_name || "").replace(/</g,"&lt;")}</td>
-          <td>${(row.role || "").replace(/</g,"&lt;")}</td>
-          <td>${(row.part_number || "").replace(/</g,"&lt;")}</td>
-          <td>${(row.mirror_type || "").replace(/</g,"&lt;")}</td>
-          <td>${(row.mirror_class || "").replace(/</g,"&lt;")}</td>
+          <td>${escapeHtml(row.worker_name)}</td>
+          <td>${escapeHtml(row.role)}</td>
+          <td>${escapeHtml(row.part_number)}</td>
+          <td>${escapeHtml(row.mirror_type)}</td>
+          <td>${escapeHtml(row.mirror_class)}</td>
           <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
         </tr>
       `;
@@ -890,7 +856,7 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
     setFreshness(`Last updated: ${nowStamp()}`);
   }
 
-
+  // ---------- STATUS + SAVE ----------
   function setStatus(message, ok=true){
     const el = $("#statusLine");
     if(!el) return;
@@ -900,82 +866,155 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
   }
 
   async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
-  const logDate     = $("#logDate").value || todayIso();
-  const hourBlock   = $("#hourBlock").value.trim();
-  const role        = $("#role").value.trim();
-  const workerName  = $("#workerName").value.trim();
-  const partNumber  = $("#partNumber").value.trim();
-  const mirrorType  = $("#mirrorType").value.trim();
-  const mirrorClass = $("#mirrorClass").value.trim();
-  const qtyStr      = $("#qty").value.trim();
+    const logDate     = $("#logDate").value || todayIso();
+    const hourBlock   = $("#hourBlock").value.trim();
+    const role        = $("#role").value.trim();
+    const workerName  = $("#workerName").value.trim();
+    const partNumber  = $("#partNumber").value.trim();
+    const mirrorType  = $("#mirrorType").value.trim();
+    const mirrorClass = $("#mirrorClass").value.trim();
+    const qtyStr      = $("#qty").value.trim();
 
-  // Clear previous invalid states
-  ["logDate","hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","qty"]
-    .forEach(id => {
-      const el = $("#" + id);
+    ["logDate","hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","qty"].forEach(id => {
+      const el = document.getElementById(id);
       if(el) el.classList.remove("input-invalid");
     });
 
-  // Validation
-  let hasError = false;
+    let hasError = false;
 
-  if(!hourBlock){
-    const hb = $("#hourBlock");
-    if(hb) hb.classList.add("input-invalid");
-    setStatus("Please select an hour block.", false);
-    hasError = true;
-  }
-
-  if(!role || !workerName || !partNumber || !mirrorType || !mirrorClass || !qtyStr){
-    setStatus("Please fill in all fields before saving.", false);
-    hasError = true;
-  }
-
-  const qty = Number(qtyStr);
-  if(isNaN(qty) || qty < 0){
-    const qEl = $("#qty");
-    if(qEl) qEl.classList.add("input-invalid");
-    setStatus("Quantity must be a non-negative number.", false);
-    hasError = true;
-  }
-
-  if(hasError) return;
-
-  setStatus("Saving entry...", true);
-
-    // DEMO MODE: save locally (no Supabase)
-  if(demoMode){
-    const rows = loadDemoEntries();
-
-    // Unique key match (same key you use for Supabase lookup)
-    const idx = (rows || []).findIndex(r =>
-      r.log_date === logDate &&
-      r.hour_block === hourBlock &&
-      r.role === role &&
-      r.worker_name === workerName &&
-      r.part_number === partNumber &&
-      r.mirror_type === mirrorType &&
-      r.mirror_class === mirrorClass
-    );
-
-    if(idx >= 0){
-      rows[idx].qty = qty;
-    } else {
-      rows.push({
-        log_date: logDate,
-        hour_block: hourBlock,
-        role: role,
-        worker_name: workerName,
-        part_number: partNumber,
-        mirror_type: mirrorType,
-        mirror_class: mirrorClass,
-        qty: qty
-      });
+    if(!hourBlock){
+      $("#hourBlock")?.classList.add("input-invalid");
+      setStatus("Please select an hour block.", false);
+      hasError = true;
     }
 
-    saveDemoEntries(rows);
+    if(!role || !workerName || !partNumber || !mirrorType || !mirrorClass || !qtyStr){
+      setStatus("Please fill in all fields before saving.", false);
+      if(!role) $("#role")?.classList.add("input-invalid");
+      if(!workerName) $("#workerName")?.classList.add("input-invalid");
+      if(!partNumber) $("#partNumber")?.classList.add("input-invalid");
+      if(!mirrorType) $("#mirrorType")?.classList.add("input-invalid");
+      if(!mirrorClass) $("#mirrorClass")?.classList.add("input-invalid");
+      if(!qtyStr) $("#qty")?.classList.add("input-invalid");
+      hasError = true;
+    }
 
-    setStatus("Entry saved (Demo mode).", true);
+    const qty = Number(qtyStr);
+    if(isNaN(qty) || qty < 0){
+      $("#qty")?.classList.add("input-invalid");
+      setStatus("Quantity must be a non-negative number.", false);
+      hasError = true;
+    }
+
+    if(hasError) return;
+
+    setStatus("Saving entry...", true);
+
+    // DEMO MODE
+    if(demoMode){
+      const rows = loadDemoEntries();
+
+      const idx = (rows || []).findIndex(r =>
+        r.log_date === logDate &&
+        r.hour_block === hourBlock &&
+        r.role === role &&
+        r.worker_name === workerName &&
+        r.part_number === partNumber &&
+        r.mirror_type === mirrorType &&
+        r.mirror_class === mirrorClass
+      );
+
+      if(idx >= 0){
+        rows[idx].qty = qty;
+      } else {
+        rows.push({
+          log_date: logDate,
+          hour_block: hourBlock,
+          role,
+          worker_name: workerName,
+          part_number: partNumber,
+          mirror_type: mirrorType,
+          mirror_class: mirrorClass,
+          qty
+        });
+      }
+
+      saveDemoEntries(rows);
+      setStatus("Entry saved (Demo mode).", true);
+
+      if(!stayOnWorkerHour){
+        $("#hourBlock").value   = "";
+        $("#role").value        = "";
+        $("#workerName").value  = "";
+        $("#partNumber").value  = "";
+        $("#mirrorType").value  = "";
+        $("#mirrorClass").value = "";
+      } else {
+        const currentBlock = hourBlock;
+        const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
+        const idx2 = orderedBlocks.indexOf(currentBlock);
+        if(idx2 >= 0 && idx2 < orderedBlocks.length - 1){
+          $("#hourBlock").value = orderedBlocks[idx2 + 1];
+        }
+      }
+
+      $("#qty").value = "";
+      await loadTodayEntries();
+      await refreshPartSuggestions();
+      return;
+    }
+
+    // LIVE MODE (upsert via find + update/insert)
+    const { data: existing, error: findErr } = await supabase
+      .from("worker_hourly_log")
+      .select("id")
+      .eq("log_date", logDate)
+      .eq("hour_block", hourBlock)
+      .eq("role", role)
+      .eq("worker_name", workerName)
+      .eq("part_number", partNumber)
+      .eq("mirror_type", mirrorType)
+      .eq("mirror_class", mirrorClass)
+      .limit(1);
+
+    if(findErr){
+      console.error("Lookup error:", findErr);
+      setStatus("Error checking existing entry. Check console.", false);
+      return;
+    }
+
+    let saveErr = null;
+
+    if(existing && existing.length){
+      const rowId = existing[0].id;
+      const { error: updErr } = await supabase
+        .from("worker_hourly_log")
+        .update({ qty })
+        .eq("id", rowId);
+      saveErr = updErr;
+    } else {
+      const { error: insErr } = await supabase
+        .from("worker_hourly_log")
+        .insert([{
+          log_date: logDate,
+          hour_block: hourBlock,
+          role,
+          worker_name: workerName,
+          part_number: partNumber,
+          mirror_type: mirrorType,
+          mirror_class: mirrorClass,
+          qty
+        }]);
+      saveErr = insErr;
+    }
+
+    if(saveErr){
+      console.error("Save error:", saveErr);
+      setStatus("Error saving entry. Check console for details.", false);
+      return;
+    }
+
+    setStatus("Entry saved.", true);
 
     if(!stayOnWorkerHour){
       $("#hourBlock").value   = "";
@@ -985,137 +1024,54 @@ function buildPrintTemplateHtml({ date, roleLabel, workers }){
       $("#mirrorType").value  = "";
       $("#mirrorClass").value = "";
     } else {
-      const currentBlock = $("#hourBlock").value;
-      const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER)
-        .sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
-
-      const idx2 = orderedBlocks.indexOf(currentBlock);
-      if(idx2 >= 0 && idx2 < orderedBlocks.length - 1){
-        $("#hourBlock").value = orderedBlocks[idx2 + 1];
+      const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
+      const idx = orderedBlocks.indexOf(hourBlock);
+      if(idx >= 0 && idx < orderedBlocks.length - 1){
+        $("#hourBlock").value = orderedBlocks[idx + 1];
       }
     }
 
     $("#qty").value = "";
-    loadTodayEntries();
-    return;
+    await loadTodayEntries();
+    await refreshPartSuggestions();
   }
 
-  // Check if an entry already exists for this exact key
-  const { data: existing, error: findErr } = await supabase
-    .from("worker_hourly_log")
-    .select("id")
-    .eq("log_date", logDate)
-    .eq("hour_block", hourBlock)
-    .eq("role", role)
-    .eq("worker_name", workerName)
-    .eq("part_number", partNumber)
-    .eq("mirror_type", mirrorType)
-    .eq("mirror_class", mirrorClass)
-    .limit(1);
+  function initQuickQtyButtons(){
+    const container = document.querySelector(".quick-qty-row");
+    if(!container) return;
 
-  if(findErr){
-    console.error("Lookup error:", findErr);
-    setStatus("Error checking existing entry. Check console.", false);
-    return;
+    container.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-qty]");
+      if(!btn) return;
+
+      const inc = Number(btn.dataset.qty || 0);
+      const qtyInput = document.querySelector("#qty");
+      const current = Number(qtyInput.value || 0);
+      qtyInput.value = current + inc;
+    });
   }
-
-  let saveErr = null;
-
-  if(existing && existing.length){
-    // Update existing row (overwrite qty)
-    const rowId = existing[0].id;
-    const { error: updErr } = await supabase
-      .from("worker_hourly_log")
-      .update({ qty })
-      .eq("id", rowId);
-
-    saveErr = updErr;
-  } else {
-    // Insert new row
-    const { error: insErr } = await supabase
-      .from("worker_hourly_log")
-      .insert([{
-        log_date:     logDate,
-        hour_block:   hourBlock,
-        role:         role,
-        worker_name:  workerName,
-        part_number:  partNumber,
-        mirror_type:  mirrorType,
-        mirror_class: mirrorClass,
-        qty:          qty
-      }]);
-
-    saveErr = insErr;
-  }
-
-  if(saveErr){
-    console.error("Save error:", saveErr);
-    setStatus("Error saving entry. Check console for details.", false);
-    return;
-  }
-
-  setStatus("Entry saved.", true);
-
-  // Clear or keep some fields
-  if(!stayOnWorkerHour){
-    $("#hourBlock").value   = "";
-    $("#role").value        = "";
-    $("#workerName").value  = "";
-    $("#partNumber").value  = "";
-    $("#mirrorType").value  = "";
-    $("#mirrorClass").value = "";
-  } else {
-    // Keep worker + job context, move to next hour block
-    const currentBlock = $("#hourBlock").value;
-    const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER)
-      .sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
-
-    const idx = orderedBlocks.indexOf(currentBlock);
-    if(idx >= 0 && idx < orderedBlocks.length - 1){
-      $("#hourBlock").value = orderedBlocks[idx + 1];
-    }
-  }
-
-  $("#qty").value = "";
-
-  // Reload today's entries
-  loadTodayEntries();
-}
-
-function initQuickQtyButtons(){
-  const container = document.querySelector(".quick-qty-row");
-  if(!container) return;
-
-  container.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-qty]");
-    if(!btn) return;
-
-    const inc = Number(btn.dataset.qty || 0);
-    const qtyInput = document.querySelector("#qty");
-    const current = Number(qtyInput.value || 0);
-    qtyInput.value = current + inc;
-  });
-}
 
   // ---------- INIT ----------
-  document.addEventListener("DOMContentLoaded", () => {
-    // Default date = today
+  document.addEventListener("DOMContentLoaded", async () => {
     $("#logDate").value = todayIso();
 
-    // Demo mode restore + toggle
+    // Restore demo toggle
     const demoToggle = document.getElementById("demoModeToggle");
     demoMode = localStorage.getItem(DEMO_KEY) === "true";
     if(demoToggle) demoToggle.checked = demoMode;
 
     setFreshness(`Last updated: —${demoMode ? " (Demo)" : ""}`);
 
+    // Demo toggle listener
     if(demoToggle){
-      demoToggle.addEventListener("change", () => {
+      demoToggle.addEventListener("change", async () => {
         demoMode = !!demoToggle.checked;
         localStorage.setItem(DEMO_KEY, demoMode ? "true" : "false");
         setStatus(demoMode ? "Demo mode enabled (no Supabase writes)." : "Live mode enabled.", true);
-        loadWorkerDirectory();
-        loadTodayEntries();
+
+        await loadWorkerDirectory();
+        await loadTodayEntries();
+        await refreshPartSuggestions();
       });
     }
 
@@ -1125,14 +1081,10 @@ function initQuickQtyButtons(){
     const closeBtn = document.getElementById("howItWorksCloseBtn");
 
     if(openBtn && modal){
-      openBtn.addEventListener("click", () => {
-        modal.style.display = "flex";
-      });
+      openBtn.addEventListener("click", () => modal.style.display = "flex");
     }
     if(closeBtn && modal){
-      closeBtn.addEventListener("click", () => {
-        modal.style.display = "none";
-      });
+      closeBtn.addEventListener("click", () => modal.style.display = "none");
     }
     if(modal){
       modal.addEventListener("click", (e) => {
@@ -1140,39 +1092,31 @@ function initQuickQtyButtons(){
       });
     }
 
-    // Pre-select the current hour block (can still be overridden)
     autoSelectHourBlock();
-
     initQuickQtyButtons();
 
-    // Load worker dropdown from Supabase
-    loadWorkerDirectory();
+    // Wire buttons
+    $("#submitBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:false }));
+    $("#saveAndStayBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:true }));
 
-    // Buttons
-    $("#submitBtn").addEventListener("click", () => {
-      saveEntry({ stayOnWorkerHour:false });
-    });
-
-    $("#saveAndStayBtn").addEventListener("click", () => {
-      saveEntry({ stayOnWorkerHour:true });
-    });
-
-    $("#todayFilterBtn").addEventListener("click", () => {
+    $("#todayFilterBtn").addEventListener("click", async () => {
       $("#logDate").value = todayIso();
-      loadTodayEntries();
+      await loadTodayEntries();
+      await refreshPartSuggestions();
     });
 
-      const ptb = document.getElementById("printTemplateBtn");
-if(ptb){
-  ptb.addEventListener("click", () => openPrintTemplate());
-}
+    const ptb = document.getElementById("printTemplateBtn");
+    if(ptb) ptb.addEventListener("click", () => openPrintTemplate());
 
-    $("#logDate").addEventListener("change", () => {
-      loadTodayEntries();
+    $("#logDate").addEventListener("change", async () => {
+      await loadTodayEntries();
+      await refreshPartSuggestions();
     });
 
-    // Initial load
-    loadTodayEntries();
+    // Initial loads
+    await loadWorkerDirectory();
+    await loadTodayEntries();
+    await refreshPartSuggestions();
   });
 </script>
 
@@ -1185,10 +1129,13 @@ if(ptb){
     </div>
 
     <div style="font-size:13px; color:var(--text); line-height:1.45; margin-top:10px;">
-      This page captures hourly production entries (date, hour block, worker/station, part number, type, category, quantity)
-      and writes them to a structured log. In <b>Live mode</b>, it saves to Supabase and refreshes the “Today’s entries” table.
-      In <b>Demo mode</b>, it uses local sample data and stores entries in your browser so you can safely showcase the UI without any real backend.
-      The “Last updated” badge confirms when the table was last refreshed.
+      This page captures hourly production entries (date, hour block, worker/station, part number, type, category, quantity) and writes them to a structured log.<br/><br/>
+
+      In <b>Live mode</b>, entries are saved to Supabase and the “Today’s entries” table refreshes automatically.<br/>
+      In <b>Demo mode</b>, sample data is stored locally in your browser so the interface can be safely showcased without any real backend.<br/><br/>
+
+      The <b>Part #</b> field includes an <b>autocomplete</b> suggestion list based on part numbers already logged for the selected date.<br/>
+      The <b>Print blank log</b> feature generates a printable hourly worksheet using the current worker/station list.
     </div>
 
     <div style="margin-top:10px; font-size:12px; color:var(--muted);">
