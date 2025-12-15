@@ -364,11 +364,15 @@
       </div>
     </div>
 
-    <div class="btn-row">
+     <div class="btn-row">
       <button class="btn btn-primary" id="submitBtn">Save entry</button>
       <button class="btn" id="saveAndStayBtn">Save &amp; stay on worker / hour</button>
       <button class="btn" id="todayFilterBtn">Show today’s entries</button>
+    
+      <!-- NEW -->
+      <button class="btn" id="printTemplateBtn" type="button">Print blank log</button>
     </div>
+
 
     <div id="statusLine" class="status-line"></div>
   </section>
@@ -497,6 +501,212 @@
   function nowStamp(){
     const d = new Date();
     return d.toLocaleString();
+  }
+
+  // ---------- PRINT TEMPLATE ----------
+function escapeHtml(str){
+  return String(str || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function getWorkerListForPrint(){
+  const sel = document.getElementById("workerName");
+  if(!sel) return [];
+
+  const opts = Array.from(sel.options)
+    .map(o => ({
+      value: (o.value || "").trim(),
+      text: (o.textContent || "").trim()
+    }))
+    .filter(o =>
+      o.value !== "" &&                      // ignore placeholder value=""
+      o.text.toLowerCase() !== "select..."   // extra safety
+    )
+    .map(o => o.value);
+
+  return Array.from(new Set(opts));
+}
+
+function buildPrintTemplateHtml({ date, roleLabel, workers }){
+  const hourBlocks = [
+    "7am-8am",
+    "8am-9am",
+    "9am-10am (15m break)",
+    "10am-11am",
+    "11am-12pm",
+    "12:30pm-1:30pm",
+    "1:30pm-2:30pm (10m break)",
+    "2:30pm-3:30pm"
+  ];
+
+  const header = `
+    <div class="print-header">
+      <div class="title">Worker Hourly Log — Blank Template</div>
+      <div class="meta">
+        <div><b>Date:</b> ${escapeHtml(date)}</div>
+        <div><b>Role:</b> ${escapeHtml(roleLabel)}</div>
+        <div><b>Supervisor:</b> __________________________</div>
+      </div>
+      <div class="note">Use this sheet while walking the floor. Fill in Part # and Qty for each worker per hour block.</div>
+    </div>
+  `;
+
+  const workerRows = (workers || []).map(w => `
+    <tr>
+      <td class="wcol">${escapeHtml(w)}</td>
+      <td class="pcol"></td>
+      <td class="qcol"></td>
+      <td class="ncol"></td>
+    </tr>
+  `).join("");
+
+  const sections = hourBlocks.map((hb, idx) => `
+    <section class="block ${idx === 0 ? "" : "page-break"}">
+      <div class="block-title">
+        <span>${escapeHtml(hb.replace(/\s*\(.*\)/,"").trim())}</span>
+        ${/\(([^)]+)\)/.test(hb) ? `<span class="break-pill">${escapeHtml(hb.match(/\(([^)]+)\)/)[1])}</span>` : ""}
+      </div>
+
+      <table class="pt">
+        <thead>
+          <tr>
+            <th>Worker / Station</th>
+            <th>Part #</th>
+            <th style="text-align:right;">Qty</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${workerRows || `<tr><td colspan="4" class="empty">No workers loaded. (Make sure the dropdown is populated.)</td></tr>`}
+        </tbody>
+      </table>
+
+      <div class="totals">
+        <div><b>Hour total:</b> ____________</div>
+        <div><b>Issues / downtime:</b> ________________________________________________</div>
+      </div>
+    </section>
+  `).join("");
+
+  return `
+  <!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Print — Worker Hourly Log</title>
+    <style>
+      :root{
+        --text:#111;
+        --muted:#555;
+        --border:#ddd;
+      }
+      html,body{ margin:0; padding:0; color:var(--text); font-family:"Times New Roman", Times, serif; }
+      .wrap{ padding:18px 18px 28px 18px; }
+      .print-header{
+        border-bottom:2px solid #000;
+        padding-bottom:10px;
+        margin-bottom:12px;
+      }
+      .title{ font-size:20px; font-weight:800; }
+      .meta{
+        margin-top:6px;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:6px 18px;
+        font-size:12px;
+      }
+      .note{ margin-top:8px; font-size:12px; color:var(--muted); }
+      .block{ margin-top:14px; }
+      .block-title{
+        display:flex; align-items:center; gap:10px;
+        font-size:14px; font-weight:800;
+        margin:10px 0 6px 0;
+      }
+      .break-pill{
+        font-size:11px;
+        border:1px solid #999;
+        padding:1px 8px;
+        border-radius:999px;
+        font-weight:600;
+        color:#333;
+      }
+
+      table.pt{ width:100%; border-collapse:collapse; font-size:12px; }
+      table.pt th, table.pt td{ border:1px solid var(--border); padding:6px 8px; vertical-align:top; }
+      table.pt th{ background:#f3f3f3; font-weight:800; }
+      .wcol{ width:34%; }
+      .pcol{ width:22%; }
+      .qcol{ width:10%; text-align:right; }
+      .ncol{ width:34%; }
+      .empty{ text-align:center; color:var(--muted); padding:18px !important; }
+
+      .totals{
+        margin-top:8px;
+        font-size:12px;
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+      }
+
+      .page-break{ page-break-before: always; }
+
+      @media print{
+        .wrap{ padding:0; }
+        .page-break{ page-break-before: always; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      ${header}
+      ${sections}
+    </div>
+
+    <script>
+      // Auto-print after render
+      window.addEventListener('load', () => {
+        setTimeout(() => window.print(), 50);
+      });
+    <\/script>
+  </body>
+  </html>
+  `;
+}
+
+  function openPrintTemplate(){
+    const date = (document.getElementById("logDate")?.value || todayIso());
+    const roleVal = (document.getElementById("role")?.value || "").trim();
+    const roleLabel = roleVal ? (roleVal.charAt(0).toUpperCase() + roleVal.slice(1)) : "All";
+    const workers = getWorkerListForPrint();
+
+    const html = buildPrintTemplateHtml({ date, roleLabel, workers });
+
+    // Hidden iframe print (no pop-ups)
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.visibility = "hidden";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    };
   }
 
   function loadDemoEntries(){
@@ -951,6 +1161,11 @@ function initQuickQtyButtons(){
       $("#logDate").value = todayIso();
       loadTodayEntries();
     });
+
+      const ptb = document.getElementById("printTemplateBtn");
+if(ptb){
+  ptb.addEventListener("click", () => openPrintTemplate());
+}
 
     $("#logDate").addEventListener("change", () => {
       loadTodayEntries();
