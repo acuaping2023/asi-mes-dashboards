@@ -512,11 +512,14 @@
 
   async function refreshPartSuggestions(){
     const date = document.getElementById("logDate")?.value || todayIso();
+    const mirrorType = document.getElementById("mirrorType")?.value || "";
 
+    // DEMO MODE
     if(demoMode){
       const all = loadDemoEntries();
       const parts = (all || [])
         .filter(r => r.log_date === date)
+        .filter(r => !mirrorType || r.mirror_type === mirrorType)
         .map(r => (r.part_number || "").trim())
         .filter(Boolean);
 
@@ -524,10 +527,13 @@
       return;
     }
 
-    const { data, error } = await supabase
+    // LIVE MODE
+    let query = supabase
       .from("worker_hourly_log")
-      .select("part_number")
+      .select("part_number, mirror_type")
       .eq("log_date", date);
+
+    const { data, error } = await query;
 
     if(error){
       console.error("Part suggestion load error:", error.message);
@@ -535,6 +541,7 @@
     }
 
     const parts = (data || [])
+      .filter(r => !mirrorType || r.mirror_type === mirrorType)
       .map(r => (r.part_number || "").trim())
       .filter(Boolean);
 
@@ -1051,6 +1058,32 @@
     });
   }
 
+  function autoSetMirrorTypeFromPart(part){
+    const p = String(part || "").toLowerCase();
+
+    // Try common patterns:
+    // - "0600-2436"
+    // - "0620 2436"
+    // - "mirror 0600 ..."
+    const is0600 = p.includes("0600");
+    const is0620 = p.includes("0620");
+
+    // If both appear somehow, don’t change anything (avoid weird edge cases)
+    if(is0600 && is0620) return;
+
+    const mt = document.getElementById("mirrorType");
+    if(!mt) return;
+
+    const next = is0600 ? "0600" : (is0620 ? "0620" : "");
+    if(next && mt.value !== next){
+      mt.value = next;
+
+      // update suggestions to match the new mirror type
+      refreshPartSuggestions();
+    }
+  }
+
+
   // ---------- INIT ----------
   document.addEventListener("DOMContentLoaded", async () => {
     $("#logDate").value = todayIso();
@@ -1111,6 +1144,18 @@
     $("#logDate").addEventListener("change", async () => {
       await loadTodayEntries();
       await refreshPartSuggestions();
+    });
+
+    $("#mirrorType").addEventListener("change", async () => {
+      await refreshPartSuggestions();
+    });
+
+    $("#partNumber").addEventListener("input", (e) => {
+      autoSetMirrorTypeFromPart(e.target.value);
+    });
+
+    $("#partNumber").addEventListener("change", (e) => {
+      autoSetMirrorTypeFromPart(e.target.value);
     });
 
     // Initial loads
