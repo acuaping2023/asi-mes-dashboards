@@ -157,6 +157,21 @@
       border-color:#a84300;
     }
 
+    .btn-mini{
+      padding:5px 10px;
+      font-size:12px;
+      border-radius:10px;
+    }
+    .btn-danger{
+      background:#fff;
+      border-color:#fecaca;
+      color:#b91c1c;
+    }
+    .btn-danger:hover{
+      background:#fff1f2;
+      border-color:#fca5a5;
+    }
+
     .status-line{
       font-size:12px;
       margin-top:6px;
@@ -359,7 +374,13 @@
       <button class="btn" id="saveAndStayBtn" type="button">Save &amp; stay on worker / hour</button>
       <button class="btn" id="todayFilterBtn" type="button">Show today’s entries</button>
       <button class="btn" id="printTemplateBtn" type="button">Print blank log</button>
-    </div>
+
+      <!-- Only shows if part is missing from mirror_standards -->
+      <button class="btn" id="enterStandardBtn" type="button" style="display:none;">
+        Enter mirror standard
+      </button>
+    </div>  
+
 
     <div id="statusLine" class="status-line"></div>
   </section>
@@ -382,6 +403,7 @@
             <th>Type</th>
             <th>Category</th>
             <th style="text-align:right;">Qty</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="entriesBody"></tbody>
@@ -764,7 +786,7 @@
       const data = (all || []).filter(r => r.log_date === date);
 
       if(!data.length){
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
         if(tag) tag.textContent = date;
         setFreshness(`Last updated: ${nowStamp()} (Demo)`);
         return;
@@ -797,6 +819,7 @@
             <td>${escapeHtml(row.mirror_type)}</td>
             <td>${escapeHtml(row.mirror_class)}</td>
             <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
+            <td><span class="tag">Demo</span></td>
           </tr>
         `;
       });
@@ -814,14 +837,14 @@
 
     if(error){
       console.error("Error loading entries:", error.message);
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
       if(tag) tag.textContent = "";
       setFreshness(`Last updated: ${nowStamp()} (Error)`);
       return;
     }
 
     if(!data || !data.length){
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
       if(tag) tag.textContent = date;
       setFreshness(`Last updated: ${nowStamp()}`);
       return;
@@ -854,6 +877,10 @@
           <td>${escapeHtml(row.mirror_type)}</td>
           <td>${escapeHtml(row.mirror_class)}</td>
           <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-mini" type="button" data-action="edit" data-id="${row.id}">Edit</button>
+            <button class="btn btn-mini btn-danger" type="button" data-action="delete" data-id="${row.id}">Delete</button>
+          </td>
         </tr>
       `;
     });
@@ -916,6 +943,18 @@
     if(hasError) return;
 
     setStatus("Saving entry...", true);
+
+    // If LIVE mode, require part # to exist in mirror_standards before allowing save
+    if(!demoMode){
+      const exists = await mirrorStandardExists(partNumber);
+      if(!exists){
+        showEnterStandardUI(partNumber);
+        return;
+      } else {
+        const btn = document.getElementById("enterStandardBtn");
+        if(btn) btn.style.display = "none";
+      }
+    }
 
     // DEMO MODE
     if(demoMode){
@@ -1058,6 +1097,211 @@
     });
   }
 
+  // ---------- MIRROR STANDARDS (gate saves + allow inline entry) ----------
+  async function mirrorStandardExists(partNumber){
+    if(demoMode) return true; // demo should never block saves
+    const pn = (partNumber || "").trim();
+    if(!pn) return false;
+
+    const { data, error } = await supabase
+      .from("mirror_standards")
+      .select("id")
+      .eq("part_number", pn)
+      .limit(1);
+
+    if(error){
+      console.error("mirror_standards lookup error:", error.message);
+      return false;
+    }
+    return !!(data && data.length);
+  }
+
+  function showEnterStandardUI(missingPart){
+    const btn = document.getElementById("enterStandardBtn");
+    if(btn) btn.style.display = "inline-flex";
+
+    setStatus(`"${missingPart}" is not in mirror_standards. Please enter the standard now.`, false);
+
+    const pn = (missingPart || "").trim();
+    const family =
+      pn.includes("0620") ? "0620" :
+      pn.includes("0600") ? "0600" :
+      "";
+
+    const pnEl   = document.getElementById("ms_part_number");
+    const famEl  = document.getElementById("ms_mirror_family");
+    const sizeEl = document.getElementById("ms_size_code");
+
+    if(pnEl)   pnEl.value = pn;
+    if(famEl)  famEl.value = family;
+
+    // size_code is always ALL (matches Supabase formatting)
+    if(sizeEl) sizeEl.value = "ALL";
+  }
+
+  function openEnterStandardModal(){
+    const modal = document.getElementById("enterStandardModal");
+    if(modal) modal.style.display = "flex";
+  }
+
+  function closeEnterStandardModal(){
+    const modal = document.getElementById("enterStandardModal");
+    if(modal) modal.style.display = "none";
+  }
+
+  function setMsStatus(msg, ok=true){
+    const el = document.getElementById("msStatusLine");
+    if(!el) return;
+    el.textContent = msg || "";
+    el.classList.remove("status-ok","status-err");
+    el.classList.add(ok ? "status-ok" : "status-err");
+  }
+
+  async function saveMirrorStandardFromModal(){
+    const part_number = document.getElementById("ms_part_number")?.value.trim();
+    const mirror_family = document.getElementById("ms_mirror_family")?.value.trim() || null;
+    const size_code = (document.getElementById("ms_size_code")?.value || "").trim() || "ALL";
+
+    const stdRaw = document.getElementById("ms_std_per_hour_100")?.value.trim() || "";
+    const std_per_hour_100 = stdRaw === "" ? null : Number(stdRaw);
+
+    const active = (document.getElementById("ms_active")?.value === "true");
+    const notes = document.getElementById("ms_notes")?.value.trim() || null;
+
+    if(!part_number){
+      setMsStatus("part_number is required.", false);
+      return false;
+    }
+    if(stdRaw !== "" && (isNaN(std_per_hour_100) || std_per_hour_100 < 0)){
+      setMsStatus("std_per_hour_100 must be a non-negative number.", false);
+      return false;
+    }
+
+    setMsStatus("Saving standard...", true);
+
+    const { error } = await supabase
+      .from("mirror_standards")
+      .insert([{
+        part_number,
+        mirror_family,
+        size_code,
+        std_per_hour_100,
+        active,
+        notes
+      }]);
+
+    if(error){
+      console.error("mirror_standards insert error:", error.message);
+      setMsStatus(`Error saving: ${error.message}`, false);
+      return false;
+    }
+
+    setMsStatus("Standard saved. You can now save the hourly entry.", true);
+    return true;
+  }
+
+  // ---------- LIVE EDIT/DELETE ----------
+  function showEditStatus(msg, ok=true){
+    const el = document.getElementById("editEntryStatus");
+    if(!el) return;
+    el.textContent = msg || "";
+    el.classList.remove("status-ok","status-err");
+    el.classList.add(ok ? "status-ok" : "status-err");
+  }
+
+  function openEditModalWithRow(row){
+    const modal = document.getElementById("editEntryModal");
+    if(!modal) return;
+
+    document.getElementById("editEntryId").value = row.id || "";
+    document.getElementById("editLogDate").value = row.log_date || todayIso();
+    document.getElementById("editHourBlock").value = row.hour_block || "7am-8am";
+    document.getElementById("editRole").value = row.role || "assembler";
+    document.getElementById("editWorkerName").value = row.worker_name || "";
+    document.getElementById("editPartNumber").value = row.part_number || "";
+    document.getElementById("editMirrorType").value = row.mirror_type || "0600";
+    document.getElementById("editMirrorClass").value = row.mirror_class || "standard";
+    document.getElementById("editQty").value = (row.qty ?? 0);
+
+    showEditStatus("", true);
+    modal.style.display = "flex";
+  }
+
+  function closeEditModal(){
+    const modal = document.getElementById("editEntryModal");
+    if(modal) modal.style.display = "none";
+  }
+
+  async function fetchRowById(id){
+    const { data, error } = await supabase
+      .from("worker_hourly_log")
+      .select("*")
+      .eq("id", id)
+      .limit(1);
+
+    if(error) throw error;
+    return (data && data[0]) ? data[0] : null;
+  }
+
+  async function saveEditedRow(){
+    const id = document.getElementById("editEntryId").value;
+    if(!id){
+      showEditStatus("Missing entry id.", false);
+      return;
+    }
+
+    const payload = {
+      log_date: document.getElementById("editLogDate").value || todayIso(),
+      hour_block: document.getElementById("editHourBlock").value,
+      role: document.getElementById("editRole").value,
+      worker_name: document.getElementById("editWorkerName").value.trim(),
+      part_number: document.getElementById("editPartNumber").value.trim(),
+      mirror_type: document.getElementById("editMirrorType").value,
+      mirror_class: document.getElementById("editMirrorClass").value,
+      qty: Number(document.getElementById("editQty").value || 0),
+    };
+
+    if(!payload.worker_name || !payload.part_number){
+      showEditStatus("Worker/Station and Part # are required.", false);
+      return;
+    }
+    if(Number.isNaN(payload.qty) || payload.qty < 0){
+      showEditStatus("Qty must be a non-negative number.", false);
+      return;
+    }
+
+    showEditStatus("Saving changes...", true);
+
+    const { error } = await supabase
+      .from("worker_hourly_log")
+      .update(payload)
+      .eq("id", id);
+
+    if(error){
+      console.error("Edit save error:", error);
+      showEditStatus("Error saving changes. Check console.", false);
+      return;
+    }
+
+    showEditStatus("Saved.", true);
+    await loadTodayEntries();
+    await refreshPartSuggestions();
+    setTimeout(() => closeEditModal(), 350);
+  }
+
+  async function deleteRowById(id){
+    const { error } = await supabase
+      .from("worker_hourly_log")
+      .delete()
+      .eq("id", id);
+
+    if(error) throw error;
+
+    await loadTodayEntries();
+    await refreshPartSuggestions();
+  }
+
+
   function autoSetMirrorTypeFromPart(part){
     const p = String(part || "").toLowerCase();
 
@@ -1128,6 +1372,29 @@
     autoSelectHourBlock();
     initQuickQtyButtons();
 
+    // Enter mirror standard button + modal wiring
+    const enterBtn = document.getElementById("enterStandardBtn");
+    if(enterBtn) enterBtn.addEventListener("click", openEnterStandardModal);
+
+    const msClose = document.getElementById("enterStandardCloseBtn");
+    if(msClose) msClose.addEventListener("click", closeEnterStandardModal);
+
+    const msCancel = document.getElementById("cancelStandardBtn");
+    if(msCancel) msCancel.addEventListener("click", closeEnterStandardModal);
+
+    const msSave = document.getElementById("saveStandardBtn");
+    if(msSave) msSave.addEventListener("click", async () => {
+      const ok = await saveMirrorStandardFromModal();
+      if(ok){
+        // hide the button once the standard is saved
+        const b = document.getElementById("enterStandardBtn");
+        if(b) b.style.display = "none";
+        setStatus("Standard saved. Now click Save entry again.", true);
+        setTimeout(() => closeEnterStandardModal(), 400);
+      }
+    });
+
+
     // Wire buttons
     $("#submitBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:false }));
     $("#saveAndStayBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:true }));
@@ -1158,12 +1425,157 @@
       autoSetMirrorTypeFromPart(e.target.value);
     });
 
+    // Edit modal close/save buttons
+    const editModal = document.getElementById("editEntryModal");
+    const editClose = document.getElementById("editEntryCloseBtn");
+    const editSave  = document.getElementById("editEntrySaveBtn");
+
+    if(editClose) editClose.addEventListener("click", closeEditModal);
+    if(editSave)  editSave.addEventListener("click", async () => {
+      if(demoMode){
+        showEditStatus("Edit is disabled in Demo mode.", false);
+        return;
+      }
+      await saveEditedRow();
+    });
+
+    if(editModal){
+      editModal.addEventListener("click", (e) => {
+        if(e.target === editModal) closeEditModal();
+      });
+    }
+
+    // Live-mode action buttons (event delegation)
+    const tbody = document.getElementById("entriesBody");
+    if(tbody){
+      tbody.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if(!btn) return;
+
+        if(demoMode){
+          setStatus("Edit/Delete disabled in Demo mode.", false);
+          return;
+        }
+
+        const action = btn.getAttribute("data-action");
+        const id = btn.getAttribute("data-id");
+        if(!id) return;
+
+        if(action === "edit"){
+          try{
+            const row = await fetchRowById(id);
+            if(!row){
+              setStatus("Entry not found (may have been deleted).", false);
+              return;
+            }
+            openEditModalWithRow(row);
+          }catch(err){
+            console.error(err);
+            setStatus("Error opening edit. Check console.", false);
+          }
+        }
+
+        if(action === "delete"){
+          const ok = confirm("Delete this entry? This cannot be undone.");
+          if(!ok) return;
+
+          try{
+            await deleteRowById(id);
+            setStatus("Entry deleted.", true);
+          }catch(err){
+            console.error(err);
+            setStatus("Error deleting entry. Check console.", false);
+          }
+        }
+      });
+    }
+
+
     // Initial loads
     await loadWorkerDirectory();
     await loadTodayEntries();
     await refreshPartSuggestions();
   });
 </script>
+
+<!-- EDIT ENTRY MODAL -->
+<div id="editEntryModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10000;">
+  <div style="width:min(720px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Edit entry (Live)</div>
+      <button class="btn" id="editEntryCloseBtn" type="button">Close</button>
+    </div>
+
+    <div class="form-grid" style="margin-top:10px;">
+      <input type="hidden" id="editEntryId"/>
+
+      <div class="field">
+        <label for="editLogDate">Date</label>
+        <input type="date" id="editLogDate">
+      </div>
+
+      <div class="field">
+        <label for="editHourBlock">Hour block</label>
+        <select id="editHourBlock">
+          <option>7am-8am</option>
+          <option>8am-9am</option>
+          <option>9am-10am (15m break)</option>
+          <option>10am-11am</option>
+          <option>11am-12pm</option>
+          <option>12:30pm-1:30pm</option>
+          <option>1:30pm-2:30pm (10m break)</option>
+          <option>2:30pm-3:30pm</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editRole">Role</label>
+        <select id="editRole">
+          <option value="assembler">Assembler</option>
+          <option value="packer">Packer</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editWorkerName">Worker / Station</label>
+        <input type="text" id="editWorkerName" placeholder="Exact name/station">
+      </div>
+
+      <div class="field">
+        <label for="editPartNumber">Part #</label>
+        <input type="text" id="editPartNumber" placeholder="e.g. 0600-2436">
+      </div>
+
+      <div class="field">
+        <label for="editMirrorType">Mirror type</label>
+        <select id="editMirrorType">
+          <option value="0620">0620</option>
+          <option value="0600">0600</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editMirrorClass">Category</label>
+        <select id="editMirrorClass">
+          <option value="standard">Standard</option>
+          <option value="special">Special</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editQty">Qty</label>
+        <input type="number" id="editQty" min="0" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="editEntrySaveBtn" type="button">Save changes</button>
+    </div>
+
+    <div id="editEntryStatus" class="status-line"></div>
+  </div>
+</div>
+
 
 <!-- HOW IT WORKS MODAL -->
 <div id="howItWorksModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
@@ -1188,6 +1600,63 @@
     </div>
   </div>
 </div>
+
+<!-- ENTER MIRROR STANDARD MODAL -->
+<div id="enterStandardModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
+  <div style="width:min(760px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Enter mirror standard</div>
+      <button class="btn" id="enterStandardCloseBtn" type="button">Close</button>
+    </div>
+
+    <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+      This part number is missing in <code>mirror_standards</code>. Add it below to enable saving hourly logs.
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px 12px; margin-top:12px;">
+      <div class="field">
+        <label for="ms_part_number">part_number</label>
+        <input type="text" id="ms_part_number" placeholder="e.g. 0600-2436">
+      </div>
+
+      <div class="field">
+        <label for="ms_mirror_family">mirror_family</label>
+        <input type="text" id="ms_mirror_family" placeholder="e.g. 0600">
+      </div>
+
+      <div class="field">
+        <label for="ms_size_code">size_code</label>
+        <input type="text" id="ms_size_code" value="ALL" readonly>
+      </div>
+
+      <div class="field">
+        <label for="ms_std_per_hour_100">std_per_hour_100</label>
+        <input type="number" id="ms_std_per_hour_100" min="0" step="0.01" placeholder="e.g. 12.5">
+      </div>
+
+      <div class="field">
+        <label for="ms_active">active</label>
+        <select id="ms_active">
+          <option value="true" selected>TRUE</option>
+          <option value="false">FALSE</option>
+        </select>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <label for="ms_notes">notes (optional)</label>
+        <input type="text" id="ms_notes" placeholder="Anything helpful (optional)">
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-primary" id="saveStandardBtn" type="button">Save standard</button>
+      <button class="btn" id="cancelStandardBtn" type="button">Cancel</button>
+    </div>
+
+    <div id="msStatusLine" class="status-line" style="margin-top:8px;"></div>
+  </div>
+</div>
+
 
 </body>
 </html>
