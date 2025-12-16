@@ -465,12 +465,25 @@ border-radius:10px;
     border-collapse:collapse;
     font-size:13px;
   }
-  th,td{
+
+  th, td{
     padding:6px 8px;
     border-bottom:1px solid var(--border);
-    text-align:left;
     white-space:nowrap;
-  }
+    }
+
+    /* Center numeric columns */
+    td.num,
+    th.num{
+    text-align:center;
+   }
+
+/* Keep text columns left-aligned */
+td.text,
+th.text{
+  text-align:left;
+}
+
   th{
     background:var(--panel-2);
     font-weight:600;
@@ -641,6 +654,8 @@ html[data-theme="dark"] .date-inline input[type="date"]{
       <button class="btn" id="openUploaderBtn" type="button">Worker Hourly Logger</button>
       <button class="btn" id="themeToggle" type="button">Dark mode</button>
       <button class="btn" id="exportCsvBtn" type="button">Export CSV</button>
+      <button class="btn" id="exportDailyReportBtn" type="button">Export Daily Report (PDF)</button>
+      <button class="btn" id="exportMirrorAssemblyBtn" type="button">Export Mirror Assembly (PDF)</button>
       <button class="btn" id="exportPdfBtn" type="button">Export PDF (1:1)</button>
     </div>
   </div>
@@ -785,6 +800,11 @@ html[data-theme="dark"] .date-inline input[type="date"]{
 // ---------- BASIC HELPERS ----------
 function $(s){ return document.querySelector(s); }
 function uniq(arr){ return Array.from(new Set(arr)); }
+
+function round2(v){
+  if (v == null || isNaN(v)) return "—";
+  return Number(v).toFixed(2);
+}
 
 // ---------- SUPABASE CLIENT ----------
 const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
@@ -1094,63 +1114,37 @@ function computeWorkerSnapshotStats(rows, deptRows){
     (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0)
   );
 
-  const last = sorted[sorted.length - 1];
+  // Build daily weighted series for worker
+  const series = buildDailyWeightedSeries(sorted).filter(p => p.eff != null && !isNaN(p.eff));
+  const lastDay = series.length ? series[series.length - 1].date : (sorted[sorted.length-1].log_date || "").slice(0,10);
 
-  // latest day
-    const todayEff = getEff(last);
-  const todayUnits = Number(last.daily_total) || 0;
+  // Today (latest day) weighted
+  const todayRows = sorted.filter(r => (r.log_date || "").slice(0,10) === lastDay);
+  const todaySum = sumActualTarget(todayRows);
+  const todayEff = todaySum.target > 0 ? (todaySum.actual / todaySum.target) * 100 : null;
 
-  // all efficiencies + units + mirror-type/category breakdown
-  const effValues = [];
-  let totalUnits = 0;
-  const typeUnits  = {}; // mirror_type -> total units
-  const classUnits = {}; // mirror_class -> total units
+  // Range weighted
+  const rangeSum = sumActualTarget(sorted);
+  const weeklyAvg = rangeSum.target > 0 ? (rangeSum.actual / rangeSum.target) * 100 : null;
 
-  sorted.forEach(r => {
-    const e = getEff(r);
-    const u = Number(r.daily_total) || 0;
-    const type = (r.mirror_type  || "Unknown").toString();
-    const cls  = (r.mirror_class || "Unknown").toString();
-
-    totalUnits += u;
-    if (e != null && !isNaN(e)){
-     effValues.push(e);
-    }
-
-
-    if (!typeUnits[type])  typeUnits[type]  = 0;
-    if (!classUnits[cls])  classUnits[cls]  = 0;
-    typeUnits[type]  += u;
-    classUnits[cls]  += u;
-  });
-
-  const daysCount = effValues.length;
-  const weeklyAvg = daysCount
-    ? effValues.reduce((t,v) => t + v, 0) / daysCount
-    : null;
-      // ---------- Department average (same filters, all workers) ----------
+  // ---------- Department average (same filters, all workers) weighted ----------
   let deptAvgEff = null;
   let deltaFromDept = null;
 
   if (deptRows && deptRows.length) {
-    const deptEffs = deptRows
-      .map(r => getEff(r))
-      .filter(v => v != null && !isNaN(v));
-
-    if (deptEffs.length) {
-      deptAvgEff = deptEffs.reduce((t, v) => t + v, 0) / deptEffs.length;
-    }
-
-    if (weeklyAvg != null && deptAvgEff != null) {
-      deltaFromDept = weeklyAvg - deptAvgEff; // + = above dept, - = below
-    }
+    const deptSum = sumActualTarget(deptRows);
+    if (deptSum.target > 0) deptAvgEff = (deptSum.actual / deptSum.target) * 100;
+    if (weeklyAvg != null && deptAvgEff != null) deltaFromDept = weeklyAvg - deptAvgEff;
   }
 
-
-  // ---------- Consistency (std dev) ----------
+  // ---------- Consistency (std dev of daily weighted efficiencies) ----------
   let consistencyStd = null;
   let consistencyLabel = null;
-  if (effValues.length > 1){
+
+  const effValues = series.map(p => p.eff);
+  const daysCount = effValues.length;
+
+  if (effValues.length > 1 && weeklyAvg != null){
     const mean = weeklyAvg;
     const variance = effValues.reduce((t,v) => t + Math.pow(v - mean, 2), 0) / (effValues.length - 1);
     consistencyStd = Math.sqrt(variance);
@@ -1164,118 +1158,97 @@ function computeWorkerSnapshotStats(rows, deptRows){
     }
   }
 
-  // ---------- On-target days (≥ 75%) ----------
+  // ---------- On-target days (daily weighted ≥ 75%) ----------
   let onTargetDays = 0;
-  effValues.forEach(e => {
-    if (!isNaN(e) && e >= EFF_WARN_MIN){
-      onTargetDays++;
-    }
-  });
+  effValues.forEach(e => { if (e >= EFF_WARN_MIN) onTargetDays++; });
   const onTargetPct = daysCount ? (onTargetDays / daysCount) * 100 : null;
 
-  // ---------- Trend descriptor (early vs late) ----------
+  // ---------- Trend (early vs late avg using daily weighted series) ----------
   let trendLabel = "Trend: —";
-  if (sorted.length >= 2){
-    const series = sorted.map(r => ({
-      date: r.log_date,
-      eff: getEff(r)
-    })).filter(p => p.eff != null && !isNaN(p.eff));
+  if (series.length >= 2){
+    const n = series.length;
+    const split = Math.floor(n / 2) || 1;
 
-    if (series.length >= 2){
-      const n = series.length;
-      const split = Math.floor(n / 2) || 1;
+    const early = series.slice(0, split);
+    const late  = series.slice(n - split);
 
-      const early = series.slice(0, split);
-      const late  = series.slice(n - split);
+    const earlyAvg = early.reduce((t,p) => t + p.eff, 0) / early.length;
+    const lateAvg  = late.reduce((t,p) => t + p.eff, 0) / late.length;
 
-      const earlyAvg = early.reduce((t,p) => t + p.eff, 0) / early.length;
-      const lateAvg  = late.reduce((t,p) => t + p.eff, 0) / late.length;
+    const diff = lateAvg - earlyAvg;
+    const absDiff = Math.abs(diff);
 
-      const diff = lateAvg - earlyAvg;
-      const absDiff = Math.abs(diff);
-
-      let descriptor = "stable";
-      if (absDiff < 3){
-        descriptor = "stable";
-      } else if (absDiff < 7){
-        descriptor = diff > 0 ? "slightly upward" : "slightly downward";
-      } else {
-        descriptor = diff > 0 ? "significantly upward" : "significantly downward";
-      }
-
-      if (descriptor === "stable"){
-        trendLabel = "Trend: stable";
-      } else {
-        trendLabel = `Trend: ${descriptor}`;
-      }
+    let descriptor = "stable";
+    if (absDiff < 3){
+      descriptor = "stable";
+    } else if (absDiff < 7){
+      descriptor = diff > 0 ? "slightly upward" : "slightly downward";
+    } else {
+      descriptor = diff > 0 ? "significantly upward" : "significantly downward";
     }
+
+    trendLabel = descriptor === "stable" ? "Trend: stable" : `Trend: ${descriptor}`;
   }
 
-  // ---------- Top mirror type ----------
-  let topType = null;
-  let topUnits = 0;
+  // ---------- Mirror-type/category breakdown by units (unchanged) ----------
+  let totalUnits = 0;
+  const typeUnits  = {};
+  const classUnits = {};
+
+  sorted.forEach(r => {
+    const u = Number(r.daily_total) || 0;
+    const type = (r.mirror_type  || "Unknown").toString();
+    const cls  = (r.mirror_class || "Unknown").toString();
+    totalUnits += u;
+
+    typeUnits[type]  = (typeUnits[type]  || 0) + u;
+    classUnits[cls]  = (classUnits[cls]  || 0) + u;
+  });
+
+  let topType = null, topUnits = 0;
   Object.keys(typeUnits).forEach(type => {
-    if (typeUnits[type] > topUnits){
-      topUnits = typeUnits[type];
-      topType  = type;
-    }
+    if (typeUnits[type] > topUnits){ topUnits = typeUnits[type]; topType = type; }
   });
 
-  // ---------- Top mirror category ----------
-  let topClass = null;
-  let topClassUnits = 0;
+  let topClass = null, topClassUnits = 0;
   Object.keys(classUnits).forEach(cls => {
-    if (classUnits[cls] > topClassUnits){
-      topClassUnits = classUnits[cls];
-      topClass = cls;
-    }
+    if (classUnits[cls] > topClassUnits){ topClassUnits = classUnits[cls]; topClass = cls; }
   });
 
-  let topTypeShare = null;
-  if (topType && totalUnits > 0){
-    topTypeShare = (typeUnits[topType] / totalUnits) * 100;
-  }
-
-  let topClassShare = null;
-  if (topClass && totalUnits > 0){
-    topClassShare = (classUnits[topClass] / totalUnits) * 100;
-  }
+  const topTypeShare = (topType && totalUnits > 0) ? (typeUnits[topType] / totalUnits) * 100 : null;
+  const topClassShare = (topClass && totalUnits > 0) ? (classUnits[topClass] / totalUnits) * 100 : null;
 
   const from = document.getElementById("fromDate")?.value;
   const to   = document.getElementById("toDate")?.value;
   let rangeLabel = "Selected range";
-  if(from && to){
-    rangeLabel = `${from} to ${to}`;
-  }
+  if(from && to) rangeLabel = `${from} to ${to}`;
 
   return {
     todayEfficiency: todayEff,
-    todayUnits: todayUnits,
+    todayUnits: todaySum.actual,
     weeklyAverageEfficiency: weeklyAvg,
     weeklyTotalUnits: totalUnits,
 
-    consistencyStd: consistencyStd,
-    consistencyLabel: consistencyLabel,
-    daysCount: daysCount,
-    onTargetDays: onTargetDays,
-    onTargetPct: onTargetPct,
-    trendLabel: trendLabel,
+    consistencyStd,
+    consistencyLabel,
+    daysCount,
+    onTargetDays,
+    onTargetPct,
+    trendLabel,
 
-    topType: topType,
-    topTypeShare: topTypeShare,
+    topType,
+    topTypeShare,
     topTypeUnits: topUnits,
 
-    topClass: topClass,
-    topClassShare: topClassShare,
+    topClass,
+    topClassShare,
     topClassUnits: topClassUnits,
 
     dateRangeLabel: rangeLabel,
 
-    // NEW:
-    deptAvgEff: deptAvgEff,
-    deltaFromDept: deltaFromDept
+    deptAvgEff,
+    deltaFromDept
   };
-
 }
 
 // ---------- MAIN LOAD ----------
@@ -1327,11 +1300,6 @@ document.addEventListener("DOMContentLoaded", () => {
     baselineSel.addEventListener("change", () => renderAll(lastRows));
   }
 
-  const actionsMenu = document.getElementById("actionsMenu");
-  document.addEventListener("click", (e) => {
-    if (!actionsMenu) return;
-    if (!actionsMenu.contains(e.target)) actionsMenu.removeAttribute("open");
-  });  
 
   // HEADER BUTTONS
   const quick7Btn = $("#quick7");
@@ -1364,6 +1332,374 @@ document.addEventListener("DOMContentLoaded", () => {
       exportWorkerPdf();
     });
   }
+
+  // Mirror Assembly (PDF)
+    const exportMirrorAssemblyBtn = document.getElementById("exportMirrorAssemblyBtn");
+    if (exportMirrorAssemblyBtn) {
+        exportMirrorAssemblyBtn.addEventListener("click", () => {
+            exportMirrorAssemblyPdf_FirstShiftOnly();
+        });
+    }
+    
+    // ---------- MIRROR ASSEMBLY (PDF) — 1st SHIFT ONLY (NO 2nd SHIFT) ----------
+    function exportMirrorAssemblyPdf_FirstShiftOnly(){
+    // Use SAME filters as dashboard (role/type/category + hide 0% rows)
+    const base0 = applyBaseFilters(lastRows || []);
+    const base  = applyNonZeroFilter(base0);
+
+    if(!base.length){
+        alert("No data available for the selected filters/date range.");
+        return;
+    }
+
+    // Build date list within current dashboard range
+    const from = $("#fromDate")?.value || null;
+    const to   = $("#toDate")?.value || null;
+
+    const dates = Array.from(new Set(base.map(r => (r.log_date || "").slice(0,10))))
+        .filter(d => d && (!from || d >= from) && (!to || d <= to))
+        .sort();
+
+    if(!dates.length){
+        alert("No rows found inside the selected date range.");
+        return;
+    }
+
+    // Sum helper for type+date
+    function sumTypeOnDate(date, mirrorType){
+        const rows = base.filter(r =>
+        (r.log_date || "").slice(0,10) === date &&
+        (r.mirror_type || "") === mirrorType
+        );
+
+        const actual = rows.reduce((t,r)=> t + (Number(r.daily_total) || 0), 0);
+
+        // expected uses baseline-aware target (your getTarget() already handles 75/100 + missing std)
+        const expected = rows.reduce((t,r)=> t + (Number(getTarget(r)) || 0), 0);
+
+        return { actual, expected };
+    }
+
+    // Totals
+    let t0600A = 0, t0600E = 0, t0620A = 0, t0620E = 0;
+
+    // Table body: Date | 0600 A | 0600 E | 0620 A | 0620 E
+    const body = dates.map(date => {
+        const s0600 = sumTypeOnDate(date, "0600");
+        const s0620 = sumTypeOnDate(date, "0620");
+
+        t0600A += s0600.actual; t0600E += s0600.expected;
+        t0620A += s0620.actual; t0620E += s0620.expected;
+
+        return [
+            date,
+            round2(s0600.actual || 0),
+            round2(s0600.expected || 0),
+            round2(s0620.actual || 0),
+            round2(s0620.expected || 0)
+        ];
+    });
+
+    // Efficiency (shift = overall for now)
+    const totalActual = t0600A + t0620A;
+    const totalExpected = t0600E + t0620E;
+    const eff = totalExpected > 0 ? (totalActual / totalExpected) * 100 : 0;
+
+    // ---------- PDF ----------
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:"landscape", unit:"pt", format:"a4" });
+
+    doc.setFont("times","bold");
+    doc.setFontSize(16);
+    doc.text("Mirror Assembly", 40, 40);
+
+    doc.setFont("times","normal");
+    doc.setFontSize(11);
+
+    const baselineMode = getBaselineMode(); // "75" or "100"
+    doc.text(
+        `Date range: ${dates[0]} to ${dates[dates.length-1]}   •   Baseline: ${baselineMode === "100" ? "100%" : "75%"} engineering standard`,
+        40,
+        60
+    );
+
+    // Main table header (matches your sheet feel, but only 1st shift)
+    doc.autoTable({
+        startY: 80,
+        head: [[
+        "Date",
+        "0600 Actual", "0600 Expected",
+        "0620 Actual", "0620 Expected"
+        ]],
+        body,
+        styles: { font:"times", fontSize: 9, cellPadding: 4 },
+        headStyles: { fontStyle:"bold" },
+        margin: { left: 40, right: 40 },
+        didParseCell: (data) => {
+        // Color Actual cols light green, Expected cols light blue
+        if (data.section === "body" && data.column.index > 0) {
+            const isActual = (data.column.index === 1 || data.column.index === 3);
+            data.cell.styles.fillColor = isActual ? [232,245,233] : [227,242,253];
+            data.cell.styles.halign = "right";
+        }
+        if (data.section === "body" && data.column.index === 0) {
+            data.cell.styles.halign = "center";
+        }
+        }
+    });
+
+    // Subtotal row
+    const y1 = doc.lastAutoTable.finalY + 14;
+
+    doc.autoTable({
+        startY: y1,
+        head: [[ "", "0600 Actual", "0600 Expected", "0620 Actual", "0620 Expected" ]],
+        body: [[
+            "Sub Total (Shift)",
+            round2(t0600A), round2(t0600E),
+            round2(t0620A), round2(t0620E)
+        ]],
+        styles: { font:"times", fontSize: 9, cellPadding: 4 },
+        headStyles: { fontStyle:"bold" },
+        margin: { left: 40, right: 40 },
+        didParseCell: (data) => {
+        if (data.section === "body" && data.column.index > 0) data.cell.styles.halign = "center";
+        if (data.section === "body" && data.column.index === 0) data.cell.styles.fontStyle = "bold";
+        }
+    });
+
+    // Efficiency blocks
+    let y = doc.lastAutoTable.finalY + 22;
+    doc.setFont("times","bold");
+    doc.setFontSize(11);
+    doc.text("Efficiency %", 40, y);
+    doc.setFont("times","normal");
+    doc.text(`${eff.toFixed(2)}%`, 140, y);
+
+    y += 22;
+    doc.setFont("times","bold");
+    doc.text("Overall Efficiency (%)", 40, y);
+    doc.setFont("times","normal");
+    doc.text(`${eff.toFixed(2)}%`, 220, y);
+
+    const fname = `mirror_assembly_${dates[0]}_to_${dates[dates.length-1]}_baseline_${baselineMode}.pdf`;
+    doc.save(fname);
+    }
+
+
+  // ---------- DAILY PRODUCTION REPORT (PDF) ----------
+function safeNum(n){
+  const v = Number(n);
+  return isNaN(v) ? 0 : v;
+}
+
+function groupSum(rows, keyFn){
+  const out = {};
+  (rows || []).forEach(r => {
+    const k = (keyFn(r) ?? "Unknown").toString();
+    if(!out[k]) out[k] = { units:0, target:0, rows:0 };
+    out[k].units += safeNum(r.daily_total);
+    out[k].target += safeNum(getTarget(r)); // baseline-aware target (75/100)
+    out[k].rows += 1;
+  });
+  return out;
+}
+
+function calcOverallEff(rows){
+  const units = (rows || []).reduce((t,r)=> t + safeNum(r.daily_total), 0);
+  const target = (rows || []).reduce((t,r)=> t + safeNum(getTarget(r)), 0);
+  const eff = target > 0 ? (units / target) * 100 : null;
+  return { units, target, eff };
+}
+
+async function exportDailyProductionReportPdf(){
+  // Use SAME filters as the dashboard, then lock to a single day (latest day in range = toDate)
+  const to = $("#toDate")?.value || todayIso();
+  const from = $("#fromDate")?.value || null;
+
+  // Base rows reflect Role/MirrorType/Category + NonZero filter
+  const base0 = applyBaseFilters(lastRows || []);
+  const base  = applyNonZeroFilter(base0);
+
+  // Lock to daily view: choose "toDate" day (common “daily production” behavior)
+  const dayRows = base.filter(r => (r.log_date || "").slice(0,10) === to);
+
+  if(!dayRows.length){
+    alert(`No data found for ${to} with the current filters.`);
+    return;
+  }
+
+  const baselineMode = getBaselineMode(); // "75" or "100"
+
+  // Headline totals (THIS is the exec-style efficiency)
+  const totals = calcOverallEff(dayRows);
+
+  // Breakdowns
+  const byRole  = groupSum(dayRows, r => (r.role || "Unknown").toLowerCase());
+  const byType  = groupSum(dayRows, r => r.mirror_type || "Unknown");
+  const byClass = groupSum(dayRows, r => (r.mirror_class || "Unknown").toLowerCase());
+
+  // Top / bottom performers for the day (eff = sum(units)/sum(target) PER worker)
+  const byWorker = {};
+  dayRows.forEach(r => {
+    const name = (r.worker_name || "Unknown").toString();
+    if(!byWorker[name]) byWorker[name] = { units:0, target:0, rows:0, missingStd:0 };
+    byWorker[name].units += safeNum(r.daily_total);
+    const tgt = getTarget(r);
+    if(tgt == null) byWorker[name].missingStd += 1;
+    byWorker[name].target += safeNum(tgt);
+    byWorker[name].rows += 1;
+  });
+
+  const workerRank = Object.keys(byWorker).map(name => {
+    const u = byWorker[name].units;
+    const t = byWorker[name].target;
+    const eff = t > 0 ? (u / t) * 100 : null;
+    return {
+      name,
+      units: u,
+      target: t,
+      eff,
+      missingStd: byWorker[name].missingStd
+    };
+  }).sort((a,b) => {
+    // null eff to bottom
+    if(a.eff == null && b.eff == null) return 0;
+    if(a.eff == null) return 1;
+    if(b.eff == null) return -1;
+    return b.eff - a.eff;
+  });
+
+  const top5 = workerRank.slice(0,5);
+  const bottom5 = workerRank
+    .filter(x => x.eff != null)
+    .slice(-5)
+    .sort((a,b)=> a.eff - b.eff);
+
+  const missingStdWorkers = workerRank
+    .filter(x => x.missingStd > 0)
+    .sort((a,b)=> b.missingStd - a.missingStd)
+    .slice(0,10);
+
+  // ---------- Build PDF ----------
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:"portrait", unit:"pt", format:"a4" });
+
+  // Header
+  doc.setFont("times","bold");
+  doc.setFontSize(16);
+  doc.text("Daily Production Report — Mirror Department", 40, 42);
+
+  doc.setFont("times","normal");
+  doc.setFontSize(11);
+  doc.text(`Report date: ${to}`, 40, 64);
+
+  if(from && to){
+    doc.text(`Dashboard range: ${from} to ${to} (report locks to ${to})`, 40, 80);
+  }
+
+  doc.text(
+    `Baseline: ${baselineMode === "100" ? "100% engineering standard" : "75% engineering standard"}`,
+    40,
+    96
+  );
+
+  // Filters summary (what higher-ups will ask)
+  const roleVal = ($("#roleFilter")?.value || "all");
+  const typeVal = ($("#mirrorTypeFilter")?.value || "all");
+  const clsVal  = ($("#mirrorClassFilter")?.value || "all");
+  doc.text(`Filters: role=${roleVal}, mirror type=${typeVal}, category=${clsVal}`, 40, 112);
+
+  // KPI line
+  const effTxt = totals.eff == null ? "—" : `${totals.eff.toFixed(1)}%`;
+  doc.setFont("times","bold");
+  doc.text(`Total units: ${totals.units.toLocaleString()}   Target: ${totals.target.toLocaleString()}   Efficiency: ${effTxt}`, 40, 136);
+
+  let y = 160;
+
+  // Breakdown table helper
+  function breakdownTable(title, obj){
+    const rows = Object.keys(obj).map(k => {
+      const u = obj[k].units;
+      const t = obj[k].target;
+      const e = t > 0 ? (u/t)*100 : null;
+      return [k, u.toLocaleString(), t.toLocaleString(), e == null ? "—" : e.toFixed(1) + "%"];
+    }).sort((a,b)=> {
+      const ea = parseFloat(a[3]) || -999;
+      const eb = parseFloat(b[3]) || -999;
+      return eb - ea;
+    });
+
+   doc.setFont("times","bold");
+    doc.setFontSize(12);
+    doc.text(title, 40, y);
+
+    doc.autoTable({
+      startY: y + 10,
+      head: [["Group", "Units", "Target", "Eff %"]],
+      body: rows,
+      styles: { font:"times", fontSize: 9, cellPadding: 4 },
+      headStyles: { fontStyle:"bold" },
+      margin: { left: 40, right: 40 }
+    });
+
+    y = doc.lastAutoTable.finalY + 18;
+  }
+
+  breakdownTable("Breakdown by role", byRole);
+  breakdownTable("Breakdown by mirror type", byType);
+  breakdownTable("Breakdown by category", byClass);
+
+  // Top / Bottom tables
+  function perfTable(title, arr){
+    doc.setFont("times","bold");
+    doc.setFontSize(12);
+    doc.text(title, 40, y);
+
+    const body = (arr || []).map(x => [
+      x.name,
+      x.units.toLocaleString(),
+      x.target.toLocaleString(),
+      x.eff == null ? "—" : x.eff.toFixed(1) + "%",
+      x.missingStd ? String(x.missingStd) : "0"
+    ]);
+
+    doc.autoTable({
+      startY: y + 10,
+      head: [["Worker / Station", "Units", "Target", "Eff %", "Missing std rows"]],
+      body,
+      styles: { font:"times", fontSize: 9, cellPadding: 4 },
+      headStyles: { fontStyle:"bold" },
+      margin: { left: 40, right: 40 }
+    });
+
+    y = doc.lastAutoTable.finalY + 18;
+  }
+
+  perfTable("Top 5 performers (daily)", top5);
+  perfTable("Bottom 5 performers (daily)", bottom5);
+
+  if(missingStdWorkers.length){
+    perfTable("Attention: missing standards (top offenders)", missingStdWorkers);
+  }
+
+  // Footer timestamp
+  doc.setFont("times","normal");
+  doc.setFontSize(9);
+  doc.text(`Generated: ${nowStamp()}`, 40, 820);
+
+  const filename = `daily_production_report_${to}_baseline_${baselineMode}.pdf`;
+  doc.save(filename);
+}
+
+
+  const exportDailyReportBtn = document.getElementById("exportDailyReportBtn");
+    if (exportDailyReportBtn) {
+    exportDailyReportBtn.addEventListener("click", () => {
+        exportDailyProductionReportPdf();
+    });
+   }   
+
 
   const uploaderBtn = $("#openUploaderBtn");
   if (uploaderBtn){
@@ -1629,6 +1965,65 @@ function getTarget(row){
   return v;
 }
 
+// ---------- WEIGHTED EFFICIENCY HELPERS (Actual ÷ Target) ----------
+function safeNum(n){
+  const v = Number(n);
+  return isNaN(v) ? 0 : v;
+}
+
+// sums only rows that have a valid target (engineering standard exists)
+function sumActualTarget(rows){
+  let actual = 0;
+  let target = 0;
+  let missingRows = 0;
+  let missingUnits = 0;
+
+  (rows || []).forEach(r => {
+    const u = safeNum(r.daily_total);
+    const t = getTarget(r);
+
+    if (t == null){
+      missingRows += 1;
+      missingUnits += u;   // units that are missing a standard
+      return;
+    }
+
+    actual += u;
+    target += safeNum(t);
+  });
+
+  return { actual, target, missingRows, missingUnits };
+}
+
+function weightedEffPct(rows){
+  const s = sumActualTarget(rows);
+  if (s.target <= 0) return null;
+  return (s.actual / s.target) * 100;
+}
+
+// build a per-day weighted series (date -> weighted eff)
+function buildDailyWeightedSeries(rows){
+  const byDay = {};
+  (rows || []).forEach(r => {
+    const d = (r.log_date || "").slice(0,10);
+    if (!d) return;
+    if (!byDay[d]) byDay[d] = [];
+    byDay[d].push(r);
+  });
+
+  const dates = Object.keys(byDay).sort();
+  const series = dates.map(date => {
+    const dayRows = byDay[date];
+    return {
+      date,
+      eff: weightedEffPct(dayRows),
+      actual: sumActualTarget(dayRows).actual,
+      target: sumActualTarget(dayRows).target
+    };
+  });
+
+  return series;
+}
 
 // ---------- FILTER: WORKER / STATION DROPDOWN ----------
 function populateWorkerFilter(rows){
@@ -1701,89 +2096,93 @@ function renderAll(rows){
   }
 }
 
-// ---------- SUMMARY ----------
-function renderSummary(rows){
-  const box = $("#summaryCards");
-  if(!box) return;
+    // ---------- SUMMARY ----------
+    function renderSummary(rows){
+    const box = $("#summaryCards");
+    if(!box) return;
 
-  if(!rows || !rows.length){
-    box.innerHTML = `
-      <div class="summary-card">
-        <div class="summary-label">No data</div>
-        <div class="summary-value">0%</div>
-        <div class="summary-sub">No records for this filter.</div>
-      </div>`;
-    return;
-  }
+    if(!rows || !rows.length){
+        box.innerHTML = `
+        <div class="summary-card">
+            <div class="summary-label">No data</div>
+            <div class="summary-value">0%</div>
+            <div class="summary-sub">No records for this filter.</div>
+        </div>`;
+        return;
+    }
 
-  // Overall average across the filtered rows
-  const effs = rows
-    .map(r => getEff(r))
-    .filter(v => v != null && !isNaN(v));
+    // Department-level weighted efficiency (Actual ÷ Target)
+    const deptSum = sumActualTarget(rows);
+    const deptEff = deptSum.target > 0 ? (deptSum.actual / deptSum.target) * 100 : null;
 
-  const avgEff = effs.length
-    ? (effs.reduce((t,v)=>t+v,0) / effs.length)
-    : 0;
-
-  // Group efficiencies by worker
-  const byWorker = {};
-  rows.forEach(r => {
-    const name = r.worker_name || "Unknown";
-    const e = getEff(r);
-    if (e == null || isNaN(e)) return;
-    if (!byWorker[name]) byWorker[name] = [];
-    byWorker[name].push(e);
-  });
-
-  let bestName  = "-";
-  let bestAvg   = null;
-  let worstName = "-";
-  let worstAvg  = null;
-
-  const workerNames = Object.keys(byWorker);
-
-  if (workerNames.length){
-    workerNames.forEach(name => {
-      const arr = byWorker[name];
-      if (!arr.length) return;
-
-      const avg = arr.reduce((t,v)=>t+v,0) / arr.length;
-
-      // Best performer
-      if (bestAvg === null || avg > bestAvg){
-        bestName = name;
-        bestAvg  = avg;
-      }
-
-      // Lowest performer
-      if (worstAvg === null || avg < worstAvg){
-        worstName = name;
-        worstAvg  = avg;
-      }
+    // Worker-level weighted efficiency (per worker: SUM(actual)/SUM(target))
+    const byWorker = {};
+    rows.forEach(r => {
+        const name = r.worker_name || "Unknown";
+        if (!byWorker[name]) byWorker[name] = [];
+        byWorker[name].push(r);
     });
-  }
 
-  const bestAvgDisplay  = bestAvg  != null ? bestAvg.toFixed(1)  + "%" : "—";
-  const worstAvgDisplay = worstAvg != null ? worstAvg.toFixed(1) + "%" : "—";
+    let bestName  = "—";
+    let bestEff   = null;
+    let bestUnits = 0;
 
-  box.innerHTML = `
-    <div class="summary-card">
-      <div class="summary-label">Average efficiency (filtered rows)</div>
-      <div class="summary-value">${avgEff.toFixed(1)}%</div>
-      <div class="summary-sub">Across ${rows.length} worker/station-days</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Best performer</div>
-      <div class="summary-value">${bestName}</div>
-      <div class="summary-sub">${bestAvgDisplay}</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Lowest performer</div>
-      <div class="summary-value">${worstName}</div>
-      <div class="summary-sub">${worstAvgDisplay}</div>
-    </div>
-  `;
-}
+    let worstName  = "—";
+    let worstEff   = null;
+    let worstUnits = 0;
+
+    Object.keys(byWorker).forEach(name => {
+        const arr = byWorker[name];
+        const s = sumActualTarget(arr);
+        if (s.target <= 0) return; // skip if no standards
+
+        const e = (s.actual / s.target) * 100;
+
+        if (bestEff === null || e > bestEff){
+        bestEff = e;
+        bestName = name;
+        bestUnits = s.actual;
+        }
+
+        if (worstEff === null || e < worstEff){
+        worstEff = e;
+        worstName = name;
+        worstUnits = s.actual;
+        }
+    });
+
+    const deptEffTxt  = deptEff == null ? "—" : deptEff.toFixed(1) + "%";
+    const bestEffTxt  = bestEff == null ? "—" : bestEff.toFixed(1) + "%";
+    const worstEffTxt = worstEff == null ? "—" : worstEff.toFixed(1) + "%";
+
+    const missingNote =
+        deptSum.missingRows > 0
+        ? ` • Missing standards: ${deptSum.missingRows} rows (${deptSum.missingUnits.toLocaleString()} units)`
+        : "";
+
+    box.innerHTML = `
+        <div class="summary-card">
+        <div class="summary-label">Overall efficiency (Actual ÷ Target)</div>
+        <div class="summary-value">${deptEffTxt}</div>
+        <div class="summary-sub">
+            ${deptSum.actual.toLocaleString()} actual vs ${deptSum.target.toLocaleString()} target${missingNote}
+        </div>
+        </div>
+
+        <div class="summary-card">
+        <div class="summary-label">Best performer (weighted)</div>
+        <div class="summary-value">${bestName}</div>
+        <div class="summary-sub">${bestEffTxt} • ${bestUnits.toLocaleString()} units</div>
+        </div>
+
+        <div class="summary-card">
+        <div class="summary-label">Lowest performer (weighted)</div>
+        <div class="summary-value">${worstName}</div>
+        <div class="summary-sub">${worstEffTxt} • ${worstUnits.toLocaleString()} units</div>
+        </div>
+    `;
+    }
+
 
 // ---------- CHART THEME HELPERS ----------
 function chartTextColor(){
@@ -1864,17 +2263,18 @@ function renderWorkerBarChart(rows){
   labels.forEach(name => {
     const info = byWorker[name];
 
-    // Daily avg = most recent day only
+    // Daily avg (weighted) = most recent day only (SUM actual ÷ SUM target)
     let dailyAvg = NaN;
     if (info.rows.length){
-      const latest = [...info.rows].sort((a,b) =>
-        (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0)
-      ).pop();
+    const latestDate = [...info.rows]
+        .map(r => (r.log_date || "").slice(0,10))
+        .filter(Boolean)
+        .sort()
+        .pop();
 
-      const latestEff = getEff(latest);
-      if (latestEff != null && !isNaN(latestEff)){
-        dailyAvg = latestEff;
-        }
+    const latestDayRows = info.rows.filter(r => (r.log_date || "").slice(0,10) === latestDate);
+    const e = weightedEffPct(latestDayRows);
+    if (e != null && !isNaN(e)) dailyAvg = e;
     }
 
     const dailyAvgRounded = Math.round(dailyAvg * 10) / 10;
@@ -1882,11 +2282,11 @@ function renderWorkerBarChart(rows){
 
     // Weekly stats (latest week only)
     const rowsSorted = [...info.rows].sort((a,b) =>
-      (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0)
+    (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0)
     );
 
     const weekKeys = uniq(
-      rowsSorted
+    rowsSorted
         .map(r => getWeekKey(r.log_date || r.day || ""))
         .filter(k => !!k)
     ).sort();
@@ -1895,24 +2295,20 @@ function renderWorkerBarChart(rows){
     let weeklyUnits = 0;
 
     if (weekKeys.length){
-      const latestWeek = weekKeys[weekKeys.length - 1];
-      const latestWeekRows = rowsSorted.filter(r =>
+    const latestWeek = weekKeys[weekKeys.length - 1];
+    const latestWeekRows = rowsSorted.filter(r =>
         getWeekKey(r.log_date || r.day || "") === latestWeek
-      );
+    );
 
-      const weekEffs = latestWeekRows
-        .map(r => getEff(r))
-        .filter(e => e != null && !isNaN(e));
+    // ✅ Weekly avg (weighted) = SUM actual ÷ SUM target for latest week
+    weeklyAvg = weightedEffPct(latestWeekRows);
 
-      if (weekEffs.length){
-        weeklyAvg = weekEffs.reduce((t,v) => t + v, 0) / weekEffs.length;
-      }
-
-      weeklyUnits = latestWeekRows.reduce(
+    weeklyUnits = latestWeekRows.reduce(
         (t,r) => t + (Number(r.daily_total) || 0),
         0
-      );
+    );
     }
+
 
     if (weeklyAvg === null) weeklyAvg = dailyAvg;
     if (!weeklyUnits) weeklyUnits = 0;
@@ -2029,7 +2425,7 @@ function renderWorkerBarChart(rows){
             if (!w) return [];
 
             const lines = [];
-            lines.push(`Weekly avg: ${w.weeklyAvg.toFixed(1)}%`);
+            lines.push(`Weekly avg: ${w.weeklyAvg == null ? "—" : w.weeklyAvg.toFixed(1) + "%"}`);
             lines.push(`Weekly total units: ${w.weeklyUnits.toLocaleString()}`);
             lines.push(w.trendLabel);
 
@@ -2060,182 +2456,165 @@ function renderWorkerBarChart(rows){
   }
 }
 
-// ---------- LINE CHART ----------
-function renderWorkerTrendChart(rows, workerFilter){
-  const ctx   = $("#workerTrendChart");
-  const title = $("#trendTitle");
-  if(!ctx) return;
+    // ---------- LINE CHART ----------
+    function renderWorkerTrendChart(rows, workerFilter){
+    const ctx   = $("#workerTrendChart");
+    const title = $("#trendTitle");
+    if(!ctx) return;
 
-  if(!rows || !rows.length || !workerFilter || workerFilter === "all"){
-    if(trendChartInstance){
-      trendChartInstance.destroy();
-      trendChartInstance = null;
-    }
-    if(title){
-      title.textContent = "Daily efficiency trend (select a worker / station)";
-    }
-    return;
-  }
-
-  const sorted = [...rows].sort((a,b) => {
-    return (a.log_date > b.log_date) ? 1 : (a.log_date < b.log_date ? -1 : 0);
-  });
-
-  const labels = sorted.map(r => r.log_date);
-  const effs = sorted.map(r => {
-    const e = getEff(r);
-    return (e == null || isNaN(e)) ? null : e;
-    });
-
-
-
-  if(title){
-    title.textContent = `Daily efficiency trend — ${workerFilter}`;
-  }
-
-  const avgEff = effs.length
-    ? effs.reduce((t, v) => t + v, 0) / effs.length
-    : null;
-  const lineColor = getEfficiencyColor(avgEff);
-
-  const data = {
-    labels,
-    datasets:[{
-      label:"Efficiency (%)",
-      data:effs,
-      tension:0.3,
-      borderColor: lineColor,
-      backgroundColor: lineColor,
-      pointBackgroundColor: lineColor,
-      pointBorderColor: lineColor
-    }]
-  };
-
-  const options = {
-    responsive:true,
-    maintainAspectRatio:false,
-    scales:{
-      x: {
-        ticks: {
-          color: chartTextColor()
+    if(!rows || !rows.length || !workerFilter || workerFilter === "all"){
+        if(trendChartInstance){
+        trendChartInstance.destroy();
+        trendChartInstance = null;
         }
-      },
-      y:{
-        beginAtZero:true,
-        max:120,
-        ticks: {
-          color: chartTextColor()
+        if(title){
+        title.textContent = "Daily efficiency trend (select a worker / station)";
         }
-      }
-    },
-    plugins:{
-      legend:{ display:false },
-      tooltip: {
-        backgroundColor: "#111827",
-        borderColor: "#111827",
-        borderWidth: 1,
-        titleColor: "#f9fafb",
-        bodyColor: "#f9fafb",
-      }
+        return;
     }
-  };
 
-  if(trendChartInstance){
-    trendChartInstance.data    = data;
-    trendChartInstance.options = options;
-    trendChartInstance.update();
-  }else{
-    trendChartInstance = new Chart(ctx, {
-      type:'line',
-      data,
-      options
-    });
-  }
-}
+    // ✅ Day-by-day weighted series (SUM actual ÷ SUM target)
+    const series = buildDailyWeightedSeries(rows)
+        .filter(p => p.eff != null && !isNaN(p.eff));
 
-// ---------- WEEKLY LEADERBOARD ----------
-function renderWeeklyLeaderboard(rows){
-  const tbody = $("#leaderBody");
-  const title = $("#leaderTitle");
-  if(!tbody) return;
+    if(!series.length){
+        if(trendChartInstance){
+        trendChartInstance.destroy();
+        trendChartInstance = null;
+        }
+        if(title){
+        title.textContent = `Daily efficiency trend — ${workerFilter} (no standards)`;
+        }
+        return;
+    }
 
-  if(!rows || !rows.length){
-    tbody.innerHTML =
-      '<tr><td colspan="5" style="text-align:center;padding:8px;">No data for this filter.</td></tr>';
+    const labels = series.map(p => p.date);
+    const effs   = series.map(p => p.eff);
+
     if(title){
-      title.textContent = "Weekly leaderboard (latest week in range)";
+        title.textContent = `Daily efficiency trend — ${workerFilter}`;
     }
-    return;
-  }
 
-  const groups = {};
-  rows.forEach(r => {
-    const dateStr = r.log_date || r.day || "";
-    const weekKey = getWeekKey(dateStr);
-    if(!weekKey) return;
+    const avgEff = effs.reduce((t,v)=> t + v, 0) / effs.length;
+    const lineColor = getEfficiencyColor(avgEff);
 
-    const name = r.worker_name || "Unknown";
-    const eff = getEff(r);
-    if (eff == null || isNaN(eff)) return;
-
-    const gKey = weekKey + "||" + name;
-    if(!groups[gKey]){
-      groups[gKey] = { week: weekKey, name, effs: [] };
-    }
-    groups[gKey].effs.push(eff);
-  });
-
-  const arr = Object.values(groups).map(g => {
-    const avg = g.effs.reduce((t,v)=>t+v,0) / g.effs.length;
-    return {
-      week: g.week,
-      name: g.name,
-      avg,
-      days: g.effs.length
+    const data = {
+        labels,
+        datasets:[{
+        label:"Efficiency (%)",
+        data:effs,
+        tension:0.3,
+        borderColor: lineColor,
+        backgroundColor: lineColor,
+        pointBackgroundColor: lineColor,
+        pointBorderColor: lineColor
+        }]
     };
-  });
 
-  if(!arr.length){
-    tbody.innerHTML =
-      '<tr><td colspan="5" style="text-align:center;padding:8px;">No efficiency data for leaderboard.</td></tr>';
-    if(title){
-      title.textContent = "Weekly leaderboard (latest week in range)";
+    const options = {
+        responsive:true,
+        maintainAspectRatio:false,
+        scales:{
+        x: { ticks: { color: chartTextColor() } },
+        y: { beginAtZero:true, max:120, ticks: { color: chartTextColor() } }
+        },
+        plugins:{
+        legend:{ display:false },
+        tooltip: {
+            backgroundColor: "#111827",
+            borderColor: "#111827",
+            borderWidth: 1,
+            titleColor: "#f9fafb",
+            bodyColor: "#f9fafb",
+        }
+        }
+    };
+
+    if(trendChartInstance){
+        trendChartInstance.data    = data;
+        trendChartInstance.options = options;
+        trendChartInstance.update();
+    }else{
+        trendChartInstance = new Chart(ctx, { type:'line', data, options });
     }
-    return;
-  }
-
-  // latest week by key
-  let latestWeek = null;
-  arr.forEach(g => {
-    if(!latestWeek || g.week > latestWeek){
-      latestWeek = g.week;
     }
-  });
 
-  const latestRows = arr.filter(g => g.week === latestWeek);
-  latestRows.sort((a,b) => b.avg - a.avg);
+    // ---------- WEEKLY LEADERBOARD ----------
+    function renderWeeklyLeaderboard(rows){
+    const tbody = $("#leaderBody");
+    const title = $("#leaderTitle");
+    if(!tbody) return;
 
-  const top = latestRows.slice(0,5);
+    if(!rows || !rows.length){
+        tbody.innerHTML =
+        '<tr><td colspan="5" style="text-align:center;padding:8px;">No data for this filter.</td></tr>';
+        if(title) title.textContent = "Weekly leaderboard (latest week in range)";
+        return;
+    }
 
-  if(title){
-    title.textContent = `Weekly leaderboard — ${latestWeek}`;
-  }
+    // group by week + worker, but compute WEIGHTED eff using sums
+    const groups = {};
+    rows.forEach(r => {
+        const dateStr = r.log_date || r.day || "";
+        const weekKey = getWeekKey(dateStr);
+        if(!weekKey) return;
 
-  let html = "";
-  top.forEach((g, idx) => {
-    html += `
-      <tr>
-        <td>${idx+1}</td>
-        <td>${g.week}</td>
-        <td>${g.name.replace(/</g,"&lt;")}</td>
-        <td style="text-align:right;">${g.avg.toFixed(1)}</td>
-        <td style="text-align:right;">${g.days}</td>
-      </tr>
-    `;
-  });
+        const name = r.worker_name || "Unknown";
+        const gKey = weekKey + "||" + name;
 
-  tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
-}
+        if(!groups[gKey]) groups[gKey] = { week: weekKey, name, rows: [] };
+        groups[gKey].rows.push(r);
+    });
+
+    const arr = Object.values(groups).map(g => {
+        const s = sumActualTarget(g.rows);
+        const avg = s.target > 0 ? (s.actual / s.target) * 100 : null;
+
+        // days counted = unique days that had a standard
+        const daySet = new Set();
+        g.rows.forEach(r => {
+        if (getTarget(r) == null) return;
+        daySet.add((r.log_date || "").slice(0,10));
+        });
+
+        return {
+        week: g.week,
+        name: g.name,
+        avg,
+        days: daySet.size
+        };
+    }).filter(x => x.avg != null);
+
+    if(!arr.length){
+        tbody.innerHTML =
+        '<tr><td colspan="5" style="text-align:center;padding:8px;">No efficiency data for leaderboard.</td></tr>';
+        if(title) title.textContent = "Weekly leaderboard (latest week in range)";
+        return;
+    }
+
+    let latestWeek = null;
+    arr.forEach(g => { if(!latestWeek || g.week > latestWeek) latestWeek = g.week; });
+
+    const latestRows = arr.filter(g => g.week === latestWeek).sort((a,b) => b.avg - a.avg);
+    const top = latestRows.slice(0,5);
+
+    if(title) title.textContent = `Weekly leaderboard — ${latestWeek}`;
+
+    let html = "";
+    top.forEach((g, idx) => {
+        html += `
+        <tr>
+            <td>${idx+1}</td>
+            <td>${g.week}</td>
+            <td>${g.name.replace(/</g,"&lt;")}</td>
+            <td style="text-align:right;">${g.avg.toFixed(1)}</td>
+            <td style="text-align:right;">${g.days}</td>
+        </tr>
+        `;
+    });
+
+    tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
+    }
 
 // ---------- HELPER: GET CURRENT FILTERED ROWS (MATCHES DETAIL TABLE) ----------
 function getCurrentFilteredRows() {
@@ -2421,16 +2800,18 @@ async function exportWorkerPdf() {
 
   const tableBody = rows.map(r => {
     const eff = getEff(r);
+    const tgt = getTarget(r);
     return [
-      r.log_date || "",
-      r.role || "",
-      r.mirror_type || "",
-      r.mirror_class || "",
-      (Number(r.daily_total) || 0).toLocaleString(),
-      getTarget(r).toLocaleString(),
-      isNaN(eff) ? "" : eff.toFixed(1)
+        r.log_date || "",
+        r.role || "",
+        r.mirror_type || "",
+        r.mirror_class || "",
+        (Number(r.daily_total) || 0).toLocaleString(),
+        (tgt == null ? "—" : tgt.toLocaleString()),
+        (eff == null || isNaN(eff)) ? "—" : eff.toFixed(1)
     ];
   });
+
 
   doc.autoTable({
     startY: y + 5,
@@ -2457,7 +2838,7 @@ function renderTable(rows){
 
   if(!rows || !rows.length){
     tbody.innerHTML =
-      '<tr><td colspan="8" style="text-align:center;padding:10px;">No rows for this filter.</td></tr>';
+      '<tr><td colspan="9" style="text-align:center;padding:10px;">No rows for this filter.</td></tr>';
     return;
   }
 
