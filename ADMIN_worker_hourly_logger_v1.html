@@ -255,6 +255,7 @@
         border-color:#dc2626 !important;
         box-shadow:0 0 0 1px rgba(220,38,38,0.25);
       }
+      
 
       @media (max-width:700px){
         header{
@@ -366,6 +367,16 @@
             <button type="button" data-qty="5">+5</button>
             <button type="button" data-qty="10">+10</button>
           </div>
+        </div>
+
+        <div class="field">
+          <label for="jobRef">Job Ref</label>
+          <input type="text" id="jobRef" placeholder="e.g. JOB-2025-12-16-001">
+        </div>
+
+        <div class="field">
+          <label for="orderQty">Order Qty (total)</label>
+          <input type="number" id="orderQty" min="1" step="1" inputmode="numeric" placeholder="e.g. 600">
         </div>
       </div>
 
@@ -908,8 +919,10 @@
       const mirrorType  = $("#mirrorType").value.trim();
       const mirrorClass = $("#mirrorClass").value.trim();
       const qtyStr      = $("#qty").value.trim();
+      const jobRef      = ($("#jobRef")?.value || "").trim();
+      const orderQtyStr = ($("#orderQty")?.value || "").trim();
 
-      ["logDate","hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","qty"].forEach(id => {
+      ["logDate","hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","qty","jobRef","orderQty"].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.classList.remove("input-invalid");
       });
@@ -942,6 +955,16 @@
 
       if(hasError) return;
 
+      const order_qty = orderQtyStr === "" ? null : parseInt(orderQtyStr, 10);
+      const job_ref = jobRef === "" ? null : jobRef;
+
+      // Optional validation: Order Qty must be a positive whole number (or blank)
+      if(orderQtyStr !== "" && (Number.isNaN(order_qty) || order_qty <= 0)){
+        $("#orderQty")?.classList.add("input-invalid");
+        setStatus("Order Qty must be a positive whole number (or leave blank).", false);
+        return;
+      }
+
       setStatus("Saving entry...", true);
 
       // If LIVE mode, require part # to exist in mirror_standards before allowing save
@@ -972,6 +995,8 @@
 
         if(idx >= 0){
           rows[idx].qty = qty;
+          rows[idx].job_ref = job_ref;
+          rows[idx].order_qty = order_qty;
         } else {
           rows.push({
             log_date: logDate,
@@ -981,7 +1006,9 @@
             part_number: partNumber,
             mirror_type: mirrorType,
             mirror_class: mirrorClass,
-            qty
+            qty,
+            job_ref,
+            order_qty
           });
         }
 
@@ -995,6 +1022,8 @@
           $("#partNumber").value  = "";
           $("#mirrorType").value  = "";
           $("#mirrorClass").value = "";
+          $("#jobRef").value      = "";
+          $("#orderQty").value    = "";
         } else {
           const currentBlock = hourBlock;
           const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
@@ -1035,7 +1064,7 @@
         const rowId = existing[0].id;
         const { error: updErr } = await supabase
           .from("worker_hourly_log")
-          .update({ qty })
+          .update({ qty, job_ref, order_qty })
           .eq("id", rowId);
         saveErr = updErr;
       } else {
@@ -1049,7 +1078,9 @@
             part_number: partNumber,
             mirror_type: mirrorType,
             mirror_class: mirrorClass,
-            qty
+            qty,
+            job_ref,
+            order_qty
           }]);
         saveErr = insErr;
       }
@@ -1069,6 +1100,8 @@
         $("#partNumber").value  = "";
         $("#mirrorType").value  = "";
         $("#mirrorClass").value = "";
+        $("#jobRef").value      = "";
+        $("#orderQty").value    = "";
       } else {
         const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
         const idx = orderedBlocks.indexOf(hourBlock);
@@ -1160,7 +1193,7 @@
     async function saveMirrorStandardFromModal(){
       const part_number = document.getElementById("ms_part_number")?.value.trim();
       const mirror_family = document.getElementById("ms_mirror_family")?.value.trim() || null;
-      const size_code = (document.getElementById("ms_size_code")?.value || "").trim() || "ALL";
+      const size_code = "ALL";
 
       const stdRaw = document.getElementById("ms_std_per_hour_100")?.value.trim() || "";
       const std_per_hour_100 = stdRaw === "" ? null : Number(stdRaw);
