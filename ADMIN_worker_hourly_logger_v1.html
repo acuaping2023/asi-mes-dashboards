@@ -287,6 +287,19 @@
 
       <div class="tag" id="freshnessTag">Last updated: —</div>
 
+      <div id="authBox" class="tag" style="display:flex; align-items:center; gap:8px;">
+        <span id="authState">Signed out</span>
+
+        <input id="loginEmail" type="text" placeholder="email"
+              style="width:170px; padding:5px 8px; border-radius:10px; border:1px solid var(--border);" />
+        <input id="loginPassword" type="password" placeholder="password"
+              style="width:130px; padding:5px 8px; border-radius:10px; border:1px solid var(--border);" />
+
+        <button class="btn btn-mini" id="signInBtn" type="button">Sign in</button>
+        <button class="btn btn-mini" id="signOutBtn" type="button" style="display:none;">Sign out</button>
+      </div>
+
+
       <button class="btn" id="howItWorksBtn" type="button">How it works</button>
     </div>
   </header>
@@ -413,6 +426,8 @@
               <th>Part #</th>
               <th>Type</th>
               <th>Category</th>
+              <th>Job Ref</th>
+              <th style="text-align:right;">Order Qty</th>
               <th style="text-align:right;">Qty</th>
               <th>Actions</th>
             </tr>
@@ -433,7 +448,9 @@
     function $(s){ return document.querySelector(s); }
 
     function todayIso(){
-      return new Date().toISOString().slice(0,10);
+      const d = new Date();
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); // shift to local
+      return d.toISOString().slice(0,10);
     }
 
     function nowStamp(){
@@ -448,6 +465,16 @@
         .replaceAll('"',"&quot;")
         .replaceAll("'","&#039;");
     }
+
+    function withTimeout(promise, ms = 8000, label = "Request"){
+      return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+        )
+      ]);
+    }
+
 
     // ---------- HOUR BLOCK ORDER & HELPERS ----------
     const HOUR_BLOCK_ORDER = {
@@ -496,7 +523,33 @@
       console.error("Supabase library failed to load. Check your script tag / internet access.");
       alert("Supabase failed to load. Fix the Supabase script tag first.");
     }
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const sb = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false
+        },
+        global: {
+          // Force apikey on EVERY request, but do NOT override Authorization.
+          fetch: (url, options = {}) => {
+            const headers = new Headers(options.headers || {});
+            headers.set("apikey", SUPABASE_ANON_KEY);
+
+            // IMPORTANT: do NOT set Authorization here.
+            // Supabase will set Authorization to the user's access token after sign-in.
+
+            return fetch(url, { ...options, headers });
+          }
+        }
+      }
+    );
+
+
+
 
     // ---------- DEMO MODE ----------
     const DEMO_KEY = "WHL_DEMO_MODE_v1";
@@ -530,6 +583,35 @@
       ];
     }
 
+    function setWriteEnabled(enabled){
+  ["submitBtn","saveAndStayBtn","enterStandardBtn"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.disabled = !enabled;
+  });
+}
+
+  async function refreshAuthUI(){
+    const { data: { session } } = await sb.auth.getSession();
+    const signedIn = !!session?.user;
+
+    const authState = document.getElementById("authState");
+    const signOutBtn = document.getElementById("signOutBtn");
+    const signInBtn  = document.getElementById("signInBtn");
+    const emailEl = document.getElementById("loginEmail");
+    const passEl  = document.getElementById("loginPassword");
+
+    if(authState) authState.textContent = signedIn ? `Signed in: ${session.user.email}` : "Signed out";
+    if(signOutBtn) signOutBtn.style.display = signedIn ? "inline-flex" : "none";
+    if(signInBtn)  signInBtn.style.display  = signedIn ? "none" : "inline-flex";
+    if(emailEl) emailEl.style.display = signedIn ? "none" : "inline-block";
+    if(passEl)  passEl.style.display  = signedIn ? "none" : "inline-block";
+
+    // If not signed in and not demo mode → disable writes
+    setWriteEnabled(demoMode ? true : signedIn);
+  }
+
+
+
     // ---------- PART # AUTOFILL (datalist) ----------
     let PART_CACHE = [];
 
@@ -560,11 +642,18 @@
         return;
       }
 
-      // LIVE MODE
-      let query = supabase
+      // LIVE MODE — only pull suggestions if signed in (worker_hourly_log is auth-only)
+      const { data: { session } } = await sb.auth.getSession();
+      if(!session?.user){
+        setPartSuggestions([]); // signed out → no suggestions (by design)
+        return;
+      }
+
+      let query = sb
         .from("worker_hourly_log")
         .select("part_number, mirror_type")
         .eq("log_date", date);
+
 
       const { data, error } = await query;
 
@@ -707,12 +796,6 @@
           ${header}
           ${sections}
         </div>
-
-        <script>
-          window.addEventListener('load', () => {
-            setTimeout(() => window.print(), 50);
-          });
-        <\/script>
       </body>
       </html>
       `;
@@ -765,7 +848,7 @@
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("worker_directory")
         .select("worker_name")
         .order("worker_name", { ascending: true });
@@ -797,7 +880,7 @@
         const data = (all || []).filter(r => r.log_date === date);
 
         if(!data.length){
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
           if(tag) tag.textContent = date;
           setFreshness(`Last updated: ${nowStamp()} (Demo)`);
           return;
@@ -829,6 +912,8 @@
               <td>${escapeHtml(row.part_number)}</td>
               <td>${escapeHtml(row.mirror_type)}</td>
               <td>${escapeHtml(row.mirror_class)}</td>
+              <td>${escapeHtml(row.job_ref || "")}</td>
+              <td style="text-align:right;">${row.order_qty == null ? "" : Number(row.order_qty).toLocaleString()}</td>
               <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
               <td><span class="tag">Demo</span></td>
             </tr>
@@ -841,21 +926,21 @@
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("worker_hourly_log")
         .select("*")
         .eq("log_date", date);
 
       if(error){
         console.error("Error loading entries:", error.message);
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
         if(tag) tag.textContent = "";
         setFreshness(`Last updated: ${nowStamp()} (Error)`);
         return;
       }
 
       if(!data || !data.length){
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
         if(tag) tag.textContent = date;
         setFreshness(`Last updated: ${nowStamp()}`);
         return;
@@ -887,6 +972,8 @@
             <td>${escapeHtml(row.part_number)}</td>
             <td>${escapeHtml(row.mirror_type)}</td>
             <td>${escapeHtml(row.mirror_class)}</td>
+            <td>${escapeHtml(row.job_ref || "")}</td>
+            <td style="text-align:right;">${row.order_qty == null ? "" : Number(row.order_qty).toLocaleString()}</td>
             <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
             <td>
               <button class="btn btn-mini" type="button" data-action="edit" data-id="${row.id}">Edit</button>
@@ -911,6 +998,8 @@
     }
 
     async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
+  try{
+
       const logDate     = $("#logDate").value || todayIso();
       const hourBlock   = $("#hourBlock").value.trim();
       const role        = $("#role").value.trim();
@@ -936,7 +1025,7 @@
       }
 
       if(!role || !workerName || !partNumber || !mirrorType || !mirrorClass || !qtyStr){
-        setStatus("Please fill in all fields before saving.", false);
+        setStatus("Please fill in all required fields before saving.", false);
         if(!role) $("#role")?.classList.add("input-invalid");
         if(!workerName) $("#workerName")?.classList.add("input-invalid");
         if(!partNumber) $("#partNumber")?.classList.add("input-invalid");
@@ -967,11 +1056,19 @@
 
       setStatus("Saving entry...", true);
 
-      // If LIVE mode, require part # to exist in mirror_standards before allowing save
+      // If LIVE mode, require part # to exist in the correct standards table
       if(!demoMode){
-        const exists = await mirrorStandardExists(partNumber);
+        const exists = (role === "packer")
+          ? await packingStandardExists(partNumber)
+          : await mirrorStandardExists(partNumber);
+
         if(!exists){
-          showEnterStandardUI(partNumber);
+          if(role === "packer"){
+            setStatus(`"${partNumber}" is not in packing_standards. Add packing standard first.`, false);
+            // (Optionally: later we can add a packing standard modal just like mirror standards)
+          } else {
+            showEnterStandardUI(partNumber);
+          }
           return;
         } else {
           const btn = document.getElementById("enterStandardBtn");
@@ -1040,17 +1137,22 @@
       }
 
       // LIVE MODE (upsert via find + update/insert)
-      const { data: existing, error: findErr } = await supabase
-        .from("worker_hourly_log")
-        .select("id")
-        .eq("log_date", logDate)
-        .eq("hour_block", hourBlock)
-        .eq("role", role)
-        .eq("worker_name", workerName)
-        .eq("part_number", partNumber)
-        .eq("mirror_type", mirrorType)
-        .eq("mirror_class", mirrorClass)
-        .limit(1);
+      const { data: existing, error: findErr } = await withTimeout(
+        sb
+          .from("worker_hourly_log")
+          .select("id")
+          .eq("log_date", logDate)
+          .eq("hour_block", hourBlock)
+          .eq("role", role)
+          .eq("worker_name", workerName)
+          .eq("part_number", partNumber)
+          .eq("mirror_type", mirrorType)
+          .eq("mirror_class", mirrorClass)
+          .limit(1),
+        8000,
+        "worker_hourly_log find existing"
+      );
+
 
       if(findErr){
         console.error("Lookup error:", findErr);
@@ -1062,27 +1164,30 @@
 
       if(existing && existing.length){
         const rowId = existing[0].id;
-        const { error: updErr } = await supabase
-          .from("worker_hourly_log")
-          .update({ qty, job_ref, order_qty })
-          .eq("id", rowId);
+        const { error: updErr } = await withTimeout(
+          sb.from("worker_hourly_log").update({ qty, job_ref, order_qty }).eq("id", rowId),
+          8000,
+          "worker_hourly_log update"
+        );
         saveErr = updErr;
       } else {
-        const { error: insErr } = await supabase
-          .from("worker_hourly_log")
-          .insert([{
-            log_date: logDate,
-            hour_block: hourBlock,
-            role,
-            worker_name: workerName,
-            part_number: partNumber,
-            mirror_type: mirrorType,
-            mirror_class: mirrorClass,
-            qty,
-            job_ref,
-            order_qty
-          }]);
-        saveErr = insErr;
+        const { error: insErr } = await withTimeout(
+        sb.from("worker_hourly_log").insert([{
+          log_date: logDate,
+          hour_block: hourBlock,
+          role,
+          worker_name: workerName,
+          part_number: partNumber,
+          mirror_type: mirrorType,
+          mirror_class: mirrorClass,
+          qty,
+          job_ref,
+          order_qty
+        }]),
+        8000,
+        "worker_hourly_log insert"
+      );
+      saveErr = insErr;
       }
 
       if(saveErr){
@@ -1110,10 +1215,15 @@
         }
       }
 
-      $("#qty").value = "";
+            $("#qty").value = "";
       await loadTodayEntries();
       await refreshPartSuggestions();
-    }
+  } catch(err){
+      console.error("saveEntry crashed:", err);
+      setStatus(`Save failed: ${err.message || err}`, false);
+  }
+}
+
 
     function initQuickQtyButtons(){
       const container = document.querySelector(".quick-qty-row");
@@ -1136,7 +1246,7 @@
       const pn = (partNumber || "").trim();
       if(!pn) return false;
 
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("mirror_standards")
         .select("id")
         .eq("part_number", pn)
@@ -1144,6 +1254,26 @@
 
       if(error){
         console.error("mirror_standards lookup error:", error.message);
+        return false;
+      }
+      return !!(data && data.length);
+    }
+
+    // ---------- PACKING STANDARDS (gate saves for packers) ----------
+    async function packingStandardExists(partNumber){
+      if(demoMode) return true;
+      const pn = (partNumber || "").trim();
+      if(!pn) return false;
+
+      const { data, error } = await sb
+        .from("packing_standards")
+        .select("id")
+        .eq("part_number", pn)
+        .eq("active", true)
+        .limit(1);
+
+      if(error){
+        console.error("packing_standards lookup error:", error.message);
         return false;
       }
       return !!(data && data.length);
@@ -1212,7 +1342,7 @@
 
       setMsStatus("Saving standard...", true);
 
-      const { error } = await supabase
+      const { error } = await sb
         .from("mirror_standards")
         .insert([{
           part_number,
@@ -1255,6 +1385,8 @@
       document.getElementById("editMirrorType").value = row.mirror_type || "0600";
       document.getElementById("editMirrorClass").value = row.mirror_class || "standard";
       document.getElementById("editQty").value = (row.qty ?? 0);
+      document.getElementById("editJobRef").value = row.job_ref || "";
+      document.getElementById("editOrderQty").value = (row.order_qty ?? "");
 
       showEditStatus("", true);
       modal.style.display = "flex";
@@ -1266,7 +1398,7 @@
     }
 
     async function fetchRowById(id){
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("worker_hourly_log")
         .select("*")
         .eq("id", id)
@@ -1292,6 +1424,13 @@
         mirror_type: document.getElementById("editMirrorType").value,
         mirror_class: document.getElementById("editMirrorClass").value,
         qty: Number(document.getElementById("editQty").value || 0),
+        job_ref: (document.getElementById("editJobRef").value.trim() || null),
+        order_qty: (() => {
+          const v = (document.getElementById("editOrderQty").value || "").trim();
+          if(v === "") return null;
+          const n = parseInt(v, 10);
+          return Number.isNaN(n) ? null : n;
+        })(),
       };
 
       if(!payload.worker_name || !payload.part_number){
@@ -1305,7 +1444,7 @@
 
       showEditStatus("Saving changes...", true);
 
-      const { error } = await supabase
+      const { error } = await sb
         .from("worker_hourly_log")
         .update(payload)
         .eq("id", id);
@@ -1323,7 +1462,7 @@
     }
 
     async function deleteRowById(id){
-      const { error } = await supabase
+      const { error } = await sb
         .from("worker_hourly_log")
         .delete()
         .eq("id", id);
@@ -1372,6 +1511,48 @@
 
       setFreshness(`Last updated: —${demoMode ? " (Demo)" : ""}`);
 
+      // --- AUTH WIRING ---
+      await refreshAuthUI();
+
+      sb.auth.onAuthStateChange(async () => {
+        await refreshAuthUI();
+      });
+
+      const signInBtn = document.getElementById("signInBtn");
+      if(signInBtn){
+        signInBtn.addEventListener("click", async () => {
+          const email = (document.getElementById("loginEmail")?.value || "").trim();
+          const password = (document.getElementById("loginPassword")?.value || "").trim();
+          if(!email || !password){
+            setStatus("Enter email + password to sign in.", false);
+            return;
+          }
+
+          const { error } = await sb.auth.signInWithPassword({ email, password });
+            if(error){
+              setStatus(`Sign in failed: ${error.message}`, false);
+              return;
+            }
+
+            setStatus("Signed in. Loading data...", true);
+            await refreshAuthUI();
+            await loadWorkerDirectory();
+            await refreshPartSuggestions();
+            await loadTodayEntries();
+            setStatus("Signed in. Data loaded.", true);
+        });
+      }
+
+      const signOutBtn = document.getElementById("signOutBtn");
+      if(signOutBtn){
+        signOutBtn.addEventListener("click", async () => {
+          await sb.auth.signOut();
+          setStatus("Signed out. Writes disabled.", true);
+          await refreshAuthUI();
+        });
+      }
+
+
       // Demo toggle listener
       if(demoToggle){
         demoToggle.addEventListener("change", async () => {
@@ -1414,6 +1595,13 @@
 
       const msCancel = document.getElementById("cancelStandardBtn");
       if(msCancel) msCancel.addEventListener("click", closeEnterStandardModal);
+
+      const enterModal = document.getElementById("enterStandardModal");
+      if(enterModal){
+        enterModal.addEventListener("click", (e) => {
+          if(e.target === enterModal) closeEnterStandardModal();
+        });
+      }
 
       const msSave = document.getElementById("saveStandardBtn");
       if(msSave) msSave.addEventListener("click", async () => {
@@ -1526,10 +1714,22 @@
 
       // Initial loads
       await loadWorkerDirectory();
-      await loadTodayEntries();
       await refreshPartSuggestions();
-    });
-  </script>
+
+      // Only load today's entries in Live mode if signed in (Demo mode can always show local)
+     if(demoMode){
+        await loadTodayEntries();
+      } else {
+        const { data: { session } } = await sb.auth.getSession();
+        if(session?.user){
+          await loadTodayEntries();
+        } else {
+          const tbody = document.getElementById("entriesBody");
+          if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view today’s entries.</td></tr>';
+        }
+      }
+    }); // ✅ CLOSE DOMContentLoaded
+  </script> <!-- ✅ CLOSE SCRIPT -->
 
   <!-- EDIT ENTRY MODAL -->
   <div id="editEntryModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10000;">
@@ -1599,8 +1799,17 @@
           <label for="editQty">Qty</label>
           <input type="number" id="editQty" min="0" inputmode="numeric">
         </div>
-      </div>
 
+        <div class="field">
+          <label for="editJobRef">Job Ref</label>
+          <input type="text" id="editJobRef" placeholder="Optional">
+        </div>
+
+        <div class="field">
+          <label for="editOrderQty">Order Qty (total)</label>
+          <input type="number" id="editOrderQty" min="1" step="1" inputmode="numeric" placeholder="Optional">
+        </div>
+      </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="editEntrySaveBtn" type="button">Save changes</button>
       </div>
