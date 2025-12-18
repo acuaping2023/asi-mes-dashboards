@@ -1,1178 +1,1175 @@
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>ASI — Worker Hourly Logger (v1)</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ASI — Worker Hourly Logger (v1.1 no-timeout)</title>
 
-    <!-- Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
-    <style>
-      :root{
-        --accent:#E41E26;
-        --burnt:#CC5500;
-        --ok:#2ecc71;
-        --warn:#ffd84d;
-        --danger:#ff6b6b;
-        --bg:#f3f4f6;
-        --panel:#ffffff;
-        --panel-soft:#f9fafb;
-        --text:#111111;
-        --muted:#6b7280;
-        --border:#e5e7eb;
-        --button:#f3f6fa;
-      }
+  <style>
+    :root{
+      --accent:#E41E26;
+      --burnt:#CC5500;
+      --ok:#2ecc71;
+      --warn:#ffd84d;
+      --danger:#ff6b6b;
+      --bg:#f3f4f6;
+      --panel:#ffffff;
+      --panel-soft:#f9fafb;
+      --text:#111111;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --button:#f3f6fa;
+    }
 
-      *{ box-sizing:border-box; }
-      html, body{
-        margin:0;
-        padding:0;
-        background:var(--bg);
-        color:var(--text);
-        font-family:"Times New Roman", Times, serif;
-      }
+    *{ box-sizing:border-box; }
+    html, body{
+      margin:0; padding:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:"Times New Roman", Times, serif;
+    }
 
-      header{
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        padding:10px 16px;
-        border-bottom:3px solid var(--accent);
-        background:var(--panel);
-      }
-      .brand{
-        display:flex;
-        align-items:center;
-        gap:10px;
-      }
-      .asi-logo{
-        height:34px;
-        width:auto;
-      }
-      .brand-text{
-        display:flex;
-        flex-direction:column;
-        line-height:1.1;
-      }
-      .brand-text strong{
-        font-size:20px;
-        font-weight:800;
-        color:var(--burnt);
-      }
-      .brand-text span{
-        font-size:13px;
-        color:var(--muted);
-      }
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 16px;
+      border-bottom:3px solid var(--accent);
+      background:var(--panel);
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .brand{ display:flex; align-items:center; gap:10px; }
+    .asi-logo{ height:34px; width:auto; }
+    .brand-text{ display:flex; flex-direction:column; line-height:1.1; }
+    .brand-text strong{ font-size:20px; font-weight:800; color:var(--burnt); }
+    .brand-text span{ font-size:13px; color:var(--muted); }
 
-      main{
-        max-width:1100px;
-        margin:16px auto 32px auto;
-        padding:0 12px;
-        display:flex;
-        flex-direction:column;
-        gap:16px;
-      }
+    main{
+      max-width:1100px;
+      margin:16px auto 32px auto;
+      padding:0 12px;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
 
-      .card{
-        background:var(--panel);
-        border:1px solid var(--border);
-        border-radius:14px;
-        padding:14px 16px;
-        box-shadow:0 1px 3px rgba(15,23,42,0.08);
-      }
+    .card{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px 16px;
+      box-shadow:0 1px 3px rgba(15,23,42,0.08);
+    }
 
-      .card-title{
-        font-size:15px;
-        font-weight:700;
-        color:var(--burnt);
-        margin-bottom:10px;
-      }
+    .card-title{
+      font-size:15px;
+      font-weight:700;
+      color:var(--burnt);
+      margin-bottom:10px;
+    }
 
-      .form-grid{
-        display:grid;
-        grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
-        gap:10px 12px;
-        margin-bottom:10px;
-        align-items:flex-end;
-      }
+    .form-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+      gap:10px 12px;
+      margin-bottom:10px;
+      align-items:flex-end;
+    }
 
-      .field{
-        display:flex;
-        flex-direction:column;
-        gap:4px;
-        font-size:12px;
-      }
-      .field label{
-        color:var(--muted);
-      }
+    .field{ display:flex; flex-direction:column; gap:4px; font-size:12px; }
+    .field label{ color:var(--muted); }
 
-      input[type="date"],
-      input[type="number"],
-      input[type="text"],
-      select{
-        background:#ffffff;
-        border:1px solid var(--border);
-        border-radius:10px;
-        padding:6px 10px;
-        font-size:14px;
-        outline:none;
-      }
-      input:focus,
-      select:focus{
-        border-color:#b9c6d8;
-        box-shadow:0 0 0 2px rgba(204,85,0,.15);
-      }
+    input[type="date"],
+    input[type="number"],
+    input[type="text"],
+    input[type="password"],
+    select{
+      background:#ffffff;
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:6px 10px;
+      font-size:14px;
+      outline:none;
+    }
+    input:focus, select:focus{
+      border-color:#b9c6d8;
+      box-shadow:0 0 0 2px rgba(204,85,0,.15);
+    }
 
-      .btn-row{
-        display:flex;
-        flex-wrap:wrap;
-        gap:8px;
-        margin-top:4px;
-      }
+    .btn-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:4px;
+    }
 
-      .btn{
-        background:var(--button);
-        border:1px solid var(--border);
-        border-radius:10px;
-        padding:7px 12px;
-        font-size:14px;
-        cursor:pointer;
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
-      }
-      .btn:hover{
-        background:#e9edf3;
-        border-color:#b9c6d8;
-      }
+    .btn{
+      background:var(--button);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:7px 12px;
+      font-size:14px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .btn:hover{ background:#e9edf3; border-color:#b9c6d8; }
 
-      .btn-primary{
-        background:var(--burnt);
-        border-color:var(--burnt);
-        color:#ffffff;
-      }
-      .btn-primary:hover{
-        background:#a84300;
-        border-color:#a84300;
-      }
+    .btn-primary{
+      background:var(--burnt);
+      border-color:var(--burnt);
+      color:#ffffff;
+    }
+    .btn-primary:hover{ background:#a84300; border-color:#a84300; }
 
-      .btn-mini{
-        padding:5px 10px;
-        font-size:12px;
-        border-radius:10px;
-      }
-      .btn-danger{
-        background:#fff;
-        border-color:#fecaca;
-        color:#b91c1c;
-      }
-      .btn-danger:hover{
-        background:#fff1f2;
-        border-color:#fca5a5;
-      }
+    .btn-mini{ padding:5px 10px; font-size:12px; border-radius:10px; }
+    .btn-danger{
+      background:#fff;
+      border-color:#fecaca;
+      color:#b91c1c;
+    }
+    .btn-danger:hover{ background:#fff1f2; border-color:#fca5a5; }
 
-      .status-line{
-        font-size:12px;
-        margin-top:6px;
-        min-height:16px;
-      }
-      .status-ok{ color:var(--ok); }
-      .status-err{ color:var(--danger); }
+    .status-line{
+      font-size:12px;
+      margin-top:6px;
+      min-height:16px;
+    }
+    .status-ok{ color:var(--ok); }
+    .status-err{ color:var(--danger); }
 
-      .quick-qty-row{
-        display:flex;
-        align-items:center;
-        gap:6px;
-        font-size:12px;
-        color:var(--muted);
-        margin-top:4px;
-      }
-      .quick-qty-row button{
-        padding:3px 8px;
-        font-size:11px;
-        border-radius:999px;
-        border:1px solid var(--border);
-        background:var(--panel-soft);
-        cursor:pointer;
-      }
-      .quick-qty-row button:hover{
-        background:#e5e7eb;
-      }
+    .quick-qty-row{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:12px;
+      color:var(--muted);
+      margin-top:4px;
+    }
+    .quick-qty-row button{
+      padding:3px 8px;
+      font-size:11px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      cursor:pointer;
+    }
+    .quick-qty-row button:hover{ background:#e5e7eb; }
 
-      table{
-        width:100%;
-        border-collapse:collapse;
-        font-size:13px;
-      }
-      th, td{
-        padding:6px 8px;
-        text-align:left;
-        border-bottom:1px solid var(--border);
-        white-space:nowrap;
-      }
-      th{
-        background:var(--panel-soft);
-        font-size:12px;
-        font-weight:600;
-        color:var(--muted);
-      }
+    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    th, td{
+      padding:6px 8px;
+      text-align:left;
+      border-bottom:1px solid var(--border);
+      white-space:nowrap;
+    }
+    th{
+      background:var(--panel-soft);
+      font-size:12px;
+      font-weight:600;
+      color:var(--muted);
+    }
+    .table-wrap{ overflow-x:auto; }
 
-      .table-wrap{ overflow-x:auto; }
+    .tag{
+      display:inline-block;
+      padding:2px 6px;
+      border-radius:999px;
+      font-size:11px;
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      color:var(--muted);
+    }
 
-      .tag{
-        display:inline-block;
-        padding:2px 6px;
-        border-radius:999px;
-        font-size:11px;
-        border:1px solid var(--border);
-        background:var(--panel-soft);
-        color:var(--muted);
-      }
+    .footer{
+      text-align:center;
+      font-size:11px;
+      color:var(--muted);
+      padding:12px;
+    }
 
-      .footer{
-        text-align:center;
-        font-size:11px;
-        color:var(--muted);
-        padding:12px;
-      }
+    tr.row-break td{ background:#fff7ed; }
+    .break-badge{
+      display:inline-block;
+      margin-left:6px;
+      padding:1px 6px;
+      border-radius:999px;
+      border:1px solid #fed7aa;
+      background:#fffbeb;
+      font-size:10px;
+      color:#9a3412;
+    }
 
-      tr.row-break td{
-        background:#fff7ed;
-      }
-      .break-badge{
-        display:inline-block;
-        margin-left:6px;
-        padding:1px 6px;
-        border-radius:999px;
-        border:1px solid #fed7aa;
-        background:#fffbeb;
-        font-size:10px;
-        color:#9a3412;
-      }
+    .input-invalid{
+      border-color:#dc2626 !important;
+      box-shadow:0 0 0 1px rgba(220,38,38,0.25);
+    }
 
-      .input-invalid{
-        border-color:#dc2626 !important;
-        box-shadow:0 0 0 1px rgba(220,38,38,0.25);
-      }
-      
+    @media (max-width:700px){
+      header{ flex-direction:column; align-items:flex-start; }
+    }
+  </style>
+</head>
+<body>
 
-      @media (max-width:700px){
-        header{
-          flex-direction:column;
-          align-items:flex-start;
-          gap:8px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-
-  <header>
-    <div class="brand">
-      <img class="asi-logo" src="asi_logo.png" alt="ASI Logo">
-      <div class="brand-text">
-        <strong>Worker Hourly Logger</strong>
-        <span>American Specialties Inc. — Mirror Department</span>
-      </div>
+<header>
+  <div class="brand">
+    <img class="asi-logo" src="asi_logo.png" alt="ASI Logo">
+    <div class="brand-text">
+      <strong>Worker Hourly Logger</strong>
+      <span>American Specialties Inc. — Mirror Department</span>
     </div>
-
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
-      <div class="tag">v1 • Real-time input → Supabase</div>
-
-      <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);">
-        <input type="checkbox" id="demoModeToggle" />
-        Demo mode
-      </label>
-
-      <div class="tag" id="freshnessTag">Last updated: —</div>
-
-      <div id="authBox" class="tag" style="display:flex; align-items:center; gap:8px;">
-        <span id="authState">Signed out</span>
-
-        <input id="loginEmail" type="text" placeholder="email"
-              style="width:170px; padding:5px 8px; border-radius:10px; border:1px solid var(--border);" />
-        <input id="loginPassword" type="password" placeholder="password"
-              style="width:130px; padding:5px 8px; border-radius:10px; border:1px solid var(--border);" />
-
-        <button class="btn btn-mini" id="signInBtn" type="button">Sign in</button>
-        <button class="btn btn-mini" id="signOutBtn" type="button" style="display:none;">Sign out</button>
-      </div>
-
-
-      <button class="btn" id="howItWorksBtn" type="button">How it works</button>
-    </div>
-  </header>
-
-  <main>
-
-    <!-- ENTRY FORM -->
-    <section class="card">
-      <div class="card-title">Log hourly production</div>
-
-      <div class="form-grid">
-        <div class="field">
-          <label for="logDate">Date</label>
-          <input type="date" id="logDate">
-        </div>
-
-        <div class="field">
-          <label for="hourBlock">Hour block</label>
-          <select id="hourBlock">
-            <option value="">Select...</option>
-            <option>7am-8am</option>
-            <option>8am-9am</option>
-            <option>9am-10am (15m break)</option>
-            <option>10am-11am</option>
-            <option>11am-12pm</option>
-            <option>12:30pm-1:30pm</option>
-            <option>1:30pm-2:30pm (10m break)</option>
-            <option>2:30pm-3:30pm</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="role">Role</label>
-          <select id="role">
-            <option value="">Select...</option>
-            <option value="assembler">Assembler</option>
-            <option value="packer">Packer</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="workerName">Worker / Station</label>
-          <select id="workerName">
-            <option value="">Select...</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="partNumber">Part #</label>
-          <input type="text" id="partNumber" placeholder="e.g. 0600-2436" list="partSuggestions">
-          <datalist id="partSuggestions"></datalist>
-        </div>
-
-        <div class="field">
-          <label for="mirrorType">Mirror type</label>
-          <select id="mirrorType">
-            <option value="">Select...</option>
-            <option value="0620">0620</option>
-            <option value="0600">0600</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="mirrorClass">Category</label>
-          <select id="mirrorClass">
-            <option value="">Select...</option>
-            <option value="standard">Standard</option>
-            <option value="special">Special</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="qty">Quantity this hour</label>
-          <input type="number" id="qty" min="0" inputmode="numeric">
-          <div class="quick-qty-row">
-            <span>Quick add:</span>
-            <button type="button" data-qty="1">+1</button>
-            <button type="button" data-qty="5">+5</button>
-            <button type="button" data-qty="10">+10</button>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="jobRef">Job Ref</label>
-          <input type="text" id="jobRef" placeholder="e.g. JOB-2025-12-16-001">
-        </div>
-
-        <div class="field">
-          <label for="orderQty">Order Qty (total)</label>
-          <input type="number" id="orderQty" min="1" step="1" inputmode="numeric" placeholder="e.g. 600">
-        </div>
-      </div>
-
-      <div class="btn-row">
-        <button class="btn btn-primary" id="submitBtn" type="button">Save entry</button>
-        <button class="btn" id="saveAndStayBtn" type="button">Save &amp; stay on worker / hour</button>
-        <button class="btn" id="todayFilterBtn" type="button">Show today’s entries</button>
-        <button class="btn" id="printTemplateBtn" type="button">Print blank log</button>
-
-        <!-- Only shows if part is missing from mirror_standards -->
-        <button class="btn" id="enterStandardBtn" type="button" style="display:none;">
-          Enter mirror standard
-        </button>
-      </div>  
-
-
-      <div id="statusLine" class="status-line"></div>
-    </section>
-
-    <!-- TODAY ENTRIES -->
-    <section class="card">
-      <div class="card-title">
-        Today’s hourly entries
-        <span id="todayTag" class="tag" style="margin-left:6px;"></span>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Worker / Station</th>
-              <th>Role</th>
-              <th>Part #</th>
-              <th>Type</th>
-              <th>Category</th>
-              <th>Job Ref</th>
-              <th style="text-align:right;">Order Qty</th>
-              <th style="text-align:right;">Qty</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="entriesBody"></tbody>
-        </table>
-      </div>
-    </section>
-
-  </main>
-
-  <div class="footer">
-    Writes to Supabase table <code>worker_hourly_log</code> • Intended to replace Excel → CSV for real-time updates.
   </div>
 
-  <script>
-    // ---------- BASIC HELPERS ----------
-    function $(s){ return document.querySelector(s); }
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+    <div class="tag">v1.1 • hardened loads</div>
 
-    function todayIso(){
-      const d = new Date();
-      d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); // shift to local
-      return d.toISOString().slice(0,10);
-    }
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);">
+      <input type="checkbox" id="demoModeToggle" />
+      Demo mode
+    </label>
 
-    function nowStamp(){
-      return new Date().toLocaleString();
-    }
+    <div class="tag" id="freshnessTag">Last updated: —</div>
 
-    function escapeHtml(str){
-      return String(str || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
+    <div id="authBox" class="tag" style="display:flex; align-items:center; gap:8px;">
+      <span id="authState">Signed out</span>
 
-    function withTimeout(promise, ms = 8000, label = "Request"){
-      return Promise.race([
-        promise,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-        )
-      ]);
-    }
+      <input id="loginEmail" type="text" placeholder="email"
+            style="width:170px; padding:5px 8px; border-radius:10px; border:1px solid var(--border);" />
+      <input id="loginPassword" type="password" placeholder="password"
+            style="width:130px; padding:5px 8px; border-radius:10px; border:1px solid var(--border);" />
 
+      <button class="btn btn-mini" id="signInBtn" type="button">Sign in</button>
+      <button class="btn btn-mini" id="signOutBtn" type="button" style="display:none;">Sign out</button>
+    </div>
 
-    // ---------- HOUR BLOCK ORDER & HELPERS ----------
-    const HOUR_BLOCK_ORDER = {
-      "7am-8am": 1,
-      "8am-9am": 2,
-      "9am-10am (15m break)": 3,
-      "10am-11am": 4,
-      "11am-12pm": 5,
-      "12:30pm-1:30pm": 6,
-      "1:30pm-2:30pm (10m break)": 7,
-      "2:30pm-3:30pm": 8
-    };
+    <button class="btn" id="howItWorksBtn" type="button">How it works</button>
+  </div>
+</header>
 
-    function getHourBlockSortValue(block){
-      return HOUR_BLOCK_ORDER[block] || 999;
-    }
+<main>
 
-    function autoSelectHourBlock(){
-      const select = $("#hourBlock");
-      if(!select) return;
+  <!-- ENTRY FORM -->
+  <section class="card">
+    <div class="card-title">Log hourly production</div>
 
-      const now = new Date();
-      const total = now.getHours() * 60 + now.getMinutes();
+    <div class="form-grid">
+      <div class="field">
+        <label for="logDate">Date</label>
+        <input type="date" id="logDate">
+      </div>
 
-      const blocks = [
-        { label: "7am-8am",                   start: 7*60,        end: 8*60        },
-        { label: "8am-9am",                   start: 8*60,        end: 9*60        },
-        { label: "9am-10am (15m break)",      start: 9*60,        end: 10*60       },
-        { label: "10am-11am",                 start: 10*60,       end: 11*60       },
-        { label: "11am-12pm",                 start: 11*60,       end: 12*60       },
-        { label: "12:30pm-1:30pm",            start: 12*60 + 30,  end: 13*60 + 30  },
-        { label: "1:30pm-2:30pm (10m break)", start: 13*60 + 30,  end: 14*60 + 30  },
-        { label: "2:30pm-3:30pm",             start: 14*60 + 30,  end: 15*60 + 30  }
-      ];
+      <div class="field">
+        <label for="hourBlock">Hour block</label>
+        <select id="hourBlock">
+          <option value="">Select...</option>
+          <option>7am-8am</option>
+          <option>8am-9am</option>
+          <option>9am-10am (15m break)</option>
+          <option>10am-11am</option>
+          <option>11am-12pm</option>
+          <option>12:30pm-1:30pm</option>
+          <option>1:30pm-2:30pm (10m break)</option>
+          <option>2:30pm-3:30pm</option>
+        </select>
+      </div>
 
-      const match = blocks.find(b => total >= b.start && total < b.end);
-      if(match) select.value = match.label;
-    }
+      <div class="field">
+        <label for="role">Role</label>
+        <select id="role">
+          <option value="">Select...</option>
+          <option value="assembler">Assembler</option>
+          <option value="packer">Packer</option>
+        </select>
+      </div>
 
-    // ---------- SUPABASE CLIENT ----------
-    const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
-    const SUPABASE_ANON_KEY =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
+      <div class="field">
+        <label for="workerName">Worker / Station</label>
+        <select id="workerName">
+          <option value="">Select...</option>
+        </select>
+      </div>
 
-    if(!window.supabase){
-      console.error("Supabase library failed to load. Check your script tag / internet access.");
-      alert("Supabase failed to load. Fix the Supabase script tag first.");
-    }
+      <div class="field">
+        <label for="partNumber">Part #</label>
+        <input type="text" id="partNumber" placeholder="e.g. 0600-2436" list="partSuggestions">
+        <datalist id="partSuggestions"></datalist>
+      </div>
 
-    const sb = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: false
-        },
-        global: {
-          // Force apikey on EVERY request, but do NOT override Authorization.
-          fetch: (url, options = {}) => {
-            const headers = new Headers(options.headers || {});
-            headers.set("apikey", SUPABASE_ANON_KEY);
+      <div class="field">
+        <label for="mirrorType">Mirror type</label>
+        <select id="mirrorType">
+          <option value="">Select...</option>
+          <option value="0620">0620</option>
+          <option value="0600">0600</option>
+        </select>
+      </div>
 
-            // IMPORTANT: do NOT set Authorization here.
-            // Supabase will set Authorization to the user's access token after sign-in.
+      <div class="field">
+        <label for="mirrorClass">Category</label>
+        <select id="mirrorClass">
+          <option value="">Select...</option>
+          <option value="standard">Standard</option>
+          <option value="special">Special</option>
+        </select>
+      </div>
 
-            return fetch(url, { ...options, headers });
-          }
-        }
+      <div class="field">
+        <label for="qty">Quantity this hour</label>
+        <input type="number" id="qty" min="0" inputmode="numeric">
+        <div class="quick-qty-row">
+          <span>Quick add:</span>
+          <button type="button" data-qty="1">+1</button>
+          <button type="button" data-qty="5">+5</button>
+          <button type="button" data-qty="10">+10</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="jobRef">Job Ref</label>
+        <input type="text" id="jobRef" placeholder="e.g. JOB-2025-12-16-001">
+      </div>
+
+      <div class="field">
+        <label for="orderQty">Order Qty (total)</label>
+        <input type="number" id="orderQty" min="1" step="1" inputmode="numeric" placeholder="e.g. 600">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="submitBtn" type="button">Save entry</button>
+      <button class="btn" id="saveAndStayBtn" type="button">Save &amp; stay on worker / hour</button>
+      <button class="btn" id="todayFilterBtn" type="button">Show today’s entries</button>
+      <button class="btn" id="printTemplateBtn" type="button">Print blank log</button>
+
+      <button class="btn" id="enterStandardBtn" type="button" style="display:none;">Enter mirror standard</button>
+      <button class="btn" id="enterPackingStandardBtn" type="button" style="display:none;">Enter packing standard</button>
+    </div>
+
+    <div id="statusLine" class="status-line"></div>
+  </section>
+
+  <!-- TODAY ENTRIES -->
+  <section class="card">
+    <div class="card-title">
+      Today’s hourly entries
+      <span id="todayTag" class="tag" style="margin-left:6px;"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Worker / Station</th>
+            <th>Role</th>
+            <th>Part #</th>
+            <th>Type</th>
+            <th>Category</th>
+            <th>Job Ref</th>
+            <th style="text-align:right;">Order Qty</th>
+            <th style="text-align:right;">Qty</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="entriesBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<div class="footer">
+  Writes to Supabase table <code>worker_hourly_log</code> • Hardened loads to prevent timeout / lockups.
+</div>
+
+<script>
+/* -------------------- HELPERS -------------------- */
+function $(s){ return document.querySelector(s); }
+
+function todayIso(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+}
+function nowStamp(){ return new Date().toLocaleString(); }
+
+function escapeHtml(str){
+  return String(str || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function setFreshness(text){
+  const el = document.getElementById("freshnessTag");
+  if(el) el.textContent = text;
+}
+
+function withTimeout(promise, ms = 15000, label = "Request"){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    )
+  ]);
+}
+
+async function withTimeoutRetry(fn, { ms=20000, label="Request", retries=1, backoffMs=600 } = {}){
+  let lastErr;
+  for(let attempt=0; attempt<=retries; attempt++){
+    try{
+      return await withTimeout(fn(), ms, label);
+    }catch(err){
+      lastErr = err;
+      if(attempt < retries){
+        await new Promise(r => setTimeout(r, backoffMs * (attempt+1)));
+        continue;
       }
-    );
-
-
-
-
-    // ---------- DEMO MODE ----------
-    const DEMO_KEY = "WHL_DEMO_MODE_v1";
-    const DEMO_STORAGE_KEY = "WHL_DEMO_ENTRIES_v1";
-    let demoMode = false;
-
-    function setFreshness(text){
-      const el = document.getElementById("freshnessTag");
-      if(el) el.textContent = text;
     }
+  }
+  throw lastErr;
+}
 
-    function loadDemoEntries(){
-      try{
-        return JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY) || "[]");
-      }catch(_e){
-        return [];
-      }
-    }
+function debounce(fn, wait=300){
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
 
-    function saveDemoEntries(rows){
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(rows || []));
-    }
+/* -------------------- HOUR BLOCK ORDER -------------------- */
+const HOUR_BLOCK_ORDER = {
+  "7am-8am": 1,
+  "8am-9am": 2,
+  "9am-10am (15m break)": 3,
+  "10am-11am": 4,
+  "11am-12pm": 5,
+  "12:30pm-1:30pm": 6,
+  "1:30pm-2:30pm (10m break)": 7,
+  "2:30pm-3:30pm": 8
+};
+function getHourBlockSortValue(block){ return HOUR_BLOCK_ORDER[block] || 999; }
 
-    function demoWorkers(){
-      return [
-        "Station 1 — Demo",
-        "Station 2 — Demo",
-        "Station 3 — Demo",
-        "Packer A — Demo",
-        "Packer B — Demo"
-      ];
-    }
+function autoSelectHourBlock(){
+  const select = $("#hourBlock");
+  if(!select) return;
 
-    function setWriteEnabled(enabled){
-  ["submitBtn","saveAndStayBtn","enterStandardBtn"].forEach(id => {
+  const now = new Date();
+  const total = now.getHours() * 60 + now.getMinutes();
+
+  const blocks = [
+    { label: "7am-8am",                   start: 7*60,        end: 8*60        },
+    { label: "8am-9am",                   start: 8*60,        end: 9*60        },
+    { label: "9am-10am (15m break)",      start: 9*60,        end: 10*60       },
+    { label: "10am-11am",                 start: 10*60,       end: 11*60       },
+    { label: "11am-12pm",                 start: 11*60,       end: 12*60       },
+    { label: "12:30pm-1:30pm",            start: 12*60 + 30,  end: 13*60 + 30  },
+    { label: "1:30pm-2:30pm (10m break)", start: 13*60 + 30,  end: 14*60 + 30  },
+    { label: "2:30pm-3:30pm",             start: 14*60 + 30,  end: 15*60 + 30  }
+  ];
+  const match = blocks.find(b => total >= b.start && total < b.end);
+  if(match) select.value = match.label;
+}
+
+/* -------------------- SUPABASE CLIENT -------------------- */
+const SUPABASE_URL = "https://coxxavwtkwbqotunldqv.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo";
+
+if(!window.supabase){
+  console.error("Supabase library failed to load.");
+  alert("Supabase failed to load. Check the script tag + internet.");
+}
+
+const sb = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false
+    },
+    global: { headers: { apikey: SUPABASE_ANON_KEY } }
+  }
+);
+
+/* -------------------- DEMO MODE -------------------- */
+const DEMO_KEY = "WHL_DEMO_MODE_v1";
+const DEMO_STORAGE_KEY = "WHL_DEMO_ENTRIES_v1";
+let demoMode = false;
+
+function loadDemoEntries(){
+  try{ return JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY) || "[]"); }
+  catch(_e){ return []; }
+}
+function saveDemoEntries(rows){
+  localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(rows || []));
+}
+function demoWorkers(){
+  return ["Station 1 — Demo","Station 2 — Demo","Station 3 — Demo","Packer A — Demo","Packer B — Demo"];
+}
+function setWriteEnabled(enabled){
+  ["submitBtn","saveAndStayBtn","enterStandardBtn","enterPackingStandardBtn"].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.disabled = !enabled;
   });
 }
 
-  async function refreshAuthUI(){
-    const { data: { session } } = await sb.auth.getSession();
-    const signedIn = !!session?.user;
+async function refreshAuthUI(){
+  const { data: { session } } = await sb.auth.getSession();
+  const signedIn = !!session?.user;
 
-    const authState = document.getElementById("authState");
-    const signOutBtn = document.getElementById("signOutBtn");
-    const signInBtn  = document.getElementById("signInBtn");
-    const emailEl = document.getElementById("loginEmail");
-    const passEl  = document.getElementById("loginPassword");
+  const authState = document.getElementById("authState");
+  const signOutBtn = document.getElementById("signOutBtn");
+  const signInBtn  = document.getElementById("signInBtn");
+  const emailEl = document.getElementById("loginEmail");
+  const passEl  = document.getElementById("loginPassword");
 
-    if(authState) authState.textContent = signedIn ? `Signed in: ${session.user.email}` : "Signed out";
-    if(signOutBtn) signOutBtn.style.display = signedIn ? "inline-flex" : "none";
-    if(signInBtn)  signInBtn.style.display  = signedIn ? "none" : "inline-flex";
-    if(emailEl) emailEl.style.display = signedIn ? "none" : "inline-block";
-    if(passEl)  passEl.style.display  = signedIn ? "none" : "inline-block";
+  if(authState) authState.textContent = signedIn ? `Signed in: ${session.user.email}` : "Signed out";
+  if(signOutBtn) signOutBtn.style.display = signedIn ? "inline-flex" : "none";
+  if(signInBtn)  signInBtn.style.display  = signedIn ? "none" : "inline-flex";
+  if(emailEl) emailEl.style.display = signedIn ? "none" : "inline-block";
+  if(passEl)  passEl.style.display  = signedIn ? "none" : "inline-block";
 
-    // If not signed in and not demo mode → disable writes
-    setWriteEnabled(demoMode ? true : signedIn);
+  setWriteEnabled(demoMode ? true : signedIn);
+}
+
+/* -------------------- STATUS -------------------- */
+function setStatus(message, ok=true){
+  const el = $("#statusLine");
+  if(!el) return;
+  el.textContent = message || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+
+/* -------------------- PART SUGGESTIONS (CACHED + DEBOUNCED) -------------------- */
+let PART_CACHE = [];
+let PART_SUGGESTIONS_CACHE = new Map(); // key = `${date}|${mirrorType}` -> { ts, parts[] }
+const PART_CACHE_TTL_MS = 60_000;
+
+function setPartSuggestions(parts){
+  PART_CACHE = Array.from(new Set((parts || []).filter(Boolean))).sort();
+  const dl = document.getElementById("partSuggestions");
+  if(!dl) return;
+  dl.innerHTML = PART_CACHE.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
+}
+
+async function refreshPartSuggestionsCore(){
+  const date = document.getElementById("logDate")?.value || todayIso();
+  const mirrorType = document.getElementById("mirrorType")?.value || "";
+  const cacheKey = `${date}|${mirrorType || "ALL"}`;
+
+  if(demoMode){
+    const all = loadDemoEntries();
+    const parts = (all || [])
+      .filter(r => r.log_date === date)
+      .filter(r => !mirrorType || r.mirror_type === mirrorType)
+      .map(r => (r.part_number || "").trim())
+      .filter(Boolean);
+    setPartSuggestions(parts);
+    return;
   }
 
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session?.user){
+    setPartSuggestions([]);
+    return;
+  }
 
+  // Cache hit
+  const cached = PART_SUGGESTIONS_CACHE.get(cacheKey);
+  if(cached && (Date.now() - cached.ts) < PART_CACHE_TTL_MS){
+    setPartSuggestions(cached.parts);
+    return;
+  }
 
-    // ---------- PART # AUTOFILL (datalist) ----------
-    let PART_CACHE = [];
-
-    function setPartSuggestions(parts){
-      PART_CACHE = Array.from(new Set((parts || []).filter(Boolean))).sort();
-      const dl = document.getElementById("partSuggestions");
-      if(!dl) return;
-
-      dl.innerHTML = PART_CACHE
-        .map(p => `<option value="${escapeHtml(p)}"></option>`)
-        .join("");
-    }
-
-    async function refreshPartSuggestions(){
-      const date = document.getElementById("logDate")?.value || todayIso();
-      const mirrorType = document.getElementById("mirrorType")?.value || "";
-
-      // DEMO MODE
-      if(demoMode){
-        const all = loadDemoEntries();
-        const parts = (all || [])
-          .filter(r => r.log_date === date)
-          .filter(r => !mirrorType || r.mirror_type === mirrorType)
-          .map(r => (r.part_number || "").trim())
-          .filter(Boolean);
-
-        setPartSuggestions(parts);
-        return;
-      }
-
-      // LIVE MODE — only pull suggestions if signed in (worker_hourly_log is auth-only)
-      const { data: { session } } = await sb.auth.getSession();
-      if(!session?.user){
-        setPartSuggestions([]); // signed out → no suggestions (by design)
-        return;
-      }
-
-      let query = sb
-        .from("worker_hourly_log")
-        .select("part_number, mirror_type")
-        .eq("log_date", date);
-
-
-      const { data, error } = await query;
-
-      if(error){
-        console.error("Part suggestion load error:", error.message);
-        return;
-      }
-
-      const parts = (data || [])
-        .filter(r => !mirrorType || r.mirror_type === mirrorType)
-        .map(r => (r.part_number || "").trim())
-        .filter(Boolean);
-
-      setPartSuggestions(parts);
-    }
-
-    // ---------- PRINT TEMPLATE ----------
-    function getWorkerListForPrint(){
-      const sel = document.getElementById("workerName");
-      if(!sel) return [];
-
-      const opts = Array.from(sel.options)
-        .map(o => ({
-          value: (o.value || "").trim(),
-          text: (o.textContent || "").trim()
-        }))
-        .filter(o => o.value !== "" && o.text.toLowerCase() !== "select...")
-        .map(o => o.value);
-
-      return Array.from(new Set(opts));
-    }
-
-    function buildPrintTemplateHtml({ date, roleLabel, workers }){
-      const hourBlocks = [
-        "7am-8am",
-        "8am-9am",
-        "9am-10am (15m break)",
-        "10am-11am",
-        "11am-12pm",
-        "12:30pm-1:30pm",
-        "1:30pm-2:30pm (10m break)",
-        "2:30pm-3:30pm"
-      ];
-
-      const header = `
-        <div class="print-header">
-          <div class="title">Worker Hourly Log — Blank Template</div>
-          <div class="meta">
-            <div><b>Date:</b> ${escapeHtml(date)}</div>
-            <div><b>Role:</b> ${escapeHtml(roleLabel)}</div>
-            <div><b>Supervisor:</b> __________________________</div>
-          </div>
-          <div class="note">Use this sheet while walking the floor. Fill in Part # and Qty for each worker per hour block.</div>
-        </div>
-      `;
-
-      const workerRows = (workers || []).map(w => `
-        <tr>
-          <td class="wcol">${escapeHtml(w)}</td>
-          <td class="pcol"></td>
-          <td class="qcol"></td>
-          <td class="ncol"></td>
-        </tr>
-      `).join("");
-
-      const sections = hourBlocks.map((hb, idx) => `
-        <section class="block ${idx === 0 ? "" : "page-break"}">
-          <div class="block-title">
-            <span>${escapeHtml(hb.replace(/\s*\(.*\)/,"").trim())}</span>
-            ${/\(([^)]+)\)/.test(hb) ? `<span class="break-pill">${escapeHtml(hb.match(/\(([^)]+)\)/)[1])}</span>` : ""}
-          </div>
-
-          <table class="pt">
-            <thead>
-              <tr>
-                <th>Worker / Station</th>
-                <th>Part #</th>
-                <th style="text-align:right;">Qty</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${workerRows || `<tr><td colspan="4" class="empty">No workers loaded. (Make sure the dropdown is populated.)</td></tr>`}
-            </tbody>
-          </table>
-
-          <div class="totals">
-            <div><b>Hour total:</b> ____________</div>
-            <div><b>Issues / downtime:</b> ________________________________________________</div>
-          </div>
-        </section>
-      `).join("");
-
-      return `
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Print — Worker Hourly Log</title>
-        <style>
-          :root{ --text:#111; --muted:#555; --border:#ddd; }
-          html,body{ margin:0; padding:0; color:var(--text); font-family:"Times New Roman", Times, serif; }
-          .wrap{ padding:18px 18px 28px 18px; }
-          .print-header{ border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:12px; }
-          .title{ font-size:20px; font-weight:800; }
-          .meta{
-            margin-top:6px;
-            display:grid;
-            grid-template-columns:1fr 1fr;
-            gap:6px 18px;
-            font-size:12px;
-          }
-          .note{ margin-top:8px; font-size:12px; color:var(--muted); }
-          .block{ margin-top:14px; }
-          .block-title{ display:flex; align-items:center; gap:10px; font-size:14px; font-weight:800; margin:10px 0 6px 0; }
-          .break-pill{ font-size:11px; border:1px solid #999; padding:1px 8px; border-radius:999px; font-weight:600; color:#333; }
-
-          table.pt{ width:100%; border-collapse:collapse; font-size:12px; }
-          table.pt th, table.pt td{ border:1px solid var(--border); padding:6px 8px; vertical-align:top; }
-          table.pt th{ background:#f3f3f3; font-weight:800; }
-          .wcol{ width:34%; }
-          .pcol{ width:22%; }
-          .qcol{ width:10%; text-align:right; }
-          .ncol{ width:34%; }
-          .empty{ text-align:center; color:var(--muted); padding:18px !important; }
-
-          .totals{ margin-top:8px; font-size:12px; display:flex; flex-direction:column; gap:6px; }
-
-          .page-break{ page-break-before: always; }
-
-          @media print{
-            .wrap{ padding:0; }
-            .page-break{ page-break-before: always; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="wrap">
-          ${header}
-          ${sections}
-        </div>
-      </body>
-      </html>
-      `;
-    }
-
-    function openPrintTemplate(){
-      const date = (document.getElementById("logDate")?.value || todayIso());
-      const roleVal = (document.getElementById("role")?.value || "").trim();
-      const roleLabel = roleVal ? (roleVal.charAt(0).toUpperCase() + roleVal.slice(1)) : "All";
-      const workers = getWorkerListForPrint();
-
-      const html = buildPrintTemplateHtml({ date, roleLabel, workers });
-
-      const iframe = document.createElement("iframe");
-      iframe.style.position = "fixed";
-      iframe.style.right = "0";
-      iframe.style.bottom = "0";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      iframe.style.border = "0";
-      iframe.style.visibility = "hidden";
-      document.body.appendChild(iframe);
-
-      const doc = iframe.contentWindow.document;
-      doc.open();
-      doc.write(html);
-      doc.close();
-
-      iframe.onload = () => {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        setTimeout(() => document.body.removeChild(iframe), 1000);
-      };
-    }
-
-    // ---------- WORKER DIRECTORY DROPDOWN ----------
-    async function loadWorkerDirectory(){
-      const selectEl = document.getElementById("workerName");
-      if(!selectEl) return;
-
-      selectEl.innerHTML = '<option value="">Select...</option>';
-
-      if(demoMode){
-        demoWorkers().forEach(name => {
-          const opt = document.createElement("option");
-          opt.value = name;
-          opt.textContent = name;
-          selectEl.appendChild(opt);
-        });
-        return;
-      }
-
-      const { data, error } = await sb
-        .from("worker_directory")
-        .select("worker_name")
-        .order("worker_name", { ascending: true });
-
-      if(error){
-        console.error("Error loading worker directory:", error.message);
-        return;
-      }
-
-      (data || [])
-        .filter(row => row.worker_name && row.worker_name.trim() !== "")
-        .forEach(row => {
-          const opt = document.createElement("option");
-          opt.value = row.worker_name;
-          opt.textContent = row.worker_name;
-          selectEl.appendChild(opt);
-        });
-    }
-
-    // ---------- TABLE LOGIC ----------
-    async function loadTodayEntries(){
-      const date = $("#logDate").value || todayIso();
-
-      const tbody = $("#entriesBody");
-      const tag   = $("#todayTag");
-
-      if(demoMode){
-        const all = loadDemoEntries();
-        const data = (all || []).filter(r => r.log_date === date);
-
-        if(!data.length){
-          tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
-          if(tag) tag.textContent = date;
-          setFreshness(`Last updated: ${nowStamp()} (Demo)`);
-          return;
-        }
-
-        data.sort((a, b) => {
-          const oa = getHourBlockSortValue(a.hour_block || "");
-          const ob = getHourBlockSortValue(b.hour_block || "");
-          if(oa !== ob) return oa - ob;
-          return (a.worker_name || "").localeCompare((b.worker_name || ""));
-        });
-
-        let html = "";
-        data.forEach(row => {
-          const blockRaw   = row.hour_block || "";
-          const breakMatch = blockRaw.match(/\(([^)]+)\)/);
-          const hasBreak   = !!breakMatch;
-          const baseLabel  = blockRaw.replace(/\s*\(.*\)/, "").trim();
-          const breakText  = breakMatch ? breakMatch[1] : "";
-
-          html += `
-            <tr class="${hasBreak ? "row-break" : ""}">
-              <td>
-                ${escapeHtml(baseLabel)}
-                ${hasBreak ? '<span class="break-badge">' + escapeHtml(breakText) + '</span>' : ""}
-              </td>
-              <td>${escapeHtml(row.worker_name)}</td>
-              <td>${escapeHtml(row.role)}</td>
-              <td>${escapeHtml(row.part_number)}</td>
-              <td>${escapeHtml(row.mirror_type)}</td>
-              <td>${escapeHtml(row.mirror_class)}</td>
-              <td>${escapeHtml(row.job_ref || "")}</td>
-              <td style="text-align:right;">${row.order_qty == null ? "" : Number(row.order_qty).toLocaleString()}</td>
-              <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
-              <td><span class="tag">Demo</span></td>
-            </tr>
-          `;
-        });
-
-        tbody.innerHTML = html;
-        if(tag) tag.textContent = `${date} • ${data.length} entries`;
-        setFreshness(`Last updated: ${nowStamp()} (Demo)`);
-        return;
-      }
-
-      const { data, error } = await sb
-        .from("worker_hourly_log")
-        .select("*")
-        .eq("log_date", date);
-
-      if(error){
-        console.error("Error loading entries:", error.message);
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
-        if(tag) tag.textContent = "";
-        setFreshness(`Last updated: ${nowStamp()} (Error)`);
-        return;
-      }
-
-      if(!data || !data.length){
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
-        if(tag) tag.textContent = date;
-        setFreshness(`Last updated: ${nowStamp()}`);
-        return;
-      }
-
-      data.sort((a, b) => {
-        const oa = getHourBlockSortValue(a.hour_block || "");
-        const ob = getHourBlockSortValue(b.hour_block || "");
-        if(oa !== ob) return oa - ob;
-        return (a.worker_name || "").toLowerCase().localeCompare((b.worker_name || "").toLowerCase());
-      });
-
-      let html = "";
-      data.forEach(row => {
-        const blockRaw   = row.hour_block || "";
-        const breakMatch = blockRaw.match(/\(([^)]+)\)/);
-        const hasBreak   = !!breakMatch;
-        const baseLabel  = blockRaw.replace(/\s*\(.*\)/, "").trim();
-        const breakText  = breakMatch ? breakMatch[1] : "";
-
-        html += `
-          <tr class="${hasBreak ? "row-break" : ""}">
-            <td>
-              ${escapeHtml(baseLabel || blockRaw)}
-              ${hasBreak ? '<span class="break-badge">' + escapeHtml(breakText) + '</span>' : ""}
-            </td>
-            <td>${escapeHtml(row.worker_name)}</td>
-            <td>${escapeHtml(row.role)}</td>
-            <td>${escapeHtml(row.part_number)}</td>
-            <td>${escapeHtml(row.mirror_type)}</td>
-            <td>${escapeHtml(row.mirror_class)}</td>
-            <td>${escapeHtml(row.job_ref || "")}</td>
-            <td style="text-align:right;">${row.order_qty == null ? "" : Number(row.order_qty).toLocaleString()}</td>
-            <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
-            <td>
-              <button class="btn btn-mini" type="button" data-action="edit" data-id="${row.id}">Edit</button>
-              <button class="btn btn-mini btn-danger" type="button" data-action="delete" data-id="${row.id}">Delete</button>
-            </td>
-          </tr>
-        `;
-      });
-
-      tbody.innerHTML = html;
-      if(tag) tag.textContent = `${date} • ${data.length} entries`;
-      setFreshness(`Last updated: ${nowStamp()}`);
-    }
-
-    // ---------- STATUS + SAVE ----------
-    function setStatus(message, ok=true){
-      const el = $("#statusLine");
-      if(!el) return;
-      el.textContent = message || "";
-      el.classList.remove("status-ok","status-err");
-      el.classList.add(ok ? "status-ok" : "status-err");
-    }
-
-    async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
+  // FAST query: only required cols, limited
   try{
+    const q = sb
+      .from("worker_hourly_log")
+      .select("part_number, mirror_type")
+      .eq("log_date", date)
+      .order("id", { ascending: false })
+      .limit(300); // keep small to prevent timeouts
 
-      const logDate     = $("#logDate").value || todayIso();
-      const hourBlock   = $("#hourBlock").value.trim();
-      const role        = $("#role").value.trim();
-      const workerName  = $("#workerName").value.trim();
-      const partNumber  = $("#partNumber").value.trim();
-      const mirrorType  = $("#mirrorType").value.trim();
-      const mirrorClass = $("#mirrorClass").value.trim();
-      const qtyStr      = $("#qty").value.trim();
-      const jobRef      = ($("#jobRef")?.value || "").trim();
-      const orderQtyStr = ($("#orderQty")?.value || "").trim();
+    const { data, error } = await withTimeoutRetry(
+      () => q,
+      { ms: 20000, label: "part suggestions", retries: 1, backoffMs: 700 }
+    );
 
-      ["logDate","hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","qty","jobRef","orderQty"].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.classList.remove("input-invalid");
+    if(error){
+      console.error("Part suggestions error:", error);
+      setPartSuggestions([]);
+      return;
+    }
+
+    const parts = (data || [])
+      .filter(r => !mirrorType || r.mirror_type === mirrorType)
+      .map(r => (r.part_number || "").trim())
+      .filter(Boolean);
+
+    PART_SUGGESTIONS_CACHE.set(cacheKey, { ts: Date.now(), parts });
+    setPartSuggestions(parts);
+  }catch(err){
+    console.error("Part suggestions timeout:", err);
+    setPartSuggestions([]); // don’t block the page
+  }
+}
+const refreshPartSuggestions = debounce(refreshPartSuggestionsCore, 350);
+
+/* -------------------- WORKER DIRECTORY DROPDOWN -------------------- */
+async function loadWorkerDirectory(){
+  const selectEl = document.getElementById("workerName");
+  if(!selectEl) return;
+
+  selectEl.innerHTML = '<option value="">Select...</option>';
+
+  if(demoMode){
+    demoWorkers().forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name; opt.textContent = name;
+      selectEl.appendChild(opt);
+    });
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session?.user){
+    return; // don’t query while signed out
+  }
+
+  try{
+    const { data, error } = await withTimeoutRetry(
+      () => sb.from("worker_directory").select("worker_name").order("worker_name", { ascending:true }).limit(300),
+      { ms: 20000, label: "worker_directory load", retries: 1, backoffMs: 700 }
+    );
+
+    if(error){
+      console.error("Worker directory error:", error);
+      return;
+    }
+
+    (data || [])
+      .filter(row => row.worker_name && row.worker_name.trim() !== "")
+      .forEach(row => {
+        const opt = document.createElement("option");
+        opt.value = row.worker_name;
+        opt.textContent = row.worker_name;
+        selectEl.appendChild(opt);
       });
+  }catch(err){
+    console.error("Worker directory timeout:", err);
+  }
+}
 
-      let hasError = false;
+/* -------------------- TODAY ENTRIES (NO select(*) + LIMIT) -------------------- */
+let ENTRIES_REQ = 0;
 
-      if(!hourBlock){
-        $("#hourBlock")?.classList.add("input-invalid");
-        setStatus("Please select an hour block.", false);
-        hasError = true;
-      }
+async function loadTodayEntries(){
+  const reqId = ++ENTRIES_REQ;
+  const date = $("#logDate").value || todayIso();
+  const tbody = $("#entriesBody");
+  const tag   = $("#todayTag");
 
-      if(!role || !workerName || !partNumber || !mirrorType || !mirrorClass || !qtyStr){
-        setStatus("Please fill in all required fields before saving.", false);
-        if(!role) $("#role")?.classList.add("input-invalid");
-        if(!workerName) $("#workerName")?.classList.add("input-invalid");
-        if(!partNumber) $("#partNumber")?.classList.add("input-invalid");
-        if(!mirrorType) $("#mirrorType")?.classList.add("input-invalid");
-        if(!mirrorClass) $("#mirrorClass")?.classList.add("input-invalid");
-        if(!qtyStr) $("#qty")?.classList.add("input-invalid");
-        hasError = true;
-      }
+  if(demoMode){
+    const all = loadDemoEntries();
+    const data = (all || []).filter(r => r.log_date === date);
 
-      const qty = Number(qtyStr);
-      if(isNaN(qty) || qty < 0){
-        $("#qty")?.classList.add("input-invalid");
-        setStatus("Quantity must be a non-negative number.", false);
-        hasError = true;
-      }
+    if(!data.length){
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+      if(tag) tag.textContent = date;
+      setFreshness(`Last updated: ${nowStamp()} (Demo)`);
+      return;
+    }
 
-      if(hasError) return;
+    data.sort((a, b) => {
+      const oa = getHourBlockSortValue(a.hour_block || "");
+      const ob = getHourBlockSortValue(b.hour_block || "");
+      if(oa !== ob) return oa - ob;
+      return (a.worker_name || "").localeCompare((b.worker_name || ""));
+    });
 
-      const order_qty = orderQtyStr === "" ? null : parseInt(orderQtyStr, 10);
-      const job_ref = jobRef === "" ? null : jobRef;
+    let html = "";
+    data.forEach(row => {
+      const blockRaw   = row.hour_block || "";
+      const breakMatch = blockRaw.match(/\(([^)]+)\)/);
+      const hasBreak   = !!breakMatch;
+      const baseLabel  = blockRaw.replace(/\s*\(.*\)/, "").trim();
+      const breakText  = breakMatch ? breakMatch[1] : "";
 
-      // Optional validation: Order Qty must be a positive whole number (or blank)
-      if(orderQtyStr !== "" && (Number.isNaN(order_qty) || order_qty <= 0)){
-        $("#orderQty")?.classList.add("input-invalid");
-        setStatus("Order Qty must be a positive whole number (or leave blank).", false);
+      html += `
+        <tr class="${hasBreak ? "row-break" : ""}">
+          <td>
+            ${escapeHtml(baseLabel)}
+            ${hasBreak ? '<span class="break-badge">' + escapeHtml(breakText) + '</span>' : ""}
+          </td>
+          <td>${escapeHtml(row.worker_name)}</td>
+          <td>${escapeHtml(row.role)}</td>
+          <td>${escapeHtml(row.part_number)}</td>
+          <td>${escapeHtml(row.mirror_type)}</td>
+          <td>${escapeHtml(row.mirror_class)}</td>
+          <td>${escapeHtml(row.job_ref || "")}</td>
+          <td style="text-align:right;">${row.order_qty == null ? "" : Number(row.order_qty).toLocaleString()}</td>
+          <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
+          <td><span class="tag">Demo</span></td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = html;
+    if(tag) tag.textContent = `${date} • ${data.length} entries`;
+    setFreshness(`Last updated: ${nowStamp()} (Demo)`);
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session?.user){
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view entries.</td></tr>';
+    if(tag) tag.textContent = "";
+    return;
+  }
+
+  try{
+    // Only needed columns (big timeout fix)
+    const q = sb
+      .from("worker_hourly_log")
+      .select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty")
+      .eq("log_date", date)
+      .order("id", { ascending:false })
+      .limit(250);
+
+    const { data, error } = await withTimeoutRetry(
+      () => q,
+      { ms: 25000, label: "today entries load", retries: 1, backoffMs: 900 }
+    );
+
+    if(reqId !== ENTRIES_REQ) return; // stale
+
+    if(error){
+      console.error("Today entries error:", error);
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Error loading entries.</td></tr>';
+      if(tag) tag.textContent = "";
+      setFreshness(`Last updated: ${nowStamp()} (Error)`);
+      return;
+    }
+
+    if(!data || !data.length){
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
+      if(tag) tag.textContent = date;
+      setFreshness(`Last updated: ${nowStamp()}`);
+      return;
+    }
+
+    data.sort((a, b) => {
+      const oa = getHourBlockSortValue(a.hour_block || "");
+      const ob = getHourBlockSortValue(b.hour_block || "");
+      if(oa !== ob) return oa - ob;
+      return (a.worker_name || "").toLowerCase().localeCompare((b.worker_name || "").toLowerCase());
+    });
+
+    let html = "";
+    data.forEach(row => {
+      const blockRaw   = row.hour_block || "";
+      const breakMatch = blockRaw.match(/\(([^)]+)\)/);
+      const hasBreak   = !!breakMatch;
+      const baseLabel  = blockRaw.replace(/\s*\(.*\)/, "").trim();
+      const breakText  = breakMatch ? breakMatch[1] : "";
+
+      html += `
+        <tr class="${hasBreak ? "row-break" : ""}">
+          <td>
+            ${escapeHtml(baseLabel || blockRaw)}
+            ${hasBreak ? '<span class="break-badge">' + escapeHtml(breakText) + '</span>' : ""}
+          </td>
+          <td>${escapeHtml(row.worker_name)}</td>
+          <td>${escapeHtml(row.role)}</td>
+          <td>${escapeHtml(row.part_number)}</td>
+          <td>${escapeHtml(row.mirror_type)}</td>
+          <td>${escapeHtml(row.mirror_class)}</td>
+          <td>${escapeHtml(row.job_ref || "")}</td>
+          <td style="text-align:right;">${row.order_qty == null ? "" : Number(row.order_qty).toLocaleString()}</td>
+          <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-mini" type="button" data-action="edit" data-id="${row.id}">Edit</button>
+            <button class="btn btn-mini btn-danger" type="button" data-action="delete" data-id="${row.id}">Delete</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = html;
+    if(tag) tag.textContent = `${date} • ${data.length} entries`;
+    setFreshness(`Last updated: ${nowStamp()}`);
+  }catch(err){
+    console.error("Today entries timeout:", err);
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Timed out loading entries.</td></tr>';
+    if(tag) tag.textContent = "";
+    setFreshness(`Last updated: ${nowStamp()} (Timeout)`);
+  }
+}
+
+/* -------------------- QUICK QTY -------------------- */
+function initQuickQtyButtons(){
+  const container = document.querySelector(".quick-qty-row");
+  if(!container) return;
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-qty]");
+    if(!btn) return;
+    const inc = Number(btn.dataset.qty || 0);
+    const qtyInput = document.querySelector("#qty");
+    const current = Number(qtyInput.value || 0);
+    qtyInput.value = current + inc;
+  });
+}
+
+/* -------------------- STANDARDS LOOKUPS (FAST: limit(1), no count) -------------------- */
+async function mirrorStandardExists(partNumber){
+  if(demoMode) return true;
+  const pn = (partNumber || "").trim();
+  if(!pn) return false;
+
+  try{
+    const { data, error } = await withTimeoutRetry(
+      () => sb.from("mirror_standards").select("id").eq("part_number", pn).limit(1),
+      { ms: 20000, label: "mirror_standards lookup", retries: 1, backoffMs: 800 }
+    );
+    if(error){
+      console.error("mirror_standards lookup error:", error);
+      return false;
+    }
+    return !!(data && data.length);
+  }catch(err){
+    console.error("mirror_standards lookup timeout:", err);
+    return false;
+  }
+}
+
+async function packingStandardExists(partNumber){
+  if(demoMode) return true;
+  const pn = (partNumber || "").trim();
+  if(!pn) return false;
+
+  try{
+    const { data, error } = await withTimeoutRetry(
+      () => sb.from("packing_standards").select("id").eq("part_number", pn).eq("active", true).limit(1),
+      { ms: 20000, label: "packing_standards lookup", retries: 1, backoffMs: 800 }
+    );
+    if(error){
+      console.error("packing_standards lookup error:", error);
+      return false;
+    }
+    return !!(data && data.length);
+  }catch(err){
+    console.error("packing_standards lookup timeout:", err);
+    return false;
+  }
+}
+
+/* -------------------- ENTER STANDARD UI -------------------- */
+function showEnterStandardUI(missingPart){
+  const btn = document.getElementById("enterStandardBtn");
+  if(btn) btn.style.display = "inline-flex";
+
+  setStatus(`"${missingPart}" is not in mirror_standards. Please enter the standard now.`, false);
+
+  const pn = (missingPart || "").trim();
+  const family = pn.includes("0620") ? "0620" : (pn.includes("0600") ? "0600" : "");
+
+  const pnEl   = document.getElementById("ms_part_number");
+  const famEl  = document.getElementById("ms_mirror_family");
+  const sizeEl = document.getElementById("ms_size_code");
+
+  if(pnEl) pnEl.value = pn;
+  if(famEl) famEl.value = family;
+  if(sizeEl) sizeEl.value = "ALL";
+}
+function openEnterStandardModal(){ const m = document.getElementById("enterStandardModal"); if(m) m.style.display = "flex"; }
+function closeEnterStandardModal(){ const m = document.getElementById("enterStandardModal"); if(m) m.style.display = "none"; }
+function setMsStatus(msg, ok=true){
+  const el = document.getElementById("msStatusLine");
+  if(!el) return;
+  el.textContent = msg || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+async function saveMirrorStandardFromModal(){
+  const part_number = document.getElementById("ms_part_number")?.value.trim();
+  const mirror_family = document.getElementById("ms_mirror_family")?.value.trim() || null;
+  const size_code = "ALL";
+
+  const stdRaw = document.getElementById("ms_std_per_hour_100")?.value.trim() || "";
+  const std_per_hour_100 = stdRaw === "" ? null : Number(stdRaw);
+
+  const active = (document.getElementById("ms_active")?.value === "true");
+  const notes = document.getElementById("ms_notes")?.value.trim() || null;
+
+  if(!part_number){
+    setMsStatus("part_number is required.", false);
+    return false;
+  }
+  if(stdRaw !== "" && (isNaN(std_per_hour_100) || std_per_hour_100 < 0)){
+    setMsStatus("std_per_hour_100 must be a non-negative number.", false);
+    return false;
+  }
+
+  setMsStatus("Saving standard...", true);
+
+  try{
+    const { error } = await withTimeoutRetry(
+      () => sb.from("mirror_standards").insert([{ part_number, mirror_family, size_code, std_per_hour_100, active, notes }]),
+      { ms: 25000, label: "mirror_standards insert", retries: 1, backoffMs: 900 }
+    );
+    if(error){
+      console.error("mirror_standards insert error:", error);
+      setMsStatus(`Error saving: ${error.message}`, false);
+      return false;
+    }
+    setMsStatus("Standard saved. You can now save the hourly entry.", true);
+    return true;
+  }catch(err){
+    console.error("mirror_standards insert timeout:", err);
+    setMsStatus("Timed out saving standard. Try again.", false);
+    return false;
+  }
+}
+
+/* -------------------- PACKING STANDARD UI -------------------- */
+function showEnterPackingStandardUI(missingPart){
+  const btn = document.getElementById("enterPackingStandardBtn");
+  if(btn) btn.style.display = "inline-flex";
+
+  setStatus(`"${missingPart}" is not in packing_standards. Please enter the packing standard now.`, false);
+
+  const pn = (missingPart || "").trim();
+  const pnEl = document.getElementById("ps_part_number");
+  if(pnEl) pnEl.value = pn;
+}
+function openEnterPackingStandardModal(){ const m = document.getElementById("enterPackingStandardModal"); if(m) m.style.display = "flex"; }
+function closeEnterPackingStandardModal(){ const m = document.getElementById("enterPackingStandardModal"); if(m) m.style.display = "none"; }
+function setPsStatus(msg, ok=true){
+  const el = document.getElementById("psStatusLine");
+  if(!el) return;
+  el.textContent = msg || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+async function savePackingStandardFromModal(){
+  const part_number = document.getElementById("ps_part_number")?.value.trim();
+  const stdRaw = document.getElementById("ps_std_per_hour_100")?.value.trim() || "";
+  const std_per_hour_100 = stdRaw === "" ? null : Number(stdRaw);
+  const active = (document.getElementById("ps_active")?.value === "true");
+  const notes = document.getElementById("ps_notes")?.value.trim() || null;
+
+  if(!part_number){
+    setPsStatus("part_number is required.", false);
+    return false;
+  }
+  if(stdRaw !== "" && (isNaN(std_per_hour_100) || std_per_hour_100 < 0)){
+    setPsStatus("std_per_hour_100 must be a non-negative number.", false);
+    return false;
+  }
+
+  setPsStatus("Saving packing standard...", true);
+
+  try{
+    const { error } = await withTimeoutRetry(
+      () => sb.from("packing_standards").insert([{ part_number, std_per_hour_100, active, notes }]),
+      { ms: 25000, label: "packing_standards insert", retries: 1, backoffMs: 900 }
+    );
+    if(error){
+      console.error("packing_standards insert error:", error);
+      setPsStatus(`Error saving: ${error.message}`, false);
+      return false;
+    }
+    setPsStatus("Packing standard saved. You can now save the hourly entry.", true);
+    return true;
+  }catch(err){
+    console.error("packing_standards insert timeout:", err);
+    setPsStatus("Timed out saving packing standard. Try again.", false);
+    return false;
+  }
+}
+
+/* -------------------- SAVE ENTRY -------------------- */
+async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
+  try{
+    const logDate     = $("#logDate").value || todayIso();
+    const hourBlock   = $("#hourBlock").value.trim();
+    const role        = $("#role").value.trim();
+    const workerName  = $("#workerName").value.trim();
+    const partNumber  = $("#partNumber").value.trim();
+    const mirrorType  = $("#mirrorType").value.trim();
+    const mirrorClass = $("#mirrorClass").value.trim();
+    const qtyStr      = $("#qty").value.trim();
+    const jobRef      = ($("#jobRef")?.value || "").trim();
+    const orderQtyStr = ($("#orderQty")?.value || "").trim();
+
+    ["logDate","hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","qty","jobRef","orderQty"].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.classList.remove("input-invalid");
+    });
+
+    let hasError = false;
+
+    if(!hourBlock){
+      $("#hourBlock")?.classList.add("input-invalid");
+      setStatus("Please select an hour block.", false);
+      hasError = true;
+    }
+
+    if(!role || !workerName || !partNumber || !mirrorType || !mirrorClass || !qtyStr){
+      setStatus("Please fill in all required fields before saving.", false);
+      if(!role) $("#role")?.classList.add("input-invalid");
+      if(!workerName) $("#workerName")?.classList.add("input-invalid");
+      if(!partNumber) $("#partNumber")?.classList.add("input-invalid");
+      if(!mirrorType) $("#mirrorType")?.classList.add("input-invalid");
+      if(!mirrorClass) $("#mirrorClass")?.classList.add("input-invalid");
+      if(!qtyStr) $("#qty")?.classList.add("input-invalid");
+      hasError = true;
+    }
+
+    const qty = Number(qtyStr);
+    if(isNaN(qty) || qty < 0){
+      $("#qty")?.classList.add("input-invalid");
+      setStatus("Quantity must be a non-negative number.", false);
+      hasError = true;
+    }
+
+    if(hasError) return;
+
+    const order_qty = orderQtyStr === "" ? null : parseInt(orderQtyStr, 10);
+    const job_ref = jobRef === "" ? null : jobRef;
+
+    if(orderQtyStr !== "" && (Number.isNaN(order_qty) || order_qty <= 0)){
+      $("#orderQty")?.classList.add("input-invalid");
+      setStatus("Order Qty must be a positive whole number (or leave blank).", false);
+      return;
+    }
+
+    // Gate save with standards (fast lookups)
+    if(!demoMode){
+      const exists = (role === "packer")
+        ? await packingStandardExists(partNumber)
+        : await mirrorStandardExists(partNumber);
+
+      if(!exists){
+        if(role === "packer"){
+          setStatus("Missing packing standard — please add it, then click Save entry again.", false);
+          showEnterPackingStandardUI(partNumber);
+          openEnterPackingStandardModal();
+        } else {
+          setStatus("Missing mirror standard — please add it, then click Save entry again.", false);
+          showEnterStandardUI(partNumber);
+          openEnterStandardModal();
+        }
         return;
+      } else {
+        const btn1 = document.getElementById("enterStandardBtn");
+        const btn2 = document.getElementById("enterPackingStandardBtn");
+        if(btn1) btn1.style.display = "none";
+        if(btn2) btn2.style.display = "none";
       }
+    }
 
-      setStatus("Saving entry...", true);
-
-      // If LIVE mode, require part # to exist in the correct standards table
-      if(!demoMode){
-        const exists = (role === "packer")
-          ? await packingStandardExists(partNumber)
-          : await mirrorStandardExists(partNumber);
-
-        if(!exists){
-          if(role === "packer"){
-            setStatus(`"${partNumber}" is not in packing_standards. Add packing standard first.`, false);
-            // (Optionally: later we can add a packing standard modal just like mirror standards)
-          } else {
-            showEnterStandardUI(partNumber);
-          }
-          return;
-        } else {
-          const btn = document.getElementById("enterStandardBtn");
-          if(btn) btn.style.display = "none";
-        }
-      }
-
-      // DEMO MODE
-      if(demoMode){
-        const rows = loadDemoEntries();
-
-        const idx = (rows || []).findIndex(r =>
-          r.log_date === logDate &&
-          r.hour_block === hourBlock &&
-          r.role === role &&
-          r.worker_name === workerName &&
-          r.part_number === partNumber &&
-          r.mirror_type === mirrorType &&
-          r.mirror_class === mirrorClass
-        );
-
-        if(idx >= 0){
-          rows[idx].qty = qty;
-          rows[idx].job_ref = job_ref;
-          rows[idx].order_qty = order_qty;
-        } else {
-          rows.push({
-            log_date: logDate,
-            hour_block: hourBlock,
-            role,
-            worker_name: workerName,
-            part_number: partNumber,
-            mirror_type: mirrorType,
-            mirror_class: mirrorClass,
-            qty,
-            job_ref,
-            order_qty
-          });
-        }
-
-        saveDemoEntries(rows);
-        setStatus("Entry saved (Demo mode).", true);
-
-        if(!stayOnWorkerHour){
-          $("#hourBlock").value   = "";
-          $("#role").value        = "";
-          $("#workerName").value  = "";
-          $("#partNumber").value  = "";
-          $("#mirrorType").value  = "";
-          $("#mirrorClass").value = "";
-          $("#jobRef").value      = "";
-          $("#orderQty").value    = "";
-        } else {
-          const currentBlock = hourBlock;
-          const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
-          const idx2 = orderedBlocks.indexOf(currentBlock);
-          if(idx2 >= 0 && idx2 < orderedBlocks.length - 1){
-            $("#hourBlock").value = orderedBlocks[idx2 + 1];
-          }
-        }
-
-        $("#qty").value = "";
-        await loadTodayEntries();
-        await refreshPartSuggestions();
-        return;
-      }
-
-      // LIVE MODE (upsert via find + update/insert)
-      const { data: existing, error: findErr } = await withTimeout(
-        sb
-          .from("worker_hourly_log")
-          .select("id")
-          .eq("log_date", logDate)
-          .eq("hour_block", hourBlock)
-          .eq("role", role)
-          .eq("worker_name", workerName)
-          .eq("part_number", partNumber)
-          .eq("mirror_type", mirrorType)
-          .eq("mirror_class", mirrorClass)
-          .limit(1),
-        8000,
-        "worker_hourly_log find existing"
+    // DEMO save
+    if(demoMode){
+      const rows = loadDemoEntries();
+      const idx = (rows || []).findIndex(r =>
+        r.log_date === logDate &&
+        r.hour_block === hourBlock &&
+        r.role === role &&
+        r.worker_name === workerName &&
+        r.part_number === partNumber &&
+        r.mirror_type === mirrorType &&
+        r.mirror_class === mirrorClass
       );
 
-
-      if(findErr){
-        console.error("Lookup error:", findErr);
-        setStatus("Error checking existing entry. Check console.", false);
-        return;
+      if(idx >= 0){
+        rows[idx].qty = qty;
+        rows[idx].job_ref = job_ref;
+        rows[idx].order_qty = order_qty;
+      } else {
+        rows.push({
+          log_date: logDate, hour_block: hourBlock, role,
+          worker_name: workerName, part_number: partNumber,
+          mirror_type: mirrorType, mirror_class: mirrorClass,
+          qty, job_ref, order_qty
+        });
       }
 
-      let saveErr = null;
+      saveDemoEntries(rows);
+      setStatus("Entry saved (Demo mode).", true);
 
-      if(existing && existing.length){
-        const rowId = existing[0].id;
-        const { error: updErr } = await withTimeout(
-          sb.from("worker_hourly_log").update({ qty, job_ref, order_qty }).eq("id", rowId),
-          8000,
-          "worker_hourly_log update"
-        );
-        saveErr = updErr;
+      if(!stayOnWorkerHour){
+        $("#hourBlock").value = "";
+        $("#role").value = "";
+        $("#workerName").value = "";
+        $("#partNumber").value = "";
+        $("#mirrorType").value = "";
+        $("#mirrorClass").value = "";
+        $("#jobRef").value = "";
+        $("#orderQty").value = "";
       } else {
-        const { error: insErr } = await withTimeout(
-        sb.from("worker_hourly_log").insert([{
+        const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
+        const idx2 = orderedBlocks.indexOf(hourBlock);
+        if(idx2 >= 0 && idx2 < orderedBlocks.length - 1){
+          $("#hourBlock").value = orderedBlocks[idx2 + 1];
+        }
+      }
+
+      $("#qty").value = "";
+      await loadTodayEntries();
+      refreshPartSuggestions(); // debounced
+      return;
+    }
+
+    // LIVE save
+    setStatus("Saving entry...", true);
+
+    // Fast “find existing”: only id, limit 1
+    const { data: existing, error: findErr } = await withTimeoutRetry(
+      () => sb
+        .from("worker_hourly_log")
+        .select("id")
+        .eq("log_date", logDate)
+        .eq("hour_block", hourBlock)
+        .eq("role", role)
+        .eq("worker_name", workerName)
+        .eq("part_number", partNumber)
+        .eq("mirror_type", mirrorType)
+        .eq("mirror_class", mirrorClass)
+        .limit(1),
+      { ms: 20000, label: "find existing entry", retries: 1, backoffMs: 900 }
+    );
+
+    if(findErr){
+      console.error("Lookup error:", findErr);
+      setStatus("Error checking existing entry. Check console.", false);
+      return;
+    }
+
+    let saveErr = null;
+
+    if(existing && existing.length){
+      const rowId = existing[0].id;
+      const { error: updErr } = await withTimeoutRetry(
+        () => sb.from("worker_hourly_log").update({ qty, job_ref, order_qty }).eq("id", rowId),
+        { ms: 20000, label: "update entry", retries: 1, backoffMs: 900 }
+      );
+      saveErr = updErr;
+    } else {
+      const { error: insErr } = await withTimeoutRetry(
+        () => sb.from("worker_hourly_log").insert([{
           log_date: logDate,
           hour_block: hourBlock,
           role,
@@ -1184,730 +1181,779 @@
           job_ref,
           order_qty
         }]),
-        8000,
-        "worker_hourly_log insert"
+        { ms: 20000, label: "insert entry", retries: 1, backoffMs: 900 }
       );
       saveErr = insErr;
+    }
+
+    if(saveErr){
+      console.error("Save error:", saveErr);
+      setStatus("Error saving entry. Check console for details.", false);
+      return;
+    }
+
+    setStatus("Entry saved.", true);
+
+    if(!stayOnWorkerHour){
+      $("#hourBlock").value = "";
+      $("#role").value = "";
+      $("#workerName").value = "";
+      $("#partNumber").value = "";
+      $("#mirrorType").value = "";
+      $("#mirrorClass").value = "";
+      $("#jobRef").value = "";
+      $("#orderQty").value = "";
+    } else {
+      const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
+      const idx = orderedBlocks.indexOf(hourBlock);
+      if(idx >= 0 && idx < orderedBlocks.length - 1){
+        $("#hourBlock").value = orderedBlocks[idx + 1];
       }
+    }
 
-      if(saveErr){
-        console.error("Save error:", saveErr);
-        setStatus("Error saving entry. Check console for details.", false);
-        return;
-      }
+    $("#qty").value = "";
+    await loadTodayEntries();
+    refreshPartSuggestions(); // debounced
 
-      setStatus("Entry saved.", true);
-
-      if(!stayOnWorkerHour){
-        $("#hourBlock").value   = "";
-        $("#role").value        = "";
-        $("#workerName").value  = "";
-        $("#partNumber").value  = "";
-        $("#mirrorType").value  = "";
-        $("#mirrorClass").value = "";
-        $("#jobRef").value      = "";
-        $("#orderQty").value    = "";
-      } else {
-        const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
-        const idx = orderedBlocks.indexOf(hourBlock);
-        if(idx >= 0 && idx < orderedBlocks.length - 1){
-          $("#hourBlock").value = orderedBlocks[idx + 1];
-        }
-      }
-
-            $("#qty").value = "";
-      await loadTodayEntries();
-      await refreshPartSuggestions();
-  } catch(err){
-      console.error("saveEntry crashed:", err);
-      setStatus(`Save failed: ${err.message || err}`, false);
+  }catch(err){
+    console.error("saveEntry crashed:", err);
+    setStatus(`Save failed: ${err.message || err}`, false);
   }
 }
 
+/* -------------------- EDIT/DELETE -------------------- */
+function showEditStatus(msg, ok=true){
+  const el = document.getElementById("editEntryStatus");
+  if(!el) return;
+  el.textContent = msg || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
 
-    function initQuickQtyButtons(){
-      const container = document.querySelector(".quick-qty-row");
-      if(!container) return;
+function openEditModalWithRow(row){
+  const modal = document.getElementById("editEntryModal");
+  if(!modal) return;
 
-      container.addEventListener("click", (e) => {
-        const btn = e.target.closest("button[data-qty]");
-        if(!btn) return;
+  document.getElementById("editEntryId").value = row.id || "";
+  document.getElementById("editLogDate").value = row.log_date || todayIso();
+  document.getElementById("editHourBlock").value = row.hour_block || "7am-8am";
+  document.getElementById("editRole").value = row.role || "assembler";
+  document.getElementById("editWorkerName").value = row.worker_name || "";
+  document.getElementById("editPartNumber").value = row.part_number || "";
+  document.getElementById("editMirrorType").value = row.mirror_type || "0600";
+  document.getElementById("editMirrorClass").value = row.mirror_class || "standard";
+  document.getElementById("editQty").value = (row.qty ?? 0);
+  document.getElementById("editJobRef").value = row.job_ref || "";
+  document.getElementById("editOrderQty").value = (row.order_qty ?? "");
 
-        const inc = Number(btn.dataset.qty || 0);
-        const qtyInput = document.querySelector("#qty");
-        const current = Number(qtyInput.value || 0);
-        qtyInput.value = current + inc;
-      });
+  showEditStatus("", true);
+  modal.style.display = "flex";
+}
+function closeEditModal(){
+  const modal = document.getElementById("editEntryModal");
+  if(modal) modal.style.display = "none";
+}
+
+async function fetchRowById(id){
+  const { data, error } = await withTimeoutRetry(
+    () => sb.from("worker_hourly_log").select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty").eq("id", id).limit(1),
+    { ms: 20000, label: "fetch row by id", retries: 1, backoffMs: 900 }
+  );
+  if(error) throw error;
+  return (data && data[0]) ? data[0] : null;
+}
+
+async function saveEditedRow(){
+  const id = document.getElementById("editEntryId").value;
+  if(!id){
+    showEditStatus("Missing entry id.", false);
+    return;
+  }
+
+  const payload = {
+    log_date: document.getElementById("editLogDate").value || todayIso(),
+    hour_block: document.getElementById("editHourBlock").value,
+    role: document.getElementById("editRole").value,
+    worker_name: document.getElementById("editWorkerName").value.trim(),
+    part_number: document.getElementById("editPartNumber").value.trim(),
+    mirror_type: document.getElementById("editMirrorType").value,
+    mirror_class: document.getElementById("editMirrorClass").value,
+    qty: Number(document.getElementById("editQty").value || 0),
+    job_ref: (document.getElementById("editJobRef").value.trim() || null),
+    order_qty: (() => {
+      const v = (document.getElementById("editOrderQty").value || "").trim();
+      if(v === "") return null;
+      const n = parseInt(v, 10);
+      return Number.isNaN(n) ? null : n;
+    })(),
+  };
+
+  if(!payload.worker_name || !payload.part_number){
+    showEditStatus("Worker/Station and Part # are required.", false);
+    return;
+  }
+  if(Number.isNaN(payload.qty) || payload.qty < 0){
+    showEditStatus("Qty must be a non-negative number.", false);
+    return;
+  }
+
+  showEditStatus("Saving changes...", true);
+
+  try{
+    const { error } = await withTimeoutRetry(
+      () => sb.from("worker_hourly_log").update(payload).eq("id", id),
+      { ms: 20000, label: "save edited row", retries: 1, backoffMs: 900 }
+    );
+    if(error){
+      console.error("Edit save error:", error);
+      showEditStatus("Error saving changes. Check console.", false);
+      return;
     }
-
-    // ---------- MIRROR STANDARDS (gate saves + allow inline entry) ----------
-    async function mirrorStandardExists(partNumber){
-      if(demoMode) return true; // demo should never block saves
-      const pn = (partNumber || "").trim();
-      if(!pn) return false;
-
-      const { data, error } = await sb
-        .from("mirror_standards")
-        .select("id")
-        .eq("part_number", pn)
-        .limit(1);
-
-      if(error){
-        console.error("mirror_standards lookup error:", error.message);
-        return false;
-      }
-      return !!(data && data.length);
-    }
-
-    // ---------- PACKING STANDARDS (gate saves for packers) ----------
-    async function packingStandardExists(partNumber){
-      if(demoMode) return true;
-      const pn = (partNumber || "").trim();
-      if(!pn) return false;
-
-      const { data, error } = await sb
-        .from("packing_standards")
-        .select("id")
-        .eq("part_number", pn)
-        .eq("active", true)
-        .limit(1);
-
-      if(error){
-        console.error("packing_standards lookup error:", error.message);
-        return false;
-      }
-      return !!(data && data.length);
-    }
-
-    function showEnterStandardUI(missingPart){
-      const btn = document.getElementById("enterStandardBtn");
-      if(btn) btn.style.display = "inline-flex";
-
-      setStatus(`"${missingPart}" is not in mirror_standards. Please enter the standard now.`, false);
-
-      const pn = (missingPart || "").trim();
-      const family =
-        pn.includes("0620") ? "0620" :
-        pn.includes("0600") ? "0600" :
-        "";
-
-      const pnEl   = document.getElementById("ms_part_number");
-      const famEl  = document.getElementById("ms_mirror_family");
-      const sizeEl = document.getElementById("ms_size_code");
-
-      if(pnEl)   pnEl.value = pn;
-      if(famEl)  famEl.value = family;
-
-      // size_code is always ALL (matches Supabase formatting)
-      if(sizeEl) sizeEl.value = "ALL";
-    }
-
-    function openEnterStandardModal(){
-      const modal = document.getElementById("enterStandardModal");
-      if(modal) modal.style.display = "flex";
-    }
-
-    function closeEnterStandardModal(){
-      const modal = document.getElementById("enterStandardModal");
-      if(modal) modal.style.display = "none";
-    }
-
-    function setMsStatus(msg, ok=true){
-      const el = document.getElementById("msStatusLine");
-      if(!el) return;
-      el.textContent = msg || "";
-      el.classList.remove("status-ok","status-err");
-      el.classList.add(ok ? "status-ok" : "status-err");
-    }
-
-    async function saveMirrorStandardFromModal(){
-      const part_number = document.getElementById("ms_part_number")?.value.trim();
-      const mirror_family = document.getElementById("ms_mirror_family")?.value.trim() || null;
-      const size_code = "ALL";
-
-      const stdRaw = document.getElementById("ms_std_per_hour_100")?.value.trim() || "";
-      const std_per_hour_100 = stdRaw === "" ? null : Number(stdRaw);
-
-      const active = (document.getElementById("ms_active")?.value === "true");
-      const notes = document.getElementById("ms_notes")?.value.trim() || null;
-
-      if(!part_number){
-        setMsStatus("part_number is required.", false);
-        return false;
-      }
-      if(stdRaw !== "" && (isNaN(std_per_hour_100) || std_per_hour_100 < 0)){
-        setMsStatus("std_per_hour_100 must be a non-negative number.", false);
-        return false;
-      }
-
-      setMsStatus("Saving standard...", true);
-
-      const { error } = await sb
-        .from("mirror_standards")
-        .insert([{
-          part_number,
-          mirror_family,
-          size_code,
-          std_per_hour_100,
-          active,
-          notes
-        }]);
-
-      if(error){
-        console.error("mirror_standards insert error:", error.message);
-        setMsStatus(`Error saving: ${error.message}`, false);
-        return false;
-      }
-
-      setMsStatus("Standard saved. You can now save the hourly entry.", true);
-      return true;
-    }
-
-    // ---------- LIVE EDIT/DELETE ----------
-    function showEditStatus(msg, ok=true){
-      const el = document.getElementById("editEntryStatus");
-      if(!el) return;
-      el.textContent = msg || "";
-      el.classList.remove("status-ok","status-err");
-      el.classList.add(ok ? "status-ok" : "status-err");
-    }
-
-    function openEditModalWithRow(row){
-      const modal = document.getElementById("editEntryModal");
-      if(!modal) return;
-
-      document.getElementById("editEntryId").value = row.id || "";
-      document.getElementById("editLogDate").value = row.log_date || todayIso();
-      document.getElementById("editHourBlock").value = row.hour_block || "7am-8am";
-      document.getElementById("editRole").value = row.role || "assembler";
-      document.getElementById("editWorkerName").value = row.worker_name || "";
-      document.getElementById("editPartNumber").value = row.part_number || "";
-      document.getElementById("editMirrorType").value = row.mirror_type || "0600";
-      document.getElementById("editMirrorClass").value = row.mirror_class || "standard";
-      document.getElementById("editQty").value = (row.qty ?? 0);
-      document.getElementById("editJobRef").value = row.job_ref || "";
-      document.getElementById("editOrderQty").value = (row.order_qty ?? "");
-
-      showEditStatus("", true);
-      modal.style.display = "flex";
-    }
-
-    function closeEditModal(){
-      const modal = document.getElementById("editEntryModal");
-      if(modal) modal.style.display = "none";
-    }
-
-    async function fetchRowById(id){
-      const { data, error } = await sb
-        .from("worker_hourly_log")
-        .select("*")
-        .eq("id", id)
-        .limit(1);
-
-      if(error) throw error;
-      return (data && data[0]) ? data[0] : null;
-    }
-
-    async function saveEditedRow(){
-      const id = document.getElementById("editEntryId").value;
-      if(!id){
-        showEditStatus("Missing entry id.", false);
-        return;
-      }
-
-      const payload = {
-        log_date: document.getElementById("editLogDate").value || todayIso(),
-        hour_block: document.getElementById("editHourBlock").value,
-        role: document.getElementById("editRole").value,
-        worker_name: document.getElementById("editWorkerName").value.trim(),
-        part_number: document.getElementById("editPartNumber").value.trim(),
-        mirror_type: document.getElementById("editMirrorType").value,
-        mirror_class: document.getElementById("editMirrorClass").value,
-        qty: Number(document.getElementById("editQty").value || 0),
-        job_ref: (document.getElementById("editJobRef").value.trim() || null),
-        order_qty: (() => {
-          const v = (document.getElementById("editOrderQty").value || "").trim();
-          if(v === "") return null;
-          const n = parseInt(v, 10);
-          return Number.isNaN(n) ? null : n;
-        })(),
-      };
-
-      if(!payload.worker_name || !payload.part_number){
-        showEditStatus("Worker/Station and Part # are required.", false);
-        return;
-      }
-      if(Number.isNaN(payload.qty) || payload.qty < 0){
-        showEditStatus("Qty must be a non-negative number.", false);
-        return;
-      }
-
-      showEditStatus("Saving changes...", true);
-
-      const { error } = await sb
-        .from("worker_hourly_log")
-        .update(payload)
-        .eq("id", id);
-
-      if(error){
-        console.error("Edit save error:", error);
-        showEditStatus("Error saving changes. Check console.", false);
-        return;
-      }
-
-      showEditStatus("Saved.", true);
-      await loadTodayEntries();
-      await refreshPartSuggestions();
-      setTimeout(() => closeEditModal(), 350);
-    }
-
-    async function deleteRowById(id){
-      const { error } = await sb
-        .from("worker_hourly_log")
-        .delete()
-        .eq("id", id);
-
-      if(error) throw error;
-
-      await loadTodayEntries();
-      await refreshPartSuggestions();
-    }
-
-
-    function autoSetMirrorTypeFromPart(part){
-      const p = String(part || "").toLowerCase();
-
-      // Try common patterns:
-      // - "0600-2436"
-      // - "0620 2436"
-      // - "mirror 0600 ..."
-      const is0600 = p.includes("0600");
-      const is0620 = p.includes("0620");
-
-      // If both appear somehow, don’t change anything (avoid weird edge cases)
-      if(is0600 && is0620) return;
-
-      const mt = document.getElementById("mirrorType");
-      if(!mt) return;
-
-      const next = is0600 ? "0600" : (is0620 ? "0620" : "");
-      if(next && mt.value !== next){
-        mt.value = next;
-
-        // update suggestions to match the new mirror type
-        refreshPartSuggestions();
-      }
-    }
-
-
-    // ---------- INIT ----------
-    document.addEventListener("DOMContentLoaded", async () => {
-      $("#logDate").value = todayIso();
-
-      // Restore demo toggle
-      const demoToggle = document.getElementById("demoModeToggle");
-      demoMode = localStorage.getItem(DEMO_KEY) === "true";
-      if(demoToggle) demoToggle.checked = demoMode;
-
-      setFreshness(`Last updated: —${demoMode ? " (Demo)" : ""}`);
-
-      // --- AUTH WIRING ---
-      await refreshAuthUI();
-
-      sb.auth.onAuthStateChange(async () => {
-        await refreshAuthUI();
-      });
-
-      const signInBtn = document.getElementById("signInBtn");
-      if(signInBtn){
-        signInBtn.addEventListener("click", async () => {
-          const email = (document.getElementById("loginEmail")?.value || "").trim();
-          const password = (document.getElementById("loginPassword")?.value || "").trim();
-          if(!email || !password){
-            setStatus("Enter email + password to sign in.", false);
-            return;
-          }
-
-          const { error } = await sb.auth.signInWithPassword({ email, password });
-            if(error){
-              setStatus(`Sign in failed: ${error.message}`, false);
-              return;
-            }
-
-            setStatus("Signed in. Loading data...", true);
-            await refreshAuthUI();
-            await loadWorkerDirectory();
-            await refreshPartSuggestions();
-            await loadTodayEntries();
-            setStatus("Signed in. Data loaded.", true);
-        });
-      }
-
-      const signOutBtn = document.getElementById("signOutBtn");
-      if(signOutBtn){
-        signOutBtn.addEventListener("click", async () => {
-          await sb.auth.signOut();
-          setStatus("Signed out. Writes disabled.", true);
-          await refreshAuthUI();
-        });
-      }
-
-
-      // Demo toggle listener
-      if(demoToggle){
-        demoToggle.addEventListener("change", async () => {
-          demoMode = !!demoToggle.checked;
-          localStorage.setItem(DEMO_KEY, demoMode ? "true" : "false");
-          setStatus(demoMode ? "Demo mode enabled (no Supabase writes)." : "Live mode enabled.", true);
-
-          await loadWorkerDirectory();
-          await loadTodayEntries();
-          await refreshPartSuggestions();
-        });
-      }
-
-      // How it works modal
-      const modal = document.getElementById("howItWorksModal");
-      const openBtn = document.getElementById("howItWorksBtn");
-      const closeBtn = document.getElementById("howItWorksCloseBtn");
-
-      if(openBtn && modal){
-        openBtn.addEventListener("click", () => modal.style.display = "flex");
-      }
-      if(closeBtn && modal){
-        closeBtn.addEventListener("click", () => modal.style.display = "none");
-      }
-      if(modal){
-        modal.addEventListener("click", (e) => {
-          if(e.target === modal) modal.style.display = "none";
-        });
-      }
-
-      autoSelectHourBlock();
-      initQuickQtyButtons();
-
-      // Enter mirror standard button + modal wiring
-      const enterBtn = document.getElementById("enterStandardBtn");
-      if(enterBtn) enterBtn.addEventListener("click", openEnterStandardModal);
-
-      const msClose = document.getElementById("enterStandardCloseBtn");
-      if(msClose) msClose.addEventListener("click", closeEnterStandardModal);
-
-      const msCancel = document.getElementById("cancelStandardBtn");
-      if(msCancel) msCancel.addEventListener("click", closeEnterStandardModal);
-
-      const enterModal = document.getElementById("enterStandardModal");
-      if(enterModal){
-        enterModal.addEventListener("click", (e) => {
-          if(e.target === enterModal) closeEnterStandardModal();
-        });
-      }
-
-      const msSave = document.getElementById("saveStandardBtn");
-      if(msSave) msSave.addEventListener("click", async () => {
-        const ok = await saveMirrorStandardFromModal();
-        if(ok){
-          // hide the button once the standard is saved
-          const b = document.getElementById("enterStandardBtn");
-          if(b) b.style.display = "none";
-          setStatus("Standard saved. Now click Save entry again.", true);
-          setTimeout(() => closeEnterStandardModal(), 400);
-        }
-      });
-
-
-      // Wire buttons
-      $("#submitBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:false }));
-      $("#saveAndStayBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:true }));
-
-      $("#todayFilterBtn").addEventListener("click", async () => {
-        $("#logDate").value = todayIso();
-        await loadTodayEntries();
-        await refreshPartSuggestions();
-      });
-
-      const ptb = document.getElementById("printTemplateBtn");
-      if(ptb) ptb.addEventListener("click", () => openPrintTemplate());
-
-      $("#logDate").addEventListener("change", async () => {
-        await loadTodayEntries();
-        await refreshPartSuggestions();
-      });
-
-      $("#mirrorType").addEventListener("change", async () => {
-        await refreshPartSuggestions();
-      });
-
-      $("#partNumber").addEventListener("input", (e) => {
-        autoSetMirrorTypeFromPart(e.target.value);
-      });
-
-      $("#partNumber").addEventListener("change", (e) => {
-        autoSetMirrorTypeFromPart(e.target.value);
-      });
-
-      // Edit modal close/save buttons
-      const editModal = document.getElementById("editEntryModal");
-      const editClose = document.getElementById("editEntryCloseBtn");
-      const editSave  = document.getElementById("editEntrySaveBtn");
-
-      if(editClose) editClose.addEventListener("click", closeEditModal);
-      if(editSave)  editSave.addEventListener("click", async () => {
-        if(demoMode){
-          showEditStatus("Edit is disabled in Demo mode.", false);
-          return;
-        }
-        await saveEditedRow();
-      });
-
-      if(editModal){
-        editModal.addEventListener("click", (e) => {
-          if(e.target === editModal) closeEditModal();
-        });
-      }
-
-      // Live-mode action buttons (event delegation)
-      const tbody = document.getElementById("entriesBody");
-      if(tbody){
-        tbody.addEventListener("click", async (e) => {
-          const btn = e.target.closest("button[data-action]");
-          if(!btn) return;
-
-          if(demoMode){
-            setStatus("Edit/Delete disabled in Demo mode.", false);
-            return;
-          }
-
-          const action = btn.getAttribute("data-action");
-          const id = btn.getAttribute("data-id");
-          if(!id) return;
-
-          if(action === "edit"){
-            try{
-              const row = await fetchRowById(id);
-              if(!row){
-                setStatus("Entry not found (may have been deleted).", false);
-                return;
-              }
-              openEditModalWithRow(row);
-            }catch(err){
-              console.error(err);
-              setStatus("Error opening edit. Check console.", false);
-            }
-          }
-
-          if(action === "delete"){
-            const ok = confirm("Delete this entry? This cannot be undone.");
-            if(!ok) return;
-
-            try{
-              await deleteRowById(id);
-              setStatus("Entry deleted.", true);
-            }catch(err){
-              console.error(err);
-              setStatus("Error deleting entry. Check console.", false);
-            }
-          }
-        });
-      }
-
-
-      // Initial loads
-      await loadWorkerDirectory();
-      await refreshPartSuggestions();
-
-      // Only load today's entries in Live mode if signed in (Demo mode can always show local)
-     if(demoMode){
-        await loadTodayEntries();
-      } else {
-        const { data: { session } } = await sb.auth.getSession();
-        if(session?.user){
-          await loadTodayEntries();
-        } else {
-          const tbody = document.getElementById("entriesBody");
-          if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view today’s entries.</td></tr>';
-        }
-      }
-    }); // ✅ CLOSE DOMContentLoaded
-  </script> <!-- ✅ CLOSE SCRIPT -->
-
-  <!-- EDIT ENTRY MODAL -->
-  <div id="editEntryModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10000;">
-    <div style="width:min(720px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <div class="card-title" style="margin:0;">Edit entry (Live)</div>
-        <button class="btn" id="editEntryCloseBtn" type="button">Close</button>
+    showEditStatus("Saved.", true);
+    await loadTodayEntries();
+    refreshPartSuggestions();
+    setTimeout(() => closeEditModal(), 350);
+  }catch(err){
+    console.error("Edit save timeout:", err);
+    showEditStatus("Timed out saving changes. Try again.", false);
+  }
+}
+
+async function deleteRowById(id){
+  const { error } = await withTimeoutRetry(
+    () => sb.from("worker_hourly_log").delete().eq("id", id),
+    { ms: 20000, label: "delete row", retries: 1, backoffMs: 900 }
+  );
+  if(error) throw error;
+  await loadTodayEntries();
+  refreshPartSuggestions();
+}
+
+/* -------------------- AUTO MIRROR TYPE FROM PART -------------------- */
+function autoSetMirrorTypeFromPart(part){
+  const p = String(part || "").toLowerCase();
+  const is0600 = p.includes("0600");
+  const is0620 = p.includes("0620");
+  if(is0600 && is0620) return;
+
+  const mt = document.getElementById("mirrorType");
+  if(!mt) return;
+
+  const next = is0600 ? "0600" : (is0620 ? "0620" : "");
+  if(next && mt.value !== next){
+    mt.value = next;
+    refreshPartSuggestions();
+  }
+}
+
+/* -------------------- PRINT TEMPLATE (UNCHANGED LOGIC) -------------------- */
+function getWorkerListForPrint(){
+  const sel = document.getElementById("workerName");
+  if(!sel) return [];
+  const opts = Array.from(sel.options)
+    .map(o => ({ value: (o.value || "").trim(), text: (o.textContent || "").trim() }))
+    .filter(o => o.value !== "" && o.text.toLowerCase() !== "select...")
+    .map(o => o.value);
+  return Array.from(new Set(opts));
+}
+
+function buildPrintTemplateHtml({ date, roleLabel, workers }){
+  const hourBlocks = [
+    "7am-8am","8am-9am","9am-10am (15m break)","10am-11am",
+    "11am-12pm","12:30pm-1:30pm","1:30pm-2:30pm (10m break)","2:30pm-3:30pm"
+  ];
+
+  const header = `
+    <div class="print-header">
+      <div class="title">Worker Hourly Log — Blank Template</div>
+      <div class="meta">
+        <div><b>Date:</b> ${escapeHtml(date)}</div>
+        <div><b>Role:</b> ${escapeHtml(roleLabel)}</div>
+        <div><b>Supervisor:</b> __________________________</div>
       </div>
-
-      <div class="form-grid" style="margin-top:10px;">
-        <input type="hidden" id="editEntryId"/>
-
-        <div class="field">
-          <label for="editLogDate">Date</label>
-          <input type="date" id="editLogDate">
-        </div>
-
-        <div class="field">
-          <label for="editHourBlock">Hour block</label>
-          <select id="editHourBlock">
-            <option>7am-8am</option>
-            <option>8am-9am</option>
-            <option>9am-10am (15m break)</option>
-            <option>10am-11am</option>
-            <option>11am-12pm</option>
-            <option>12:30pm-1:30pm</option>
-            <option>1:30pm-2:30pm (10m break)</option>
-            <option>2:30pm-3:30pm</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="editRole">Role</label>
-          <select id="editRole">
-            <option value="assembler">Assembler</option>
-            <option value="packer">Packer</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="editWorkerName">Worker / Station</label>
-          <input type="text" id="editWorkerName" placeholder="Exact name/station">
-        </div>
-
-        <div class="field">
-          <label for="editPartNumber">Part #</label>
-          <input type="text" id="editPartNumber" placeholder="e.g. 0600-2436">
-        </div>
-
-        <div class="field">
-          <label for="editMirrorType">Mirror type</label>
-          <select id="editMirrorType">
-            <option value="0620">0620</option>
-            <option value="0600">0600</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="editMirrorClass">Category</label>
-          <select id="editMirrorClass">
-            <option value="standard">Standard</option>
-            <option value="special">Special</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="editQty">Qty</label>
-          <input type="number" id="editQty" min="0" inputmode="numeric">
-        </div>
-
-        <div class="field">
-          <label for="editJobRef">Job Ref</label>
-          <input type="text" id="editJobRef" placeholder="Optional">
-        </div>
-
-        <div class="field">
-          <label for="editOrderQty">Order Qty (total)</label>
-          <input type="number" id="editOrderQty" min="1" step="1" inputmode="numeric" placeholder="Optional">
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="editEntrySaveBtn" type="button">Save changes</button>
-      </div>
-
-      <div id="editEntryStatus" class="status-line"></div>
+      <div class="note">Use this sheet while walking the floor. Fill in Part # and Qty for each worker per hour block.</div>
     </div>
-  </div>
+  `;
 
+  const workerRows = (workers || []).map(w => `
+    <tr>
+      <td class="wcol">${escapeHtml(w)}</td>
+      <td class="pcol"></td>
+      <td class="qcol"></td>
+      <td class="ncol"></td>
+    </tr>
+  `).join("");
 
-  <!-- HOW IT WORKS MODAL -->
-  <div id="howItWorksModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
-    <div style="width:min(720px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <div class="card-title" style="margin:0;">How it works</div>
-        <button class="btn" id="howItWorksCloseBtn" type="button">Close</button>
+  const sections = hourBlocks.map((hb, idx) => `
+    <section class="block ${idx === 0 ? "" : "page-break"}">
+      <div class="block-title">
+        <span>${escapeHtml(hb.replace(/\s*\(.*\)/,"").trim())}</span>
+        ${/\(([^)]+)\)/.test(hb) ? `<span class="break-pill">${escapeHtml(hb.match(/\(([^)]+)\)/)[1])}</span>` : ""}
       </div>
 
-      <div style="font-size:13px; color:var(--text); line-height:1.45; margin-top:10px;">
-        This page captures hourly production entries (date, hour block, worker/station, part number, mirror type, category, quantity) and writes them to a structured log.<br/><br/>
+      <table class="pt">
+        <thead>
+          <tr>
+            <th>Worker / Station</th>
+            <th>Part #</th>
+            <th style="text-align:right;">Qty</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${workerRows || `<tr><td colspan="4" class="empty">No workers loaded. (Make sure the dropdown is populated.)</td></tr>`}
+        </tbody>
+      </table>
 
-        <b>Live mode</b><br/>
-        Entries are saved directly to Supabase and the “Today’s entries” table refreshes automatically. Supervisors can <b>edit or delete entries</b> in live mode to correct mistakes or adjust test data without affecting downstream reporting accuracy.<br/><br/>
-
-        <b>Demo mode</b><br/>
-        Sample data is stored locally in your browser so the interface can be safely showcased for training, testing, or portfolio demonstrations with no real backend impact.<br/><br/>
-
-        <b>Smart part number handling</b><br/>
-        • The <b>Part #</b> field includes an <b>autocomplete suggestion list</b> based on part numbers already logged for the selected date.<br/>
-        • When a part number contains <b>0600</b> or <b>0620</b>, the <b>Mirror type</b> field is automatically selected to match.<br/>
-        • If a part number is missing from <code>mirror_standards</code>, the system prompts the supervisor to <b>add the standard inline</b> before saving.<br/><br/>
-
-        <b>Mirror standards enforcement</b><br/>
-        In Live mode, hourly logs can only be saved for part numbers that exist in <code>mirror_standards</code>, ensuring production efficiency calculations remain accurate and standardized.<br/><br/>
-
-        <b>Print blank log</b><br/>
-        Generates a printable hourly worksheet using the current worker/station list, designed for supervisors to walk the floor and capture data offline if needed.
-                                              
-        Tip: Use Demo mode for portfolio screenshots + screen recordings.
+      <div class="totals">
+        <div><b>Hour total:</b> ____________</div>
+        <div><b>Issues / downtime:</b> ________________________________________________</div>
       </div>
+    </section>
+  `).join("");
+
+  return `
+  <!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Print — Worker Hourly Log</title>
+    <style>
+      :root{ --text:#111; --muted:#555; --border:#ddd; }
+      html,body{ margin:0; padding:0; color:var(--text); font-family:"Times New Roman", Times, serif; }
+      .wrap{ padding:18px 18px 28px 18px; }
+      .print-header{ border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:12px; }
+      .title{ font-size:20px; font-weight:800; }
+      .meta{
+        margin-top:6px;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:6px 18px;
+        font-size:12px;
+      }
+      .note{ margin-top:8px; font-size:12px; color:var(--muted); }
+      .block{ margin-top:14px; }
+      .block-title{ display:flex; align-items:center; gap:10px; font-size:14px; font-weight:800; margin:10px 0 6px 0; }
+      .break-pill{ font-size:11px; border:1px solid #999; padding:1px 8px; border-radius:999px; font-weight:600; color:#333; }
+      table.pt{ width:100%; border-collapse:collapse; font-size:12px; }
+      table.pt th, table.pt td{ border:1px solid var(--border); padding:6px 8px; vertical-align:top; }
+      table.pt th{ background:#f3f3f3; font-weight:800; }
+      .wcol{ width:34%; } .pcol{ width:22%; } .qcol{ width:10%; text-align:right; } .ncol{ width:34%; }
+      .empty{ text-align:center; color:var(--muted); padding:18px !important; }
+      .totals{ margin-top:8px; font-size:12px; display:flex; flex-direction:column; gap:6px; }
+      .page-break{ page-break-before: always; }
+      @media print{ .wrap{ padding:0; } .page-break{ page-break-before: always; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      ${header}
+      ${sections}
     </div>
-  </div>
-
-  <!-- ENTER MIRROR STANDARD MODAL -->
-  <div id="enterStandardModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
-    <div style="width:min(760px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <div class="card-title" style="margin:0;">Enter mirror standard</div>
-        <button class="btn" id="enterStandardCloseBtn" type="button">Close</button>
-      </div>
-
-      <div style="font-size:12px; color:var(--muted); margin-top:6px;">
-        This part number is missing in <code>mirror_standards</code>. Add it below to enable saving hourly logs.
-      </div>
-
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px 12px; margin-top:12px;">
-        <div class="field">
-          <label for="ms_part_number">part_number</label>
-          <input type="text" id="ms_part_number" placeholder="e.g. 0600-2436">
-        </div>
-
-        <div class="field">
-          <label for="ms_mirror_family">mirror_family</label>
-          <input type="text" id="ms_mirror_family" placeholder="e.g. 0600">
-        </div>
-
-        <div class="field">
-          <label for="ms_size_code">size_code</label>
-          <input type="text" id="ms_size_code" value="ALL" readonly>
-        </div>
-
-        <div class="field">
-          <label for="ms_std_per_hour_100">std_per_hour_100</label>
-          <input type="number" id="ms_std_per_hour_100" min="0" step="0.01" placeholder="e.g. 12.5">
-        </div>
-
-        <div class="field">
-          <label for="ms_active">active</label>
-          <select id="ms_active">
-            <option value="true" selected>TRUE</option>
-            <option value="false">FALSE</option>
-          </select>
-        </div>
-
-        <div class="field" style="grid-column:1/-1;">
-          <label for="ms_notes">notes (optional)</label>
-          <input type="text" id="ms_notes" placeholder="Anything helpful (optional)">
-        </div>
-      </div>
-
-      <div class="btn-row" style="margin-top:12px;">
-        <button class="btn btn-primary" id="saveStandardBtn" type="button">Save standard</button>
-        <button class="btn" id="cancelStandardBtn" type="button">Cancel</button>
-      </div>
-
-      <div id="msStatusLine" class="status-line" style="margin-top:8px;"></div>
-    </div>
-  </div>
-
-
   </body>
   </html>
+  `;
+}
+
+function openPrintTemplate(){
+  const date = (document.getElementById("logDate")?.value || todayIso());
+  const roleVal = (document.getElementById("role")?.value || "").trim();
+  const roleLabel = roleVal ? (roleVal.charAt(0).toUpperCase() + roleVal.slice(1)) : "All";
+  const workers = getWorkerListForPrint();
+  const html = buildPrintTemplateHtml({ date, roleLabel, workers });
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.visibility = "hidden";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+
+  iframe.onload = () => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  };
+}
+
+/* -------------------- INIT -------------------- */
+let didInitialAuthedLoad = false;
+
+document.addEventListener("DOMContentLoaded", async () => {
+  $("#logDate").value = todayIso();
+
+  const demoToggle = document.getElementById("demoModeToggle");
+  demoMode = localStorage.getItem(DEMO_KEY) === "true";
+  if(demoToggle) demoToggle.checked = demoMode;
+
+  setFreshness(`Last updated: —${demoMode ? " (Demo)" : ""}`);
+
+  await refreshAuthUI();
+
+  // IMPORTANT: don’t double-load on auth + sign-in click (major timeout cause)
+  sb.auth.onAuthStateChange(async () => {
+    await refreshAuthUI();
+
+    const { data: { session } } = await sb.auth.getSession();
+    const signedIn = !!session?.user;
+
+    if(demoMode){
+      didInitialAuthedLoad = true;
+      await loadWorkerDirectory();
+      await loadTodayEntries();
+      refreshPartSuggestions();
+      return;
+    }
+
+    if(signedIn && !didInitialAuthedLoad){
+      didInitialAuthedLoad = true;
+      await loadWorkerDirectory();
+      await loadTodayEntries();
+      refreshPartSuggestions();
+    }
+
+    if(!signedIn){
+      didInitialAuthedLoad = false;
+      const tbody = document.getElementById("entriesBody");
+      if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view today’s entries.</td></tr>';
+    }
+  });
+
+  // Sign in
+  const signInBtn = document.getElementById("signInBtn");
+  if(signInBtn){
+    signInBtn.addEventListener("click", async () => {
+      const email = (document.getElementById("loginEmail")?.value || "").trim();
+      const password = (document.getElementById("loginPassword")?.value || "").trim();
+      if(!email || !password){
+        setStatus("Enter email + password to sign in.", false);
+        return;
+      }
+
+      try{
+        setStatus("Signing in...", true);
+        const { error } = await withTimeoutRetry(
+          () => sb.auth.signInWithPassword({ email, password }),
+          { ms: 20000, label: "sign in", retries: 0 }
+        );
+        if(error){
+          setStatus(`Sign in failed: ${error.message}`, false);
+          return;
+        }
+
+        // Let onAuthStateChange do the data loading (prevents double-load)
+        setStatus("Signed in.", true);
+      }catch(err){
+        console.error("Sign in timeout:", err);
+        setStatus("Sign in timed out. Try again.", false);
+      }
+    });
+  }
+
+  // Sign out
+  const signOutBtn = document.getElementById("signOutBtn");
+  if(signOutBtn){
+    signOutBtn.addEventListener("click", async () => {
+      await sb.auth.signOut();
+      setStatus("Signed out. Writes disabled.", true);
+      await refreshAuthUI();
+    });
+  }
+
+  // Demo toggle
+  if(demoToggle){
+    demoToggle.addEventListener("change", async () => {
+      demoMode = !!demoToggle.checked;
+      localStorage.setItem(DEMO_KEY, demoMode ? "true" : "false");
+      setStatus(demoMode ? "Demo mode enabled (no Supabase writes)." : "Live mode enabled.", true);
+
+      didInitialAuthedLoad = false;
+      await loadWorkerDirectory();
+      await loadTodayEntries();
+      refreshPartSuggestions();
+    });
+  }
+
+  // How it works modal
+  const howModal = document.getElementById("howItWorksModal");
+  const openBtn = document.getElementById("howItWorksBtn");
+  const closeBtn = document.getElementById("howItWorksCloseBtn");
+
+  if(openBtn && howModal){ openBtn.addEventListener("click", () => howModal.style.display = "flex"); }
+  if(closeBtn && howModal){ closeBtn.addEventListener("click", () => howModal.style.display = "none"); }
+  if(howModal){
+    howModal.addEventListener("click", (e) => { if(e.target === howModal) howModal.style.display = "none"; });
+  }
+
+  autoSelectHourBlock();
+  initQuickQtyButtons();
+
+  // Enter mirror standard
+  const enterBtn = document.getElementById("enterStandardBtn");
+  if(enterBtn) enterBtn.addEventListener("click", openEnterStandardModal);
+  const msClose = document.getElementById("enterStandardCloseBtn");
+  if(msClose) msClose.addEventListener("click", closeEnterStandardModal);
+  const msCancel = document.getElementById("cancelStandardBtn");
+  if(msCancel) msCancel.addEventListener("click", closeEnterStandardModal);
+  const enterModal = document.getElementById("enterStandardModal");
+  if(enterModal){
+    enterModal.addEventListener("click", (e) => { if(e.target === enterModal) closeEnterStandardModal(); });
+  }
+  const msSave = document.getElementById("saveStandardBtn");
+  if(msSave) msSave.addEventListener("click", async () => {
+    const ok = await saveMirrorStandardFromModal();
+    if(ok){
+      const b = document.getElementById("enterStandardBtn");
+      if(b) b.style.display = "none";
+      setStatus("Standard saved. Now click Save entry again.", true);
+      setTimeout(() => closeEnterStandardModal(), 400);
+    }
+  });
+
+  // Enter packing standard
+  const enterPackBtn = document.getElementById("enterPackingStandardBtn");
+  if(enterPackBtn) enterPackBtn.addEventListener("click", openEnterPackingStandardModal);
+  const psClose = document.getElementById("enterPackingStandardCloseBtn");
+  if(psClose) psClose.addEventListener("click", closeEnterPackingStandardModal);
+  const psCancel = document.getElementById("cancelPackingStandardBtn");
+  if(psCancel) psCancel.addEventListener("click", closeEnterPackingStandardModal);
+  const packModal = document.getElementById("enterPackingStandardModal");
+  if(packModal){
+    packModal.addEventListener("click", (e) => { if(e.target === packModal) closeEnterPackingStandardModal(); });
+  }
+  const psSave = document.getElementById("savePackingStandardBtn");
+  if(psSave) psSave.addEventListener("click", async () => {
+    const ok = await savePackingStandardFromModal();
+    if(ok){
+      const b = document.getElementById("enterPackingStandardBtn");
+      if(b) b.style.display = "none";
+      setStatus("Packing standard saved. Now click Save entry again.", true);
+      setTimeout(() => closeEnterPackingStandardModal(), 400);
+    }
+  });
+
+  // Buttons
+  $("#submitBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:false }));
+  $("#saveAndStayBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:true }));
+
+  $("#todayFilterBtn").addEventListener("click", async () => {
+    $("#logDate").value = todayIso();
+    await loadTodayEntries();
+    refreshPartSuggestions();
+  });
+
+  const ptb = document.getElementById("printTemplateBtn");
+  if(ptb) ptb.addEventListener("click", () => openPrintTemplate());
+
+  $("#logDate").addEventListener("change", async () => {
+    await loadTodayEntries();
+    refreshPartSuggestions();
+  });
+  $("#mirrorType").addEventListener("change", () => refreshPartSuggestions());
+
+  $("#partNumber").addEventListener("input", (e) => autoSetMirrorTypeFromPart(e.target.value));
+  $("#partNumber").addEventListener("change", (e) => autoSetMirrorTypeFromPart(e.target.value));
+
+  // Edit modal
+  const editModal = document.getElementById("editEntryModal");
+  const editClose = document.getElementById("editEntryCloseBtn");
+  const editSave  = document.getElementById("editEntrySaveBtn");
+  if(editClose) editClose.addEventListener("click", closeEditModal);
+  if(editSave)  editSave.addEventListener("click", async () => {
+    if(demoMode){
+      showEditStatus("Edit is disabled in Demo mode.", false);
+      return;
+    }
+    await saveEditedRow();
+  });
+  if(editModal){
+    editModal.addEventListener("click", (e) => { if(e.target === editModal) closeEditModal(); });
+  }
+
+  // Action buttons (delegation)
+  const tbody = document.getElementById("entriesBody");
+  if(tbody){
+    tbody.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if(!btn) return;
+
+      if(demoMode){
+        setStatus("Edit/Delete disabled in Demo mode.", false);
+        return;
+      }
+
+      const action = btn.getAttribute("data-action");
+      const id = btn.getAttribute("data-id");
+      if(!id) return;
+
+      if(action === "edit"){
+        try{
+          const row = await fetchRowById(id);
+          if(!row){
+            setStatus("Entry not found (may have been deleted).", false);
+            return;
+          }
+          openEditModalWithRow(row);
+        }catch(err){
+          console.error(err);
+          setStatus("Error opening edit. Check console.", false);
+        }
+      }
+
+      if(action === "delete"){
+        const ok = confirm("Delete this entry? This cannot be undone.");
+        if(!ok) return;
+
+        try{
+          await deleteRowById(id);
+          setStatus("Entry deleted.", true);
+        }catch(err){
+          console.error(err);
+          setStatus("Error deleting entry. Check console.", false);
+        }
+      }
+    });
+  }
+
+  // Initial loads (safe)
+  if(demoMode){
+    await loadWorkerDirectory();
+    await loadTodayEntries();
+    refreshPartSuggestions();
+  }else{
+    const { data: { session } } = await sb.auth.getSession();
+    if(session?.user){
+      didInitialAuthedLoad = true;
+      await loadWorkerDirectory();
+      await loadTodayEntries();
+      refreshPartSuggestions();
+    }else{
+      const tb = document.getElementById("entriesBody");
+      if(tb) tb.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view today’s entries.</td></tr>';
+      refreshPartSuggestions(); // will clear suggestions in signed-out live mode
+    }
+  }
+});
+</script>
+
+<!-- EDIT ENTRY MODAL -->
+<div id="editEntryModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10000;">
+  <div style="width:min(720px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Edit entry (Live)</div>
+      <button class="btn" id="editEntryCloseBtn" type="button">Close</button>
+    </div>
+
+    <div class="form-grid" style="margin-top:10px;">
+      <input type="hidden" id="editEntryId"/>
+
+      <div class="field">
+        <label for="editLogDate">Date</label>
+        <input type="date" id="editLogDate">
+      </div>
+
+      <div class="field">
+        <label for="editHourBlock">Hour block</label>
+        <select id="editHourBlock">
+          <option>7am-8am</option>
+          <option>8am-9am</option>
+          <option>9am-10am (15m break)</option>
+          <option>10am-11am</option>
+          <option>11am-12pm</option>
+          <option>12:30pm-1:30pm</option>
+          <option>1:30pm-2:30pm (10m break)</option>
+          <option>2:30pm-3:30pm</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editRole">Role</label>
+        <select id="editRole">
+          <option value="assembler">Assembler</option>
+          <option value="packer">Packer</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editWorkerName">Worker / Station</label>
+        <input type="text" id="editWorkerName" placeholder="Exact name/station">
+      </div>
+
+      <div class="field">
+        <label for="editPartNumber">Part #</label>
+        <input type="text" id="editPartNumber" placeholder="e.g. 0600-2436">
+      </div>
+
+      <div class="field">
+        <label for="editMirrorType">Mirror type</label>
+        <select id="editMirrorType">
+          <option value="0620">0620</option>
+          <option value="0600">0600</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editMirrorClass">Category</label>
+        <select id="editMirrorClass">
+          <option value="standard">Standard</option>
+          <option value="special">Special</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editQty">Qty</label>
+        <input type="number" id="editQty" min="0" inputmode="numeric">
+      </div>
+
+      <div class="field">
+        <label for="editJobRef">Job Ref</label>
+        <input type="text" id="editJobRef" placeholder="Optional">
+      </div>
+
+      <div class="field">
+        <label for="editOrderQty">Order Qty (total)</label>
+        <input type="number" id="editOrderQty" min="1" step="1" inputmode="numeric" placeholder="Optional">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="editEntrySaveBtn" type="button">Save changes</button>
+    </div>
+
+    <div id="editEntryStatus" class="status-line"></div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS MODAL -->
+<div id="howItWorksModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
+  <div style="width:min(720px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">How it works</div>
+      <button class="btn" id="howItWorksCloseBtn" type="button">Close</button>
+    </div>
+
+    <div style="font-size:13px; color:var(--text); line-height:1.45; margin-top:10px;">
+      Live mode writes to Supabase and loads “Today’s entries” with hardened limits/timeouts to prevent lockups.<br/><br/>
+      Demo mode stores entries locally in your browser for testing/training/portfolio without touching Supabase.<br/><br/>
+      Standards are enforced before saving:
+      <ul style="margin:6px 0 0 18px;">
+        <li>Assembler parts must exist in <code>mirror_standards</code></li>
+        <li>Packer parts must exist in <code>packing_standards</code></li>
+      </ul>
+      If missing, you’ll be prompted to add the standard inline.
+    </div>
+  </div>
+</div>
+
+<!-- ENTER MIRROR STANDARD MODAL -->
+<div id="enterStandardModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
+  <div style="width:min(760px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Enter mirror standard</div>
+      <button class="btn" id="enterStandardCloseBtn" type="button">Close</button>
+    </div>
+
+    <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+      This part number is missing in <code>mirror_standards</code>. Add it below to enable saving hourly logs.
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px 12px; margin-top:12px;">
+      <div class="field">
+        <label for="ms_part_number">part_number</label>
+        <input type="text" id="ms_part_number" placeholder="e.g. 0600-2436">
+      </div>
+
+      <div class="field">
+        <label for="ms_mirror_family">mirror_family</label>
+        <input type="text" id="ms_mirror_family" placeholder="e.g. 0600">
+      </div>
+
+      <div class="field">
+        <label for="ms_size_code">size_code</label>
+        <input type="text" id="ms_size_code" value="ALL" readonly>
+      </div>
+
+      <div class="field">
+        <label for="ms_std_per_hour_100">std_per_hour_100</label>
+        <input type="number" id="ms_std_per_hour_100" min="0" step="0.01" placeholder="e.g. 12.5">
+      </div>
+
+      <div class="field">
+        <label for="ms_active">active</label>
+        <select id="ms_active">
+          <option value="true" selected>TRUE</option>
+          <option value="false">FALSE</option>
+        </select>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <label for="ms_notes">notes (optional)</label>
+        <input type="text" id="ms_notes" placeholder="Anything helpful (optional)">
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-primary" id="saveStandardBtn" type="button">Save standard</button>
+      <button class="btn" id="cancelStandardBtn" type="button" onclick="document.getElementById('enterStandardModal').style.display='none'">Cancel</button>
+    </div>
+
+    <div id="msStatusLine" class="status-line" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- ENTER PACKING STANDARD MODAL -->
+<div id="enterPackingStandardModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
+  <div style="width:min(760px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Enter packing standard</div>
+      <button class="btn" id="enterPackingStandardCloseBtn" type="button">Close</button>
+    </div>
+
+    <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+      This part number is missing in <code>packing_standards</code>. Add it below to enable saving packing logs.
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px 12px; margin-top:12px;">
+      <div class="field">
+        <label for="ps_part_number">part_number</label>
+        <input type="text" id="ps_part_number" placeholder="e.g. 0600-2436">
+      </div>
+
+      <div class="field">
+        <label for="ps_std_per_hour_100">std_per_hour_100</label>
+        <input type="number" id="ps_std_per_hour_100" min="0" step="0.01" placeholder="e.g. 18.0">
+      </div>
+
+      <div class="field">
+        <label for="ps_active">active</label>
+        <select id="ps_active">
+          <option value="true" selected>TRUE</option>
+          <option value="false">FALSE</
+option>
+        </select>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <label for="ps_notes">notes (optional)</label>
+        <input type="text" id="ps_notes" placeholder="Anything helpful (optional)">
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-primary" id="savePackingStandardBtn" type="button">Save packing standard</button>
+      <button class="btn" id="cancelPackingStandardBtn" type="button">Cancel</button>
+    </div>
+
+    <div id="psStatusLine" class="status-line" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+</body>
+</html>
