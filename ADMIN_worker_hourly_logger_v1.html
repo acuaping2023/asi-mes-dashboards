@@ -446,29 +446,6 @@ function debounce(fn, wait=300){
   };
 }
 
-/* -------------------- !!! MISSING FUNCTION FIX !!! -------------------- */
-/* This is what was causing: date not refreshing + Save doing “nothing”. */
-async function runWithAbortTimeout(builderFn, { ms=20000, label="Request", retries=1, backoffMs=600 } = {}){
-  let lastErr;
-
-  for(let attempt=0; attempt<=retries; attempt++){
-    const controller = new AbortController();
-    try{
-      const p = builderFn(controller.signal);
-      return await withTimeout(p, ms, label);
-    }catch(err){
-      lastErr = err;
-      try{ controller.abort(); }catch(_e){}
-      if(attempt < retries){
-        await new Promise(r => setTimeout(r, backoffMs * (attempt+1)));
-        continue;
-      }
-    }
-  }
-
-  throw lastErr;
-}
-
 /* -------------------- HOUR BLOCK ORDER -------------------- */
 const HOUR_BLOCK_ORDER = {
   "7am-8am": 1,
@@ -609,21 +586,24 @@ async function refreshPartSuggestionsCore(){
     return;
   }
 
+  // Cache hit
   const cached = PART_SUGGESTIONS_CACHE.get(cacheKey);
   if(cached && (Date.now() - cached.ts) < PART_CACHE_TTL_MS){
     setPartSuggestions(cached.parts);
     return;
   }
 
+  // FAST query: only required cols, limited
   try{
-    const { data, error } = await runWithAbortTimeout(
-      (signal) => sb
-        .from("worker_hourly_log")
-        .select("part_number, mirror_type")
-        .eq("log_date", date)
-        .order("id", { ascending: false })
-        .limit(300)
-        .abortSignal(signal),
+    const q = sb
+      .from("worker_hourly_log")
+      .select("part_number, mirror_type")
+      .eq("log_date", date)
+      .order("id", { ascending: false })
+      .limit(300); // keep small to prevent timeouts
+
+    const { data, error } = await withTimeoutRetry(
+      () => q,
       { ms: 20000, label: "part suggestions", retries: 1, backoffMs: 700 }
     );
 
@@ -642,7 +622,7 @@ async function refreshPartSuggestionsCore(){
     setPartSuggestions(parts);
   }catch(err){
     console.error("Part suggestions timeout:", err);
-    setPartSuggestions([]);
+    setPartSuggestions([]); // don’t block the page
   }
 }
 const refreshPartSuggestions = debounce(refreshPartSuggestionsCore, 350);
@@ -665,17 +645,12 @@ async function loadWorkerDirectory(){
 
   const { data: { session } } = await sb.auth.getSession();
   if(!session?.user){
-    return;
+    return; // don’t query while signed out
   }
 
   try{
-    const { data, error } = await runWithAbortTimeout(
-      (signal) => sb
-        .from("worker_directory")
-        .select("worker_name")
-        .order("worker_name", { ascending:true })
-        .limit(300)
-        .abortSignal(signal),
+    const { data, error } = await withTimeoutRetry(
+      () => sb.from("worker_directory").select("worker_name").order("worker_name", { ascending:true }).limit(300),
       { ms: 20000, label: "worker_directory load", retries: 1, backoffMs: 700 }
     );
 
@@ -697,17 +672,14 @@ async function loadWorkerDirectory(){
   }
 }
 
-/* -------------------- TODAY ENTRIES -------------------- */
+/* -------------------- TODAY ENTRIES (NO select(*) + LIMIT) -------------------- */
 let ENTRIES_REQ = 0;
 
 async function loadTodayEntries(){
   const reqId = ++ENTRIES_REQ;
-  const date = $("#logDate")?.value || todayIso();
+  const date = $("#logDate").value || todayIso();
   const tbody = $("#entriesBody");
   const tag   = $("#todayTag");
-
-  if(tag) tag.textContent = `${date} • loading…`;
-  if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Loading…</td></tr>';
 
   if(demoMode){
     const all = loadDemoEntries();
@@ -762,24 +734,26 @@ async function loadTodayEntries(){
 
   const { data: { session } } = await sb.auth.getSession();
   if(!session?.user){
-    if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view entries.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view entries.</td></tr>';
     if(tag) tag.textContent = "";
     return;
   }
 
   try{
-    const { data, error } = await runWithAbortTimeout(
-      (signal) => sb
-        .from("worker_hourly_log")
-        .select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty")
-        .eq("log_date", date)
-        .order("id", { ascending:false })
-        .limit(250)
-        .abortSignal(signal),
+    // Only needed columns (big timeout fix)
+    const q = sb
+      .from("worker_hourly_log")
+      .select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty")
+      .eq("log_date", date)
+      .order("id", { ascending:false })
+      .limit(250);
+
+    const { data, error } = await withTimeoutRetry(
+      () => q,
       { ms: 25000, label: "today entries load", retries: 1, backoffMs: 900 }
     );
 
-    if(reqId !== ENTRIES_REQ) return;
+    if(reqId !== ENTRIES_REQ) return; // stale
 
     if(error){
       console.error("Today entries error:", error);
@@ -858,7 +832,7 @@ function initQuickQtyButtons(){
   });
 }
 
-/* -------------------- STANDARDS LOOKUPS -------------------- */
+/* -------------------- STANDARDS LOOKUPS (FAST: limit(1), no count) -------------------- */
 async function mirrorStandardExists(partNumber){
   if(demoMode) return true;
   const pn = (partNumber || "").trim();
@@ -1082,6 +1056,7 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
       return;
     }
 
+    // Gate save with standards (fast lookups)
     if(!demoMode){
       const exists = (role === "packer")
         ? await packingStandardExists(partNumber)
@@ -1106,6 +1081,7 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
       }
     }
 
+    // DEMO save
     if(demoMode){
       const rows = loadDemoEntries();
       const idx = (rows || []).findIndex(r =>
@@ -1153,14 +1129,16 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
 
       $("#qty").value = "";
       await loadTodayEntries();
-      refreshPartSuggestions();
+      refreshPartSuggestions(); // debounced
       return;
     }
 
+    // LIVE save
     setStatus("Saving entry...", true);
 
-    const { data: existing, error: findErr } = await runWithAbortTimeout(
-      (signal) => sb
+    // Fast “find existing”: only id, limit 1
+    const { data: existing, error: findErr } = await withTimeoutRetry(
+      () => sb
         .from("worker_hourly_log")
         .select("id")
         .eq("log_date", logDate)
@@ -1170,8 +1148,7 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
         .eq("part_number", partNumber)
         .eq("mirror_type", mirrorType)
         .eq("mirror_class", mirrorClass)
-        .limit(1)
-        .abortSignal(signal),
+        .limit(1),
       { ms: 20000, label: "find existing entry", retries: 1, backoffMs: 900 }
     );
 
@@ -1236,7 +1213,7 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
 
     $("#qty").value = "";
     await loadTodayEntries();
-    refreshPartSuggestions();
+    refreshPartSuggestions(); // debounced
 
   }catch(err){
     console.error("saveEntry crashed:", err);
@@ -1279,10 +1256,7 @@ function closeEditModal(){
 
 async function fetchRowById(id){
   const { data, error } = await withTimeoutRetry(
-    () => sb.from("worker_hourly_log")
-      .select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty")
-      .eq("id", id)
-      .limit(1),
+    () => sb.from("worker_hourly_log").select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty").eq("id", id).limit(1),
     { ms: 20000, label: "fetch row by id", retries: 1, backoffMs: 900 }
   );
   if(error) throw error;
@@ -1372,7 +1346,7 @@ function autoSetMirrorTypeFromPart(part){
   }
 }
 
-/* -------------------- PRINT TEMPLATE (UNCHANGED) -------------------- */
+/* -------------------- PRINT TEMPLATE (UNCHANGED LOGIC) -------------------- */
 function getWorkerListForPrint(){
   const sel = document.getElementById("workerName");
   if(!sel) return [];
@@ -1523,6 +1497,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await refreshAuthUI();
 
+  // IMPORTANT: don’t double-load on auth + sign-in click (major timeout cause)
   sb.auth.onAuthStateChange(async () => {
     await refreshAuthUI();
 
@@ -1551,6 +1526,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Sign in
   const signInBtn = document.getElementById("signInBtn");
   if(signInBtn){
     signInBtn.addEventListener("click", async () => {
@@ -1571,6 +1547,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           setStatus(`Sign in failed: ${error.message}`, false);
           return;
         }
+
+        // Let onAuthStateChange do the data loading (prevents double-load)
         setStatus("Signed in.", true);
       }catch(err){
         console.error("Sign in timeout:", err);
@@ -1579,6 +1557,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Sign out
   const signOutBtn = document.getElementById("signOutBtn");
   if(signOutBtn){
     signOutBtn.addEventListener("click", async () => {
@@ -1588,6 +1567,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Demo toggle
   if(demoToggle){
     demoToggle.addEventListener("change", async () => {
       demoMode = !!demoToggle.checked;
@@ -1601,6 +1581,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // How it works modal
   const howModal = document.getElementById("howItWorksModal");
   const openBtn = document.getElementById("howItWorksBtn");
   const closeBtn = document.getElementById("howItWorksCloseBtn");
@@ -1614,6 +1595,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   autoSelectHourBlock();
   initQuickQtyButtons();
 
+  // Enter mirror standard
   const enterBtn = document.getElementById("enterStandardBtn");
   if(enterBtn) enterBtn.addEventListener("click", openEnterStandardModal);
   const msClose = document.getElementById("enterStandardCloseBtn");
@@ -1635,6 +1617,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Enter packing standard
   const enterPackBtn = document.getElementById("enterPackingStandardBtn");
   if(enterPackBtn) enterPackBtn.addEventListener("click", openEnterPackingStandardModal);
   const psClose = document.getElementById("enterPackingStandardCloseBtn");
@@ -1656,6 +1639,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Buttons
   $("#submitBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:false }));
   $("#saveAndStayBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:true }));
 
@@ -1672,11 +1656,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadTodayEntries();
     refreshPartSuggestions();
   });
-
   $("#mirrorType").addEventListener("change", () => refreshPartSuggestions());
+
   $("#partNumber").addEventListener("input", (e) => autoSetMirrorTypeFromPart(e.target.value));
   $("#partNumber").addEventListener("change", (e) => autoSetMirrorTypeFromPart(e.target.value));
 
+  // Edit modal
   const editModal = document.getElementById("editEntryModal");
   const editClose = document.getElementById("editEntryCloseBtn");
   const editSave  = document.getElementById("editEntrySaveBtn");
@@ -1692,6 +1677,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     editModal.addEventListener("click", (e) => { if(e.target === editModal) closeEditModal(); });
   }
 
+  // Action buttons (delegation)
   const tbody = document.getElementById("entriesBody");
   if(tbody){
     tbody.addEventListener("click", async (e) => {
@@ -1736,6 +1722,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Initial loads (safe)
   if(demoMode){
     await loadWorkerDirectory();
     await loadTodayEntries();
@@ -1750,7 +1737,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }else{
       const tb = document.getElementById("entriesBody");
       if(tb) tb.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view today’s entries.</td></tr>';
-      refreshPartSuggestions();
+      refreshPartSuggestions(); // will clear suggestions in signed-out live mode
     }
   }
 });
@@ -1914,7 +1901,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     <div class="btn-row" style="margin-top:12px;">
       <button class="btn btn-primary" id="saveStandardBtn" type="button">Save standard</button>
-      <button class="btn" id="cancelStandardBtn" type="button">Cancel</button>
+      <button class="btn" id="cancelStandardBtn" type="button" onclick="document.getElementById('enterStandardModal').style.display='none'">Cancel</button>
     </div>
 
     <div id="msStatusLine" class="status-line" style="margin-top:8px;"></div>
@@ -1948,7 +1935,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         <label for="ps_active">active</label>
         <select id="ps_active">
           <option value="true" selected>TRUE</option>
-          <option value="false">FALSE</option>
+          <option value="false">FALSE</
+option>
         </select>
       </div>
 
