@@ -797,6 +797,7 @@ html[data-theme="dark"] .date-inline input[type="date"]{
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
 <script>
+(() => {
 // ---------- BASIC HELPERS ----------
 function $(s){ return document.querySelector(s); }
 function uniq(arr){ return Array.from(new Set(arr)); }
@@ -2875,6 +2876,7 @@ function renderTable(rows){
   });
     tbody.innerHTML = html;
 }
+})();
 </script>
 
 <!-- HOW IT WORKS MODAL -->
@@ -2900,4 +2902,5 @@ function renderTable(rows){
 
 </body>
 </html>
+
 
