@@ -811,7 +811,9 @@ const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Create once, reuse forever (prevents "already declared")
+window._sb = window._sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window._sb;
 
 // ---------- REALTIME AUTO-REFRESH ----------
 let rtChannel = null;
@@ -2898,3 +2900,4 @@ function renderTable(rows){
 
 </body>
 </html>
+
