@@ -687,17 +687,19 @@ body.theme-opacity-fade{transition:opacity .4s ease;}
   </div>
 </div>
 
-<!-- Supabase client -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase (UMD build so window.supabase exists) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <script>
 /************** BASIC HELPERS **************/
 function $(s){ return document.querySelector(s); }
 /************** SUPABASE CLIENT **************/
-const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';            // paste from Supabase Settings → API
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';  // paste anon public key
+const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Create once, reuse forever (prevents "already declared")
+window._sb = window._sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window._sb;
 
 function on(el,ev,fn){ if(el) el.addEventListener(ev,fn); }
 function coerceNum(v,fb){ var n=Number(v); return Number.isFinite(n)?n:fb; }
@@ -878,9 +880,6 @@ if (hasLow) {
 }
 
 var matSummaryHtml = renderMaterialSummary(st);
-
-
-        var matSummaryHtml = renderMaterialSummary(st);
 
     var nowHtml =
       // Header
@@ -1124,11 +1123,6 @@ function logMadePrompt(id){
   if(window.openMadeModal) openMadeModal(id);
 }
 
-function logMadePrompt(id){
-  // open the nicer modal instead of browser prompt
-  if(window.openMadeModal) openMadeModal(id);
-}
-
 /************** COMPLETE + KPI **************/
 function keyKPIFor(shift){ return "mirror.v25.kpi."+shift; }
 function loadKPI(){
@@ -1147,30 +1141,56 @@ function markCompleteConfirm(id){
 function markComplete(id){
   var st=findStation(id); if(!st) return;
 
-  // KPI record
+   // KPI record + shared status for Supabase
+  var due = st.now.due || "";
+  var done = todayIso();
+  var status = "unscheduled";
+  if (due){
+    if (done < due) status = "early";
+    else if (done === due) status = "on_time";
+    else status = "late";
+  }
+
   (function(){
-    var k=loadKPI();
-    var due=st.now.due||"";
-    var done=todayIso();
-    var status="unscheduled";
-    if(due){
-      if(done<due) status="early";
-      else if(done===due) status="on_time";
-      else status="late";
-    }
+    var k = loadKPI();
     k.records.push({
-      ts:Date.now(),
-      completed:done,
-      due:due,
-      status:status,
-      stationId:st.id,
-      stationName:st.name||"",
-      job:st.now.job||"",
-      part:st.now.part||"",
-      lot:st.now.lot||"",
-      qty:coerceNum(st.now.total||0,0)
+      ts: Date.now(),
+      completed: done,
+      due: due,
+      status: status,
+      stationId: st.id,
+      stationName: st.name || "",
+      job: st.now.job || "",
+      part: st.now.part || "",
+      lot: st.now.lot || "",
+      qty: coerceNum(st.now.total || 0, 0)
     });
     saveKPI(k);
+  })();
+
+  // Send completion to Supabase for cloud KPIs
+  (async function logCompletionToSupabase(){
+    try {
+      await logEventToSupabase({
+        type: 'job_complete',
+        userId: 'asi_supervisor',
+        stationId: st.id || null,
+        jobId: st.now.job || null,
+        jobRunId: null,
+        qty: coerceNum(st.now.total || 0, 0),
+        metadata: {
+          station_name: st.name || '',
+          job: st.now.job || '',
+          part: st.now.part || '',
+          lot: st.now.lot || '',
+          shift: activeShift,
+          due: due || null,
+          status: status
+        }
+      });
+    } catch (e) {
+      console.error("Supabase completion log failed:", e);
+    }
   })();
 
    // --- NEW: send completion to Supabase for cloud KPIs ---
@@ -3060,3 +3080,4 @@ document.addEventListener("DOMContentLoaded",function(){
 </script>
 </body>
 </html>
+
