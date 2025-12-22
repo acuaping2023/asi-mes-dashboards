@@ -699,7 +699,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Create once, reuse forever (prevents "already declared")
 window._sb = window._sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const supabase = window._sb;
+window.supabaseClient = window._sb; // <-- use a global instead of const supabase
 
 function on(el,ev,fn){ if(el) el.addEventListener(ev,fn); }
 function coerceNum(v,fb){ var n=Number(v); return Number.isFinite(n)?n:fb; }
@@ -1053,17 +1053,17 @@ function onZeroReached(id){
 /************** REMOTE LOGGING (Supabase) **************/
 async function logEventToSupabase({ type, stationId, jobId, jobRunId, qty, metadata, userId }) {
   try {
-    const { error } = await supabase
-      .from('event_logs')
-      .insert({
-        ts: new Date().toISOString(),
-        type,
-        station_id: stationId || null,
-        job_id: jobId || null,
-        job_run_id: jobRunId || null,
-        qty: qty != null ? qty : null,
-        metadata: metadata || null,
-        user_id: userId || null
+    const { error } = await window.supabaseClient
+        .from('event_logs')
+        .insert({
+            ts: new Date().toISOString(),
+            type,
+            station_id: stationId || null,
+            job_id: jobId || null,
+            job_run_id: jobRunId || null,
+            qty: qty != null ? qty : null,
+            metadata: metadata || null,
+            user_id: userId || null
       });
 
     if (error) {
@@ -1166,31 +1166,6 @@ function markComplete(id){
       qty: coerceNum(st.now.total || 0, 0)
     });
     saveKPI(k);
-  })();
-
-  // Send completion to Supabase for cloud KPIs
-  (async function logCompletionToSupabase(){
-    try {
-      await logEventToSupabase({
-        type: 'job_complete',
-        userId: 'asi_supervisor',
-        stationId: st.id || null,
-        jobId: st.now.job || null,
-        jobRunId: null,
-        qty: coerceNum(st.now.total || 0, 0),
-        metadata: {
-          station_name: st.name || '',
-          job: st.now.job || '',
-          part: st.now.part || '',
-          lot: st.now.lot || '',
-          shift: activeShift,
-          due: due || null,
-          status: status
-        }
-      });
-    } catch (e) {
-      console.error("Supabase completion log failed:", e);
-    }
   })();
 
    // --- NEW: send completion to Supabase for cloud KPIs ---
@@ -3080,4 +3055,3 @@ document.addEventListener("DOMContentLoaded",function(){
 </script>
 </body>
 </html>
-
