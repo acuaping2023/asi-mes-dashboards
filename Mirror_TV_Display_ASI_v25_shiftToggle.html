@@ -3,292 +3,3055 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ASI — Mirror Assembly TV (v43 • Exact 14-Row Fit)</title>
+<title>ASI — Mirror Control Dashboard</title>
 <style>
-  :root{
-    --bg:#ffffff;
-    --text:#CC5500;   /* ASI burnt/orange */
-    --done:#2ecc71;   /* green */
-    --todo:#ffd84d;   /* yellow */
-    --asi-red:#E41E26;
-  }
-  html,body{
-    margin:0; height:100%;
-    background:var(--bg); color:var(--text);
-    font-family:"Times New Roman", Times, serif;
-    overflow:hidden;
-  }
-  canvas{ display:block; width:100%; height:100vh; background:#fff; }
+:root{
+  --accent:#E41E26;
+  --burnt:#CC5500;
+  --ok:#2ecc71;
+  --warn:#ffd84d;
+  --danger:#ff6b6b;
+  --bg:#ffffff;
+  --panel:#ffffff;
+  --panel-2:#f6f7f9;
+  --text:#111111;
+  --muted:#5b6573;
+  --border:#e5e8ef;
+  --button:#f3f6fa;
+  --button2:#eef2f7;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Times New Roman", Times, serif;
+}
+header{
+  display:flex;
+  gap:12px;
+  align-items:center;          /* centers both sides vertically */
+  justify-content:space-between;
+  flex-wrap:wrap;
+  padding:4px 16px 4px;        /* reduce vertical padding */
+  background:var(--panel);
+  border-bottom:3px solid var(--accent);
+  position:sticky;
+  top:0;
+  z-index:20;
+}
 
-  #shiftBadge{
-    position:fixed; top:10px; right:18px;
-    background:#fff; border:2px solid var(--asi-red);
-    border-radius:12px; padding:5px 10px;
-    font-weight:700; color:#CC5500;
-    box-shadow:0 4px 10px rgba(0,0,0,.15); z-index:9999;
-  }
-  #hint{
-    position:fixed; right:14px; bottom:12px;
-    background:#ffffffee; border:1px solid #ccc; border-radius:10px;
-    padding:5px 9px; color:#000; white-space:nowrap;
-    box-shadow:0 3px 8px rgba(0,0,0,.12); z-index:9999;
-  }
+
+.brand{
+  display:flex;
+  align-items:flex-start;      /* push brand UPWARD to fill space */
+  flex-direction:row;
+  gap:12px;
+  margin-top:0;                /* ensures it sits high */
+  padding-top:0;               /* removes space above */
+}
+
+
+.asi-logo{ display:block; height:34px; width:auto; }
+.brand-text{display:flex;flex-direction:column;line-height:1.1}
+.brand-text strong{ font-size:20px; font-weight:800; letter-spacing:.2px; color:var(--burnt); }
+.brand-text span{ font-size:13px; color:var(--muted); }
+
+.controls-col{ display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+.controls-row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:flex-end; }
+.shift-indicator{
+  font-size:13px; font-weight:700; color:var(--burnt);
+  background:var(--panel-2); border:1px solid var(--border);
+  border-radius:8px; padding:4px 8px; line-height:1.2;
+}
+
+.btn{
+  background:var(--button); border:1px solid var(--border);
+  color:#1f2a37; padding:7px 12px; border-radius:10px;
+  font-size:14px; cursor:pointer;
+}
+/* --- UNIVERSAL BTN HOVER STYLES --- */
+
+/* Default button hover */
+.btn:hover{
+  background:#e9edf3;
+  border-color:#b9c6d8;
+}
+
+/* Primary button hover (red) */
+.btn.primary:hover{
+  background:#cc1a21;
+  border-color:#a4151a;
+}
+
+/* Icon button hover */
+.btn.icon:hover{
+  background:#dfe4ea;
+  border-color:#b9c6d8;
+}
+
+/* Delete button hover (danger) */
+.btn.danger:hover{
+  background:#ffcccc;
+  border-color:#ff8888;
+  color:#8a0000;
+}
+
+/* Make Delete buttons "light up" on hover like Mark Complete */
+.btn.danger:hover{
+  background:#ffcccc;
+  border-color:#ff8888;
+  color:#8a0000;
+}
+
+.btn.primary{ background:var(--accent); border-color:#c11c22; color:#fff; font-weight:700; }
+.btn.danger{ background:#fff1f1; border-color:#ffd2d2; color:#a82323; }
+.btn.icon{ padding:6px 10px; font-size:13px; }
+.btn.success{ background:#2ecc71; border-color:#25b862; color:#0a3d0a; font-weight:700; }
+.btn.success:hover{ background:#27c065; }
+/* --- UNIVERSAL BUTTON HOVER STYLES (but do NOT override success) --- */
+.btn.success:hover{
+  color:#062f06;
+}
+
+.btn.warn{
+  background: var(--warn);       /* yellow */
+  color: #111;
+}
+.btn.warn:hover{
+  opacity: 0.85;                 /* same hover fade as Mark Complete */
+}
+
+
+/* --- LIGHT MODE: Promote button only green on hover --- */
+html:not([data-theme="dark"]) .btn.success {
+  background: var(--button2);   /* normal, non-green */
+  border-color: var(--border);
+  color: #1f2a37;
+  font-weight: 700;
+}
+
+/* Hover becomes green in LIGHT MODE */
+html:not([data-theme="dark"]) .btn.success:hover {
+  background: #2ecc71;
+  border-color: #25b862;
+  color: #0a3d0a;
+}
+
+
+/* Default button hover */
+.btn:not(.success):hover{
+  background:#e9edf3;
+  border-color:#b9c6d8;
+}
+
+/* Primary button hover (red) */
+.btn.primary:hover{
+  background:#cc1a21;
+  border-color:#a4151a;
+}
+
+/* Yellow "Report low material" button */
+.btn.warn{
+  background: var(--warn);        /* base yellow */
+  border-color: #e0b000;
+  color: #111;
+  font-weight: 700;
+}
+
+/* Make sure hover stays yellow (overrides generic .btn:not(.success):hover) */
+.btn.warn:hover{
+  background: #f6c93c;            /* slightly deeper yellow on hover */
+  border-color: #d0a500;
+  color: #111;
+}
+
+/* Icon button hover */
+.btn.icon:hover{
+  background:#dfe4ea;
+  border-color:#b9c6d8;
+}
+
+/* Delete button hover */
+.btn.danger:hover{
+  background:#ffcccc;
+  border-color:#ff8888;
+  color:#8a0000;
+}
+
+
+input[type="text"], input[type="number"], input[type="date"], input[type="month"], select{
+  background:#ffffff; border:1px solid var(--border); color:var(--text);
+  padding:8px 12px; border-radius:10px; font-size:14px; outline:none; width:100%;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="month"]:focus,
+select:focus{
+  border-color:#b9c6d8; box-shadow:0 0 0 2px rgba(204,85,0,.15);
+}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance:none; margin:0;
+}
+input[type=number]{-moz-appearance:textfield;}
+
+.topnote{
+  padding:10px 16px; color:var(--muted); font-size:13px;
+  border-bottom:1px solid var(--border); background:var(--panel-2);
+}
+
+.grid{
+  display:grid; grid-template-columns:repeat(2,minmax(460px,1fr));
+  gap:16px; padding:16px; align-items:start;
+}
+@media (max-width:1100px){ .grid{grid-template-columns:1fr;} }
+
+.card{
+  background:var(--panel); border:1px solid var(--border); border-radius:14px;
+  padding:12px; display:flex; flex-direction:column; gap:12px; position:relative;
+  box-shadow:0 1px 3px rgba(16,24,40,.05);
+}
+/* Highlight station card when low material is reported */
+.card.low-material{
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(255,107,107,0.4);
+}
+
+html[data-theme="dark"] .card.low-material{
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(255,107,107,0.5);
+}
+
+.card h3{
+  margin:0; display:flex; align-items:center; gap:10px;
+  font-size:16px; font-weight:800; color:var(--burnt);
+}
+.badge{
+  font-size:11px; background:var(--panel-2); border:1px solid var(--border);
+  padding:3px 6px; border-radius:999px; color:var(--muted);
+}
+.leftchip{
+  position:absolute; top:10px; right:10px; background:#fff; border:1px solid var(--border);
+  padding:5px 10px; border-radius:999px; font-weight:800; letter-spacing:.3px; color:var(--burnt);
+}
+.row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+.row-5{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.field{display:flex;flex-direction:column;gap:6px}
+label{font-size:12px;color:var(--muted)}
+
+.progress{
+  height:10px; border-radius:6px; background:#f0f3f8;
+  border:1px solid var(--border); overflow:hidden;
+}
+.bar{ height:100%; width:0%; }
+.bar.ok{background:var(--ok);}
+.bar.warn{background:var(--warn);}
+.bar.danger{background:var(--danger);}
+
+/* Section labels inside each station card */
+.section-label{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  color:var(--muted);
+  margin:4px 0 2px;
+}
+
+/* Action button rows */
+.actions-primary,
+.actions-secondary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:4px;
+}
+
+/* Primary row = main daily actions */
+.actions-primary .btn{
+  background:var(--button2);
+  font-weight:600;
+}
+
+/* Secondary row = less frequent / supervisor actions */
+.actions-secondary{
+  opacity:0.95;
+}
+.actions-secondary .btn{
+  background:var(--button);
+  font-size:13px;
+  padding:6px 10px;
+}
+
+.queue{ display:flex; flex-direction:column; gap:6px; }
+.queue-item{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--panel-2); border:1px solid var(--border);
+  padding:6px 8px; border-radius:10px;
+}
+.queue-right{ display:flex; gap:6px; align-items:center; }
+.queue-grid{
+  display:grid;
+  grid-template-columns:minmax(160px,1.3fr) minmax(90px,.9fr) minmax(120px,1fr) minmax(120px,1fr) minmax(120px,1fr);
+  gap:8px; align-items:center;
+}
+.queue-grid .qcol{ display:flex; flex-direction:column; gap:6px; }
+
+details{
+  border:1px dashed var(--border);
+  border-radius:10px;
+  padding:6px 8px;
+  background:var(--panel-2);
+}
+summary{ cursor:pointer; color:var(--muted); }
+
+.smallnote{ color:var(--muted); font-size:13px; }
+.footer{
+  padding:12px 16px; color:var(--muted); font-size:13px; text-align:center;
+  border-top:1px solid var(--border); background:var(--panel);
+}
+code{
+  background:#fff6ef; border:1px solid #ffe3cf;
+  padding:1px 6px; border-radius:6px;
+}
+
+/* Drag styles */
+.card[draggable="true"]{cursor:grab;}
+.card.dragging{opacity:.6;}
+.drop-indicator{
+  height:8px; border:2px dashed var(--border);
+  border-radius:6px; margin:4px 0; display:none;
+}
+.drop-indicator.active{display:block;}
+
+/* Modals (KPI + Planner + Queue + Made + Schedule + Material) */
+.modal-overlay{
+  position:fixed; inset:0;
+  display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.35); z-index:9999;
+}
+.modal-card{
+  background:var(--panel);
+  color:var(--text);
+  width:min(980px,96vw);
+  border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.3);
+  display:flex;
+  flex-direction:column;
+  max-height:90vh;
+}
+.modal-header{
+  padding:14px 18px; border-bottom:1px solid var(--border);
+  font-weight:700; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.modal-body{
+  padding:12px 16px;
+  overflow-y:auto;
+}
+.modal-note{ color:var(--muted); font-size:12px; }
+
+.modal-btn{
+  padding:9px 16px;
+  border-radius:10px;
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  background:#f2f3f5;
+  border:1px solid #c6cbd4;
+  color:#1a1a1a;
+}
+/* Modal neutral hover */
+.modal-btn:hover{
+  background:#e2e4e7;
+  border-color:#b0b7c1;
+}
+
+/* Modal danger hover improved */
+.modal-btn.danger:hover{
+  background:#ffcccc;
+  border-color:#ff8888;
+  color:#8a0000;
+}
+
+.modal-btn.primary{
+  background:var(--accent);
+  border-color:#c11c22;
+  color:#ffffff;
+  font-weight:700;
+}
+.modal-btn.danger{
+  background:#ffe8e8;
+  border-color:#ffb3b3;
+  color:#a82323;
+}
+.modal-btn.danger:hover{
+  background:#ffcccc;
+  border-color:#ff8888;
+  color:#8a0000;
+}
+/* Highlight selected job in schedule list */
+#schedJobList tr.sched-active {
+  background: #fff7e0;
+  font-weight: 600;
+}
+
+/* Dark mode highlight */
+html[data-theme="dark"] #schedJobList tr.sched-active {
+  background: #2b2e33;
+  font-weight: 600;
+}
+
+html[data-theme="dark"] .modal-btn.danger:hover{
+  background:#5a1f1f;
+  border-color:#ff8888;
+  color:#ffe5e5;
+}
+
+/* Improve visibility of date-picker icon in dark mode */
+html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.5);
+  opacity: 0.9;
+}
+
+/* Optional: brighter icon on hover */
+html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) brightness(2);
+  opacity: 1;
+  cursor: pointer;
+}
+
+
+/* Disabled modal buttons */
+.modal-btn[disabled]{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+
+/* KPI specific */
+#kpiTable{
+  background:var(--panel-2);
+  border-radius:8px;
+  border:1px solid var(--border);
+  padding:8px;
+  font-size:12px;
+}
+
+/* Planner skids (kept for future use) */
+.pl-skim{
+  display:grid;
+  grid-template-columns: 80px 1fr;
+  gap:6px;
+  padding:8px;
+  border:1px dashed var(--border);
+  border-radius:10px;
+  background:var(--panel);
+}
+
+/* Dark mode */
+html[data-theme="dark"]{
+  --bg:#121212;
+  --panel:#1b1b1b;
+  --panel-2:#161616;
+  --text:#f1f1f1;
+  --muted:#c0c6cf;
+  --border:#2e2e2e;
+  --button:#222428;
+  --button2:#1f2226;
+}
+html[data-theme="dark"] header{ background:#1b1b1b; }
+html[data-theme="dark"] .leftchip{
+  background:#121212; border-color:#383e45; color:var(--burnt);
+}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select{
+  background:#101214; border-color:#3a3f46; color:#f1f1f1;
+}
+html[data-theme="dark"] input::placeholder{color:#9aa3ad;}
+html[data-theme="dark"] label{color:#c0c6cf;}
+html[data-theme="dark"] .smallnote{color:#b7c0cb;}
+html[data-theme="dark"] .queue-item,
+html[data-theme="dark"] details,
+html[data-theme="dark"] #kpiTable,
+html[data-theme="dark"] .pl-skim{
+  background:#16181a; border-color:#30343a;
+}
+html[data-theme="dark"] .progress{
+  background:#1e2125; border-color:#2f343b;
+}
+html[data-theme="dark"] .btn{
+  color:#e6ebf2; border-color:#3a3f46; background:var(--button);
+}
+html[data-theme="dark"] .btn.danger{
+  background:#2b1515; border-color:#5a2a2a; color:#ffbdbd;
+}
+/* --- DARK MODE HOVER STYLES --- */
+
+/* Default button hover (everything except success) */
+html[data-theme="dark"] .btn:not(.success):hover{
+  background:#2b2e33;
+  border-color:#4a5058;
+}
+
+html[data-theme="dark"] .btn.warn{
+  background:#4a3b00;
+  border-color:#8a6f00;
+  color:#ffeaa7;
+}
+
+html[data-theme="dark"] .btn.warn:hover{
+  background:#6d5400;
+  border-color:#ffdd57;
+  color:#fff8dc;
+}
+
+/* Primary button hover (red) */
+html[data-theme="dark"] .btn.primary:hover{
+  background:#cc1a21;
+  border-color:#a4151a;
+}
+
+/* Icon button hover */
+html[data-theme="dark"] .btn.icon:hover{
+  background:#2b2e33;
+  border-color:#4a5058;
+}
+
+/* Delete button hover */
+html[data-theme="dark"] .btn.danger:hover{
+  background:#5a1f1f;
+  border-color:#ff8888;
+  color:#ffe5e5;
+}
+
+/* Modal neutral hover */
+html[data-theme="dark"] .modal-btn:hover{
+  background:#2b2e33;
+  border-color:#4a5058;
+}
+
+/* Modal danger hover */
+html[data-theme="dark"] .modal-btn.danger:hover{
+  background:#5a1f1f;
+  border-color:#ff8888;
+  color:#ffe5e5;
+}
+
+/* Base modal button colors (must come AFTER hover definitions) */
+html[data-theme="dark"] .modal-btn{
+  background:#1f2226;
+  border-color:#3a3f46;
+  color:#e6ebf2;
+}
+
+html[data-theme="dark"] .modal-btn.danger{
+  background:#2b1515;
+  border-color:#5a2a2a;
+  color:#ffbdbd;
+}
+html.theme-fade *{
+  transition:background-color .25s ease,color .25s ease,border-color .25s ease,box-shadow .25s ease;
+}
+body.theme-opacity-fade{transition:opacity .4s ease;}
 </style>
 </head>
 <body>
-<div id="shiftBadge">Shift: Day</div>
-<div id="hint">D/N = Shift • A = Auto-Fit: On • [ / ] = Zoom • 0 = Reset • F = Fullscreen • R = Refresh</div>
-<canvas id="tv"></canvas>
+
+<header>
+  <div class="brand">
+    <img class="asi-logo" src="asi_logo.png" alt="ASI Logo">
+    <div class="brand-text">
+      <strong id="brandTitle">Mirror Control Dashboard</strong>
+<span>American Specialties Inc.</span>
+    </div>
+  </div>
+
+  <div class="controls-col">
+    <div class="controls-row">
+      <input id="search" type="text" placeholder="Search stations, job, part…"/>
+      <button class="btn" id="addBtn">+ Add Station</button>
+      <button class="btn" id="resetBtn">Reset</button>
+      <button class="btn" id="themeToggle">☀️ Light Mode</button>
+      <button class="btn" id="openTVBtn">Open TV Display</button>
+      <button class="btn" id="openWorkerBtn">Open Worker Efficiency Dashboard</button>
+      <button class="btn" id="openEffBtn">Open Mirror Department Efficiency Dashboard</button>
+      <button class="btn" id="openMasterBtn">Open Master ASI Dashboard</button>
+      <label class="btn">
+        <input id="schedFile" type="file" accept=".csv" style="display:none"/>
+        Import Mirror Schedule (.csv)
+      </label>
+      <button class="btn" id="schedOpenBtn">Assign Jobs</button>
+      <button class="btn" id="kpiBtn">Completions / KPIs</button>
+    </div>
+    <div class="controls-row">
+      <button class="btn" id="shiftToggleBtn">Switch to Night Shift</button>
+      <div class="shift-indicator">Current Shift: <span id="shiftLabel">Day</span></div>
+    </div>
+  </div>
+</header>
+
+<section class="grid" id="grid"></section>
+
+<div class="footer">
+  © 2025 American Specialties Inc. — <span id="footerDept">Mirror Department</span>
+</div>
+
+<!-- KPI MODAL -->
+<div id="kpiModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="kpiTitle">
+  <div class="modal-card">
+    <div class="modal-header" id="kpiTitle">
+      Completions — <span id="kpiShiftLabel">day</span> shift
+      <span style="flex:1"></span>
+      <label class="smallnote" style="display:flex;align-items:center;gap:6px;">
+        Group:
+        <select id="kpiGroup" style="min-width:170px">
+          <option value="station">Per Station</option>
+          <option value="job">By Job #</option>
+          <option value="jobskid">By Job # + Skid</option>
+        </select>
+      </label>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1.1fr 1.4fr;gap:12px;align-items:flex-start">
+        <div>
+          <label>Month
+            <input id="kpiMonth" type="month" style="width:100%"/>
+          </label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+            <div style="flex:1;min-width:140px;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--panel-2)">
+              <div class="smallnote">Ahead of Due Date</div>
+              <div id="kpiEarly" style="font-weight:800;font-size:20px;">0</div>
+            </div>
+            <div style="flex:1;min-width:140px;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--panel-2)">
+              <div class="smallnote">On Due Date</div>
+              <div id="kpiOnTime" style="font-weight:800;font-size:20px;">0</div>
+            </div>
+            <div style="flex:1;min-width:140px;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--panel-2)">
+              <div class="smallnote">Past Due</div>
+              <div id="kpiLate" style="font-weight:800;font-size:20px;">0</div>
+            </div>
+            <div style="flex:1;min-width:140px;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--panel-2)">
+              <div class="smallnote">No Due Date</div>
+              <div id="kpiUnk" style="font-weight:800;font-size:20px;">0</div>
+            </div>
+          </div>
+          <div class="smallnote" style="margin-top:6px">
+            Status is based on completion date vs due date.
+          </div>
+        </div>
+        <div>
+          <h4 id="kpiTableTitle" style="margin:4px 0 6px">Per-station breakdown</h4>
+          <div id="kpiTable">No data yet.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-note" style="flex:1;text-align:left;">
+        Tip: Use “By Job # + Skid” when a large order runs on multiple skids, sometimes across multiple tables.
+      </span>
+      <button class="modal-btn" id="kpiClose">Close</button>
+      <button class="modal-btn" id="kpiExport">Export CSV</button>
+      <button class="modal-btn danger" id="kpiClearMonth">Clear This Month</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCHEDULE / ASSIGN JOBS MODAL -->
+<div id="scheduleModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="scheduleTitle">
+  <div class="modal-card" style="max-width:1040px">
+    <div class="modal-header" id="scheduleTitle">
+      Mirror Schedule — Assign Jobs to Stations
+      <span style="flex:1"></span>
+      <button class="modal-btn" id="scheduleCloseTop">Close</button>
+    </div>
+    <div class="modal-body" style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:12px;">
+      <div style="border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--panel-2);">
+        <div class="smallnote" style="margin-bottom:6px;">
+          Imported mirror jobs (from CSV). Click a job to split its quantity across tables.
+        </div>
+        <div id="schedJobList" style="max-height:420px;overflow:auto;font-size:12px;"></div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--panel-2);">
+        <div id="schedDetail" class="smallnote">
+          Select a job on the left to assign quantities per station.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-note" style="flex:1;text-align:left;">
+        Assigned quantities are pushed into each station’s <strong>Queue</strong>, so you won’t overwrite the current NOW job.
+      </span>
+      <button class="modal-btn" id="scheduleClose">Close</button>
+      <button class="modal-btn primary" id="scheduleApply">Apply to Stations</button>
+    </div>
+  </div>
+</div>
+
+<!-- Supabase (UMD build so window.supabase exists) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <script>
-(()=>{
+/************** BASIC HELPERS **************/
+function $(s){ return document.querySelector(s); }
+/************** SUPABASE CLIENT **************/
+const SUPABASE_URL = 'https://coxxavwtkwbqotunldqv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveHhhdnd0a3dicW90dW5sZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwOTY0MTIsImV4cCI6MjA3OTY3MjQxMn0.21Rx_Sn2tkbR5C_itOmiph9c1OpqXC2H6AeR-AHL4Jo';
 
-  /* ------------ Shift / Data ------------ */
-  let tvShift = localStorage.getItem("asi.activeShift") || "day";
-  function STORAGE_KEYS_FOR(shift){
-    return shift==="night"
-      ? ["mirror.v3h.data.staticgraph.night","mirror.v3h.data.desktop.night"]
-      : ["mirror.v3h.data.staticgraph.day","mirror.v3h.data.desktop.day"];
+// Create once, reuse forever (prevents "already declared")
+window._sb = window._sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.supabaseClient = window._sb; // <-- use a global instead of const supabase
+
+function on(el,ev,fn){ if(el) el.addEventListener(ev,fn); }
+function coerceNum(v,fb){ var n=Number(v); return Number.isFinite(n)?n:fb; }
+function escapeHtml(str){ if(str==null) return ""; return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escapeAttr(str){ if(str==null) return ""; return String(str).replace(/&/g,"&amp;").replace(/"/g,"&quot;"); }
+function fmtDateMMDD(iso){
+  if(!iso) return "";
+  var d=new Date(iso+"T00:00:00");
+  if(isNaN(d)) return "";
+  return (d.getMonth()+1)+"/"+d.getDate();
+}
+function todayIso(){ return new Date().toISOString().slice(0,10); }
+function isPackingStationName(name){ return /packing/i.test(name||""); }
+
+
+/************** DASHBOARD CONFIG (department-wide variables) **************/
+var DASHBOARD_CONFIG = {
+  departmentName: "Mirror Department",
+  productNoun: "mirrors",          // shelves, grab bars, etc. for other depts
+  productNounSingular: "mirror",
+  stationLabel: "Table",
+  stationPrefix: "Table ",
+  lineTitle: "Mirror Control Dashboard",
+
+  // KPI language
+  kpiMadeVerb: "Made",
+  kpiPackedVerb: "Packed",
+
+  // Material terminology
+  materialAlertTitle: "Low material",
+
+  // Default stations when nothing is saved yet
+  defaultStations: [
+    "Table 1","Table 2","Table 3","Table 4",
+    "Table 5","Table 6","Table 7","Table 8"
+  ]
+};
+
+/************** SHIFT + STATE **************/
+var activeShift = localStorage.getItem("asi.activeShift") || "day";
+function keyMainFor(shift){
+  return shift==="night" ? "mirror.v3h.data.staticgraph.night"
+                         : "mirror.v3h.data.staticgraph.day";
+}
+function keyTVFor(shift){
+  return shift==="night" ? "mirror.v3h.data.desktop.night"
+                         : "mirror.v3h.data.desktop.day";
+}
+function genSeedStations(){
+  var seeds = (DASHBOARD_CONFIG.defaultStations && DASHBOARD_CONFIG.defaultStations.length)
+    ? DASHBOARD_CONFIG.defaultStations
+    : ["Table 1","Table 2","Table 3","Table 4","Table 5","Table 6","Table 7","Table 8"];
+
+  return seeds.map(function(name){
+  return {
+    id:(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)),
+    name:name,
+    now:{job:"",part:"",total:0,left:0,due:"",lot:""},
+    next:{job:"",part:"",qty:0,due:"",lot:""},
+    queue:[],
+    history:[],
+    materialAlerts:[],
+    queueCollapsed:false   // new: remember if queue is collapsed
+  };
+});
+}
+function loadShiftState(shift){
+  function tryParse(key){
+    try{
+      var raw=localStorage.getItem(key);
+      var parsed=JSON.parse(raw);
+      if(Array.isArray(parsed)) return parsed;
+    }catch(e){}
+    return null;
   }
-  function safeParse(s){ try{ return JSON.parse(s); }catch{return null} }
-  function loadState(){
-    const keys = STORAGE_KEYS_FOR(tvShift);
-    for(const k of keys){
-      const raw = localStorage.getItem(k);
-      if(raw){ const parsed = safeParse(raw); if(Array.isArray(parsed)) return parsed; }
+  var data = tryParse(keyMainFor(shift)) || tryParse(keyTVFor(shift));
+  if(!data){ data=genSeedStations(); }
+  data.forEach(function(s){
+    s.now  = Object.assign({job:"",part:"",total:0,left:0,due:"",lot:""}, s.now||{});
+    s.next = Object.assign({job:"",part:"",qty:0,due:"",lot:""}, s.next||{});
+    s.queue = Array.isArray(s.queue)?s.queue:[];
+    s.history = Array.isArray(s.history)?s.history:[];
+    /* LOW MATERIAL: ensure materialAlerts array exists */
+    s.materialAlerts = Array.isArray(s.materialAlerts) ? s.materialAlerts : [];
+s.queueCollapsed = !!s.queueCollapsed;   // default to false if missing
+  });
+  return data;
+}
+function saveShiftState(shift, data){
+  localStorage.setItem(keyMainFor(shift), JSON.stringify(data));
+  localStorage.setItem(keyTVFor(shift), JSON.stringify(data));
+}
+var state = loadShiftState(activeShift);
+if(!state || !state.length){ state=genSeedStations(); saveShiftState(activeShift,state); }
+function saveState(){ saveShiftState(activeShift,state); }
+
+/************** THEME **************/
+var THEME_KEY="asiTheme";
+function applyTheme(t){
+  var html=document.documentElement;
+  html.classList.add("theme-fade");
+  if(t==="dark") html.setAttribute("data-theme","dark");
+  else html.removeAttribute("data-theme");
+  localStorage.setItem(THEME_KEY,t);
+  var btn=$("#themeToggle");
+  if(btn) btn.textContent=(t==="dark")?"☀️ Light Mode":"🌙 Dark Mode";
+}
+function toggleTheme(){
+  var cur=localStorage.getItem(THEME_KEY)||"dark";
+  var next=(cur==="dark")?"light":"dark";
+  document.body.classList.add("theme-opacity-fade");
+  document.body.style.opacity="0.4";
+  setTimeout(function(){
+    applyTheme(next);
+    document.body.style.opacity="1";
+    setTimeout(function(){
+      document.body.classList.remove("theme-opacity-fade");
+    },300);
+  },100);
+}
+
+/************** PERCENT/BARS **************/
+function pctDone(st){
+  var t=+st.now.total||0, l=+st.now.left||0;
+  if(!t) return 0;
+  return Math.max(0,Math.min(100,Math.round((t-l)/t*100)));
+}
+function barClass(p){ return p>=80?"ok":p>=30?"warn":"danger"; }
+
+/************** LOW MATERIAL SUMMARY (on card) **************/
+function renderMaterialSummary(st){
+  var arr = Array.isArray(st.materialAlerts) ? st.materialAlerts : [];
+  if(!arr.length) return "";
+  var parts = arr.map(function(m){
+    var base = m.base || m.name || m.material || "material";
+    var pn   = m.part || (st.now && st.now.part) || "";
+    var label = pn ? (pn + " " + base) : base;
+    var qty  = coerceNum(m.qty,0);
+    return escapeHtml(label)+" ("+qty+")";
+  });
+    var title = DASHBOARD_CONFIG.materialAlertTitle || "Low material";
+  return '<div class="smallnote" style="margin-top:4px;"><strong>'+
+           escapeHtml(title)+' flagged:</strong> '+parts.join(", ")+'</div>';
+}
+
+
+/************** RENDER STATIONS **************/
+function render(){
+  var grid=$("#grid");
+  if(!grid) return;
+  grid.innerHTML="";
+
+  var q=($("#search")&&$("#search").value||"").toLowerCase();
+
+  // Config-driven product noun
+  var noun = (DASHBOARD_CONFIG.productNoun || "mirrors");
+  var nounCap = noun.charAt(0).toUpperCase()+noun.slice(1);
+
+  state.forEach(function(st){
+    var hay=(st.name+" "+st.now.job+" "+st.now.part+" "+st.next.job+" "+st.next.part+" "+(st.now.lot||"")+" "+(st.next.lot||"")).toLowerCase();
+    if(q && hay.indexOf(q)===-1) return;
+
+    var id=st.id;
+    var p=pctDone(st);
+
+   // Determine if this station has low material BEFORE creating the card
+var hasLow = Array.isArray(st.materialAlerts) && st.materialAlerts.length > 0;
+
+// Create card
+var card = document.createElement("article");
+card.className = "card";
+card.setAttribute("draggable", "true");
+card.dataset.id = id;
+
+// Highlight station card if low material exists
+if (hasLow) {
+  card.classList.add("low-material");
+}
+
+var matSummaryHtml = renderMaterialSummary(st);
+
+    var nowHtml =
+      // Header
+      '<h3><span contenteditable="true" oninput="renameStation(\''+id+'\',this.textContent.trim())">'+
+        escapeHtml(st.name)+'</span> <span class="badge">NOW</span></h3>'+
+      '<div class="leftchip">LEFT: <span id="left-'+id+'">'+(+st.now.left||0)+'</span></div>'+
+
+      // Job details
+      '<div class="section-label">Job details</div>'+
+      '<div class="row-5">'+
+        field('Job #','now','job',st.now.job,id)+
+        field('Part #','now','part',st.now.part,id)+
+        numField('Total Qty','now','total',st.now.total,id)+
+        dateField('Due Date','now','due',st.now.due,id)+
+        field('Skid / Lot','now','lot',st.now.lot,id)+
+      '</div>'+
+
+      // Progress
+      '<div class="section-label">Progress</div>'+
+      '<div class="row">'+
+        '<div class="field"><label>'+
+          (isPackingStationName(st.name)
+            ? 'Remaining mirrors to pack'
+            : 'Remaining mirrors to make')+
+        '</label>'+
+        '<input type="number" min="0" value="'+(+st.now.left||0)+'" oninput="editLeft(\''+id+'\',this.value)"></div>'+
+      '</div>'+
+      '<div>'+
+        '<div class="progress"><div id="bar-'+id+'" class="bar '+barClass(p)+'" style="width:'+p+'%"></div></div>'+
+        '<small class="smallnote"><strong id="pct-'+id+'">'+p+
+        '%</strong> done • '+(+st.now.total||0)+' total'+
+        (st.now.due?(' • Due '+fmtDateMMDD(st.now.due)):'')+
+        (st.now.lot?(' • Skid '+escapeHtml(st.now.lot)):'')+
+        '</small>'+
+        matSummaryHtml+
+
+        // Actions
+        '<div class="section-label">Actions</div>'+
+
+        // PRIMARY ACTIONS ROW
+        '<div class="actions-primary">'+
+          '<button class="btn" onclick="logMadePrompt(\''+id+'\')">'+
+            (isPackingStationName(st.name)?'Record Mirrors Packed':'Record Mirrors Made')+
+          '</button>'+
+          '<button class="btn warn" onclick="openMaterialModal(\''+id+'\')">Report low material</button>'+
+          '<button class="btn success" onclick="markCompleteConfirm(\''+id+'\')">✓ Mark Complete</button>'+
+        '</div>'+
+
+        // SECONDARY ACTIONS ROW
+        '<div class="actions-secondary">'+
+          '<button class="btn" onclick="clearMaterialAlerts(\''+id+'\')">Material restocked</button>'+
+          '<button class="btn" onclick="duplicateStation(\''+id+'\')">Duplicate table</button>'+
+          '<button class="btn" onclick="openReassignModal(\''+id+'\')">Reassign current job</button>'+
+          '<button class="btn danger" onclick="removeStation(\''+id+'\')">Delete table</button>'+
+        '</div>'+
+      '</div>';
+
+            var qCount      = st.queue.length || 0;
+    var collapsed   = !!st.queueCollapsed;
+    var qBtnLabel   = collapsed
+      ? ("Show queue ("+qCount+") ▸")
+      : ("Hide queue ("+qCount+") ▾");
+    var qBodyStyle  = collapsed ? 'style="display:none"' : '';
+
+    var nextHtml =
+  '<div class="section-label" style="margin-top:10px;">Next job & queue</div>'+
+  '<div><span class="badge">NEXT</span>'+
+  '<div class="row-5" style="margin-top:6px">'+
+    field('Job #','next','job',st.next.job,id)+
+    field('Part #','next','part',st.next.part,id)+
+    numField('Qty','next','qty',st.next.qty,id)+
+    dateField('Due Date','next','due',st.next.due,id)+
+    field('Skid / Lot','next','lot',st.next.lot,id)+
+  '</div>'+
+  '<div class="row">'+
+    '<div class="field"><label>&nbsp;</label>'+
+      '<button class="btn" onclick="pushQueuePrompt(\''+id+'\')">Add job to queue</button>'+
+    '</div>'+
+    '<div class="field"><label>&nbsp;</label>'+
+      '<button class="btn danger" onclick="demoteNext(\''+id+'\')">Demote next job to queue</button>'+
+    '</div>'+
+  '</div>'+
+
+  // Queue header + toggle
+  '<div class="section-label" style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;">'+
+    '<span>Queue</span>'+
+    '<button class="btn icon" onclick="toggleQueue(\''+id+'\')">'+qBtnLabel+'</button>'+
+  '</div>'+
+  '<div class="queue" id="queue-'+id+'" '+qBodyStyle+'></div>'+
+  '</div>';
+
+    var histHtml=renderHistoryHtml(st);
+
+    card.innerHTML =
+      nowHtml +
+      nextHtml +
+      '<details><summary>History</summary>'+
+        '<div id="history-'+id+'" class="smallnote">'+histHtml+'</div>'+
+      '</details>'+
+      '<div class="drop-indicator"></div>';
+
+    grid.appendChild(card);
+
+    var qEl=$("#queue-"+id);
+    if(qEl) qEl.innerHTML=renderQueueHtml(st);
+  });
+
+  enableDragAndDrop();
+  // live overview removed on request — stubbed out
+  // renderLiveOverview();
+  updateShiftLabels();
+  saveState();
+}
+
+function field(labelText,where,key,val,id){
+  return '<div class="field"><label>'+labelText+'</label>'+
+    '<input type="text" value="'+escapeAttr(val||"")+'" '+
+    'oninput="editField(\''+id+'\',\''+where+'\',\''+key+'\',this.value)"></div>';
+}
+function numField(labelText,where,key,val,id){
+  return '<div class="field"><label>'+labelText+'</label>'+
+    '<input type="number" min="0" value="'+(+val||0)+'" '+
+    'oninput="editField(\''+id+'\',\''+where+'\',\''+key+'\',this.value)"></div>';
+}
+function dateField(labelText,where,key,val,id){
+  return '<div class="field"><label>'+labelText+'</label>'+
+    '<input type="date" value="'+escapeAttr(val||"")+'" '+
+    'oninput="editField(\''+id+'\',\''+where+'\',\''+key+'\',this.value)"></div>';
+}
+
+/************** EDIT FIELDS **************/
+function editField(id,where,key,val){
+  var st=findStation(id); if(!st) return;
+  var tgt=(where==="now")?st.now:st.next;
+  if(key==="total"||key==="qty"||key==="left") tgt[key]=coerceNum(val,0);
+  else tgt[key]=val;
+  if(where==="now" && key==="left"){
+    var chip=$("#left-"+id); if(chip) chip.textContent=tgt.left;
+  }
+  saveState();
+  updateBars(id);
+  if(where==="now" && key==="left"){
+    var prev = st._prevLeft==null?null:st._prevLeft;
+    st._prevLeft = tgt.left;
+    if(prev>0 && tgt.left===0) onZeroReached(id);
+  }
+}
+function editLeft(id,val){ editField(id,"now","left",val); }
+
+function updateBars(id){
+  var st=findStation(id); if(!st) return;
+  var p=pctDone(st);
+  var bar=$("#bar-"+id), pct=$("#pct-"+id);
+  if(bar){ bar.style.width=p+"%"; bar.className="bar "+barClass(p); }
+  if(pct){ pct.textContent=p+"%"; }
+}
+
+function onZeroReached(id){
+  var st=findStation(id); if(!st) return;
+  var job=st.now.job||"-", part=st.now.part||"-";
+  if(!st.__zeroHandled) st.__zeroHandled={};
+  var key=job+"|"+part+"|"+(st.now.lot||"");
+  if(st.__zeroHandled[key]) return;
+  st.__zeroHandled[key]=true;
+
+  if(confirm("Job "+job+" part "+part+" is now at 0 left for "+st.name+". Load NEXT?")){
+    markComplete(id);
+  }
+}
+
+/************** REMOTE LOGGING (Supabase) **************/
+async function logEventToSupabase({ type, stationId, jobId, jobRunId, qty, metadata, userId }) {
+  try {
+    const { error } = await window.supabaseClient
+        .from('event_logs')
+        .insert({
+            ts: new Date().toISOString(),
+            type,
+            station_id: stationId || null,
+            job_id: jobId || null,
+            job_run_id: jobRunId || null,
+            qty: qty != null ? qty : null,
+            metadata: metadata || null,
+            user_id: userId || null
+      });
+
+    if (error) {
+      console.error('Supabase log error:', error.message);
     }
-    const names = Array.from({length:14}, (_,i)=> i<12 ? `Table ${i+1}` : `Packing Station #${i-11}`);
-    return names.map((n,i)=>({
-      name:n,
-      now:{job:"1695"+(40+i), part:"0620-"+(2400+i), total:100, left:Math.max(0,100 - i*7)},
-      next:{job:"J"+(100+i), part:"P"+(300+i), qty: (i%3?80:160)}
-    }));
+  } catch (err) {
+    console.error('Supabase log exception:', err);
   }
+}
 
-  /* ------------ Logo ------------ */
-  const LOGO_PATH = "asi_logo.png";
-  let logoImage=null, logoReady=false;
-  function ensureLogoLoaded(cb){
-    if(logoImage && (logoReady || logoImage.complete)){ cb(); return; }
-    logoImage = new Image();
-    logoImage.onload = ()=>{ logoReady=true; cb(); };
-    logoImage.onerror=()=>{ logoReady=false; cb(); };
-    logoImage.src = LOGO_PATH;
-  }
+/************** LOG MADE **************/
+function logMade(id, qty, ticket, labelNote){
+  var st = findStation(id); 
+  if(!st) return;
 
-  /* ------------ Canvas helpers ------------ */
-  const COLORS={ text:"#CC5500", done:"#2ecc71", todo:"#ffd84d", red:"#E41E26" };
-  const canvas=document.getElementById('tv');
-  const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+  var made = Math.max(0, coerceNum(qty,0));
+  var prevLeft = coerceNum(st.now.left,0);
+  st.now.left = Math.max(0, prevLeft - made);
 
-  function setFontPx(px,bold=true){
-    ctx.font = (bold?'bold ':'') + Math.round(px) + 'px "Times New Roman"';
-  }
-  function measure(text, px, bold=true){
-    setFontPx(px,bold);
-    return ctx.measureText(text).width;
-  }
-  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
-  function heavyFillText(text,x,y,color){
-    ctx.fillStyle=color; ctx.fillText(text,x,y);
-    ctx.save(); ctx.translate(0.45,0); ctx.fillText(text,x,y); ctx.restore();
-  }
+  var verb = isPackingStationName(st.name)
+    ? (DASHBOARD_CONFIG.kpiPackedVerb || "Packed")
+    : (DASHBOARD_CONFIG.kpiMadeVerb || "Made");
 
-  /* ------------ Fit-by-Row logic ------------ */
-  let autoFit = (localStorage.getItem("asi.tv.autofit")||"on")==="on";
-  let manualScale = parseFloat(localStorage.getItem("asi.tv.manualScale")||"1");
+  // 1) Local history
+  st.history.unshift({
+    ts: Date.now(),
+    event: verb + " " + made + " pcs on " + (st.now.part || "part") +
+           " (Job " + (st.now.job || "-") + ")" +
+           (st.now.lot ? " • Skid " + st.now.lot : "")
+  });
+  if(ticket) st.history.unshift({ts:Date.now(),event:ticket});
+  if(labelNote) st.history.unshift({ts:Date.now(),event:labelNote});
 
-  function draw(){
-    const data = loadState();
-    const rows = data.length; // 14
+  saveState();
+  render();
 
-    const W=window.innerWidth|0, H=window.innerHeight|0;
-    canvas.width=W; canvas.height=H;
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.textBaseline='alphabetic';
-
-    /* Paddings + header (compact) */
-    const padL=54, padR=54, padTop=50, padBot=64;
-    const CW=W-padL-padR, CH=H-padTop-padBot;
-
-    /* Header area */
-    const headerH = 68;          // px
-    const titleGapBelow = 8;     // px
-    const contentTop = padTop + headerH + titleGapBelow;
-
-    /* Background */
-    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
-
-    /* Header (logo + titles) */
-    const CX=padL, CY=padTop;
-    const logoH = 40; let titleLeft = CX;
-    if(logoReady){
-      try{
-        const lw = (logoImage.naturalWidth||200);
-        const lh = (logoImage.naturalHeight||100);
-        const s = logoH/lh;
-        const drawnW = lw*s;
-        ctx.drawImage(logoImage, CX, CY+6, drawnW, logoH);
-        titleLeft = CX + drawnW + 12;
-      }catch{}
+  // 2) Send to Supabase in the background
+  logEventToSupabase({
+    type: 'log_made',
+    userId: 'asi_supervisor',
+    stationId: st.id || '',
+    jobId: st.now.job || '',
+    jobRunId: null,
+    qty: made,
+    metadata: {
+      station_name: st.name || '',
+      job: st.now.job || '',
+      part: st.now.part || '',
+      lot: st.now.lot || '',
+      shift: activeShift
     }
-    ctx.fillStyle = COLORS.text;
-    setFontPx(36,true);  heavyFillText('American Specialties Inc.', titleLeft, CY + 34, COLORS.text);
-    setFontPx(24,true);  heavyFillText('Mirror Department — Day Shift Production', titleLeft, CY + 34 + 24 + 6, COLORS.text);
-    ctx.fillStyle = COLORS.red;
-    ctx.fillRect(CX, CY + headerH - 4, CW, 3);
+  });
+}   // <-- this was missing
 
-    /* EXACT PER-ROW HEIGHT so 14 always fit */
-    const availForRows = H - contentTop - padBot;
-    const perRow = Math.floor(availForRows / rows); // integer to prevent drift
-    const leftover = availForRows - perRow*rows;    // center vertically
-    const topOffset = Math.floor(leftover/2);
+function logMadePrompt(id){
+  // open the nicer modal instead of browser prompt
+  if(window.openMadeModal) openMadeModal(id);
+}
 
-    /* Left vs right column widths */
-    const stationCol = Math.max(Math.floor(CW*0.52), 520);
-    const gapCols    = 22;
-    const chartX     = CX + stationCol + gapCols;
-    const chartW     = CW - stationCol - gapCols - 20;
+/************** COMPLETE + KPI **************/
+function keyKPIFor(shift){ return "mirror.v25.kpi."+shift; }
+function loadKPI(){
+  try{ return JSON.parse(localStorage.getItem(keyKPIFor(activeShift))) || {records:[]}; }
+  catch(e){ return {records:[]}; }
+}
+function saveKPI(k){ localStorage.setItem(keyKPIFor(activeShift),JSON.stringify(k)); }
+function markCompleteConfirm(id){
+  var st=findStation(id); if(!st) return;
+  var msg="Mark current job complete and load NEXT?\n\n"+
+          "Station: "+st.name+"\n"+
+          "Job: "+(st.now.job||"-")+" Part: "+(st.now.part||"-")+
+          (st.now.lot?(" Skid "+st.now.lot):"");
+  if(confirm(msg)) markComplete(id);
+}
+function markComplete(id){
+  var st=findStation(id); if(!st) return;
 
-    /* Text sizing as FRACTIONS of perRow (with floors for readability) */
-    const stationPx = clamp(perRow*0.28, 20, 40);     // Station title
-    const nextPx    = clamp(perRow*0.22, 16, 34);     // Next line
-    const metaPx    = clamp(perRow*0.22, 16, 34);     // Current job line
-    const barH      = clamp(perRow*0.18, 10, 26);     // Bar height
+   // KPI record + shared status for Supabase
+  var due = st.now.due || "";
+  var done = todayIso();
+  var status = "unscheduled";
+  if (due){
+    if (done < due) status = "early";
+    else if (done === due) status = "on_time";
+    else status = "late";
+  }
 
-    /* Vertical gaps inside a row (fractions) */
-    const gap_station_next = clamp(perRow*0.10, 6, 16);
-    const gap_before_meta  = clamp(perRow*0.08, 4, 14);
-    const gap_meta_to_bar  = clamp(perRow*0.12, 8, 18);
-    const bottomGap        = clamp(perRow*0.08, 6, 14);
+  (function(){
+    var k = loadKPI();
+    k.records.push({
+      ts: Date.now(),
+      completed: done,
+      due: due,
+      status: status,
+      stationId: st.id,
+      stationName: st.name || "",
+      job: st.now.job || "",
+      part: st.now.part || "",
+      lot: st.now.lot || "",
+      qty: coerceNum(st.now.total || 0, 0)
+    });
+    saveKPI(k);
+  })();
 
-    /* Big number size (centered in bar) */
-    const qtyPx = clamp(barH*2.7, 38, 84);
+   // --- NEW: send completion to Supabase for cloud KPIs ---
+  (async function logCompletionToSupabase(){
+    try {
+      await logEventToSupabase({
+        type: 'job_complete',
+        userId: 'asi_supervisor',
+        stationId: st.id || null,
+        jobId: st.now.job || null,
+        jobRunId: null,
+        qty: coerceNum(st.now.total || 0, 0),
+        metadata: {
+          station_name: st.name || '',
+          job: st.now.job || '',
+          part: st.now.part || '',
+          lot: st.now.lot || '',
+          shift: activeShift,
+          due: st.now.due || null,
+          status: status        // early / on_time / late / unscheduled
+        }
+      });
+    } catch (e) {
+      console.error("Supabase completion log failed:", e);
+    }
+  })();
+ 
+  st.history.unshift({
+    ts:Date.now(),
+    event:"Completed Job "+(st.now.job||"-")+" ("+(st.now.part||"part")+")"+
+      (st.now.lot?" • Skid "+st.now.lot:"")
+  });
 
-    /* Safety: ensure sum never exceeds perRow (trim bottom gap if needed) */
-    const budget = stationPx + gap_station_next + nextPx + gap_before_meta + metaPx + gap_meta_to_bar + barH + bottomGap;
-    const adjust = budget > perRow ? (budget - perRow) : 0;
-    const bottomGapFinal = Math.max(0, bottomGap - adjust); // shave only from bottom
+  // Move NEXT -> NOW
+  st.now.job   = st.next.job   || "";
+  st.now.part  = st.next.part  || "";
+  st.now.total = coerceNum(st.next.qty||0,0);
+  st.now.left  = coerceNum(st.next.qty||0,0);
+  st.now.due   = st.next.due   || "";
+  st.now.lot   = st.next.lot   || "";
 
-    /* Badges */
-    const badge=document.getElementById("shiftBadge");
-    const hint=document.getElementById("hint");
-    if(badge){ badge.textContent="Shift: "+(tvShift==="night"?"Night":"Day"); }
-    if(hint){  hint.textContent = `D/N = Shift • A = Auto-Fit: ${autoFit?"On":"Off"} • [ / ] = Zoom • 0 = Reset • F = Fullscreen • R = Refresh`; }
+  var nxt = st.queue.shift();
+  if(nxt){
+    st.next = {
+      job:nxt.job||"",
+      part:nxt.part||"",
+      qty:coerceNum(nxt.qty||0,0),
+      due:nxt.due||"",
+      lot:nxt.lot||""
+    };
+  }else{
+    st.next = {job:"",part:"",qty:0,due:"",lot:""};
+  }
 
-    /* Draw each row */
-    const leftX = CX + 8;
-    const leftMaxW = stationCol - 16;
+  saveState();
+  render();
+}
 
-    for(let i=0;i<rows;i++){
-      const st  = data[i]||{};
-      const now = st.now||{};
-      const nxt = st.next||{};
+/************** QUEUE **************/
+function pushQueuePrompt(id){ openQueueModal(id); }
+function pushQueue(id,item){
+  var st=findStation(id); if(!st) return;
+  st.queue.push({
+    job:item.job||"",
+    part:item.part||"",
+    qty:coerceNum(item.qty,0),
+    due:item.due||"",
+    lot:item.lot||""
+  });
+  st.history.unshift({
+    ts:Date.now(),
+    event:"Queued "+coerceNum(item.qty,0)+" pcs of "+(item.part||"part")+
+      " (Job "+(item.job||"-")+")"+
+      (item.due?" — Due "+fmtDateMMDD(item.due):"")+
+      (item.lot?" • Skid "+item.lot:"")
+  });
+  saveState();
+  render();
+}
+function renderQueueHtml(st){
+  if(!st.queue.length) return '<small class="smallnote">Queue empty.</small>';
+  var html="";
+  st.queue.forEach(function(q,i){
+    html+='<div class="queue-item">'+
+      '<div class="queue-grid">'+
+        qField('Part',st.id,i,'part',q.part)+
+        qNum('Qty',st.id,i,'qty',q.qty)+
+        qField('Job #',st.id,i,'job',q.job)+
+        qDate('Due',st.id,i,'due',q.due)+
+        qField('Skid / Lot',st.id,i,'lot',q.lot)+
+      '</div>'+
+      '<div class="queue-right">'+
+        '<button class="btn icon" onclick="moveQueueUp(\''+st.id+'\','+i+')">▲</button>'+
+        '<button class="btn icon" onclick="moveQueueDown(\''+st.id+'\','+i+')">▼</button>'+
+        '<button class="btn success" onclick="promoteQueue(\''+st.id+'\','+i+')">Promote</button>'+
+        '<button class="btn danger" onclick="removeQueue(\''+st.id+'\','+i+')">X</button>'+
+      '</div></div>';
+  });
+  return html;
+}
+function qField(lbl,sid,i,key,val){
+  return '<div class="qcol"><label>'+lbl+'</label>'+
+    '<input type="text" value="'+escapeAttr(val||"")+'" '+
+    'oninput="editQueue(\''+sid+'\','+i+',\''+key+'\',this.value)"></div>';
+}
+function qNum(lbl,sid,i,key,val){
+  return '<div class="qcol"><label>'+lbl+'</label>'+
+    '<input type="number" min="0" value="'+coerceNum(val,0)+'" '+
+    'oninput="editQueue(\''+sid+'\','+i+',\''+key+'\',this.value)"></div>';
+}
+function qDate(lbl,sid,i,key,val){
+  return '<div class="qcol"><label>'+lbl+'</label>'+
+    '<input type="date" value="'+escapeAttr(val||"")+'" '+
+    'oninput="editQueue(\''+sid+'\','+i+',\''+key+'\',this.value)"></div>';
+}
+function editQueue(id,i,key,val){
+  var st=findStation(id); if(!st) return;
+  var q=st.queue[i]; if(!q) return;
+  if(key==="qty") q.qty=coerceNum(val,0);
+  else q[key]=val;
+  saveState();
+}
+function promoteQueue(id,i){
+  var st=findStation(id); if(!st) return;
+  var item=st.queue.splice(i,1)[0];
+  if(!item){ saveState(); render(); return; }
+  st.next = {
+    job:item.job||"", part:item.part||"",
+    qty:coerceNum(item.qty||0,0),
+    due:item.due||"",
+    lot:item.lot||""
+  };
+  st.history.unshift({
+    ts:Date.now(),
+    event:"Promoted "+(item.part||"part")+" ("+coerceNum(item.qty,0)+") to NEXT"+
+      (item.due?" — Due "+fmtDateMMDD(item.due):"")+
+      (item.lot?" • Skid "+item.lot:"")
+  });
+  saveState(); render();
+}
+// Open the nice modal for demoting NEXT → Queue
+function demoteNext(id){
+  // just open the styled modal
+  if (window.openDemoteModal) {
+    openDemoteModal(id);
+  }
+}
 
-      const total = +now.total || 0;
-      const left  = +now.left  || 0;
-      const pctTxt = total ? (Math.round((1-left/total)*100)+'%') : '0%';
+// Actual logic that moves NEXT back to the queue
+function demoteNextCore(id){
+  var st = findStation(id);
+  if(!st) return;
 
-      const rowTop = contentTop + topOffset + i*perRow;
+  var nxt = st.next;
+  if(!nxt || !(nxt.job || nxt.part || nxt.qty)){
+    alert("There is no NEXT job to demote.");
+    return;
+  }
 
-      /* Station */
-      setFontPx(stationPx,true);
-      ctx.fillStyle = COLORS.text;
-      heavyFillText(String(st.name||'Table'), leftX, rowTop + stationPx, COLORS.text);
+  // Add NEXT to front of queue
+  st.queue.unshift({
+    job: nxt.job || "",
+    part: nxt.part || "",
+    qty: coerceNum(nxt.qty || 0,0),
+    due: nxt.due || "",
+    lot: nxt.lot || ""
+  });
 
-      /* Next line */
-      setFontPx(nextPx,false);
-      ctx.fillStyle = COLORS.text;
-      const nextText = `Next: Job ${nxt.job||'-'}, Part ${nxt.part||'-'}, Qty ${+nxt.qty||0}`;
-      ctx.fillText(nextText, leftX, rowTop + stationPx + gap_station_next + nextPx);
+  // History log
+  st.history.unshift({
+    ts: Date.now(),
+    event: "Demoted NEXT back to queue: " +
+           (nxt.part || "part") +
+           " (" + coerceNum(nxt.qty,0) + ")" +
+           (nxt.due ? " — Due " + fmtDateMMDD(nxt.due) : "") +
+           (nxt.lot ? " • Skid " + nxt.lot : "")
+  });
 
-      /* Meta (above bar) */
-      setFontPx(metaPx,true);
-      ctx.fillStyle='#000';
-      ctx.textAlign='center';
-      const metaY = rowTop + stationPx + gap_station_next + nextPx + gap_before_meta + metaPx;
-      ctx.fillText(`Job ${now.job||'-'} • Part ${now.part||'-'} • ${pctTxt}`, chartX+chartW/2, metaY);
-      ctx.textAlign='start';
+  // Clear NEXT
+  st.next = { job:"", part:"", qty:0, due:"", lot:"" };
 
-      /* Bar */
-      const barTop = metaY + gap_meta_to_bar;
-      const doneW = total ? Math.round(chartW * (1 - left/total)) : 0;
+  saveState();
+  render();
+}
 
-      ctx.fillStyle='#fff'; ctx.fillRect(chartX, barTop, chartW, barH);
-      ctx.strokeStyle='#00000018'; ctx.strokeRect(chartX, barTop, chartW, barH);
+function moveQueueUp(id,i){
+  var st=findStation(id); if(!st) return;
+  if(i<=0) return;
+  var q=st.queue; var tmp=q[i-1]; q[i-1]=q[i]; q[i]=tmp;
+  saveState(); render();
+}
+function moveQueueDown(id,i){
+  var st=findStation(id); if(!st) return;
+  var q=st.queue; if(i>=q.length-1) return;
+  var tmp=q[i+1]; q[i+1]=q[i]; q[i]=tmp;
+  saveState(); render();
+}
+function removeQueue(id,i){
+  var st=findStation(id); if(!st) return;
+  st.queue.splice(i,1); saveState(); render();
+}
+function toggleQueue(id){
+  var st = findStation(id); 
+  if(!st) return;
+  st.queueCollapsed = !st.queueCollapsed;
+  saveState();
+  render();
+}
 
-      ctx.fillStyle=COLORS.done; ctx.fillRect(chartX, barTop, doneW, barH);
-      ctx.fillStyle=COLORS.todo; ctx.fillRect(chartX+doneW, barTop, chartW-doneW, barH);
 
-      /* Big remaining number — centered on bar, never collides with meta */
-      setFontPx(qtyPx,true);
-      ctx.fillStyle=COLORS.text;
-      ctx.textAlign='right';
-      ctx.textBaseline='middle';
-      ctx.fillText(String(left), chartX+chartW-6, barTop + barH/2);
-      ctx.textAlign='start';
-      ctx.textBaseline='alphabetic';
+/************** HISTORY **************/
+function renderHistoryHtml(st){
+  if(!st.history.length) return "No history yet.";
+  var out="<ul style='margin:6px 0 0 16px;padding:0;display:flex;flex-direction:column;gap:4px'>";
+  st.history.slice(0,18).forEach(function(h){
+    var ts=new Date(h.ts).toLocaleString();
+    out+="<li><small>"+escapeHtml(ts)+"</small> — "+escapeHtml(h.event||"")+"</li>";
+  });
+  out+="</ul>";
+  return out;
+}
 
-      /* Bottom gap is implicit since next row starts at rowTop+perRow */
-      // If needed, you could draw subtle separators here.
+/************** STATION OPS **************/
+function findStation(id){ return state.find(function(s){return s.id===id;})||null; }
+function addStation(){
+  var name=prompt("Station name (e.g., Table 9 or Packing #3):");
+  if(!name) return;
+  state.push({
+  id:(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)),
+  name:name,
+  now:{job:"",part:"",total:0,left:0,due:"",lot:""},
+  next:{job:"",part:"",qty:0,due:"",lot:""},
+  queue:[],
+  history:[],
+  materialAlerts:[],
+  queueCollapsed:false
+});
+  saveState(); render();
+}
+function duplicateStation(id){
+  var st=findStation(id); if(!st) return;
+  var clone=JSON.parse(JSON.stringify(st));
+  clone.id=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2));
+  clone.name=(st.name||"Station")+" (Copy)";
+clone.queueCollapsed = !!st.queueCollapsed;  // or false if you prefer
+  state.splice(state.indexOf(st)+1,0,clone);
+  saveState(); render();
+}
+function removeStation(id){
+  if(!confirm("Delete this station card?")) return;
+  state=state.filter(function(s){return s.id!==id;});
+  saveState(); render();
+}
+function renameStation(id,name){
+  var st=findStation(id); if(!st) return;
+  st.name=(name||"").trim()||st.name;
+  saveState();
+}
+function resetAll(){
+  if(!confirm("Reset ALL stations on this shift to blank?")) return;
+  state=genSeedStations(); saveState(); render();
+}
+
+function clearMaterialAlerts(id){
+  var st = findStation(id);
+  if(!st) return;
+
+  var hadAlerts = Array.isArray(st.materialAlerts) && st.materialAlerts.length > 0;
+  if(!hadAlerts){
+    alert("There are no low material alerts for this station.");
+    return;
+  }
+
+  if(!confirm("Mark all low material for "+(st.name || "this station")+" as restocked?")){
+    return;
+  }
+
+  // Clear alerts
+  st.materialAlerts = [];
+
+  // Log to history
+  st.history.unshift({
+    ts: Date.now(),
+    event: "Cleared low material alerts (restocked)."
+  });
+
+  saveState();
+  render();
+}
+
+/************** REASSIGN CURRENT JOB **************/
+function reassignCurrentJobCore(sourceId, targetId){
+  if (!sourceId || !targetId || sourceId === targetId) return;
+
+  var from = findStation(sourceId);
+  var to   = findStation(targetId);
+  if (!from || !to) return;
+
+  var cur = from.now || {};
+  if (!(cur.job || cur.part || cur.total)) {
+    alert("There is no current job to reassign on " + (from.name || "this station") + ".");
+    return;
+  }
+
+  // Copy job being moved (progress included)
+  var moved = {
+    job:  cur.job  || "",
+    part: cur.part || "",
+    total: coerceNum(cur.total || 0, 0),
+    left:  coerceNum(cur.left  || 0, 0),
+    due:  cur.due  || "",
+    lot:  cur.lot  || ""
+  };
+
+  /* ------------------ TARGET STATION PIPELINE ------------------ */
+
+  var prevNow  = Object.assign({job:"",part:"",total:0,left:0,due:"",lot:""}, to.now  || {});
+  var prevNext = Object.assign({job:"",part:"",qty:0,due:"",lot:""},        to.next || {});
+  to.queue = Array.isArray(to.queue) ? to.queue : [];
+
+  // If target has a current job → bump NOW → NEXT
+  if (prevNow.job || prevNow.part || prevNow.total) {
+
+    // If a NEXT exists → push NEXT into front of queue
+    if (prevNext.job || prevNext.part || prevNext.qty) {
+      to.queue.unshift({
+        job:  prevNext.job  || "",
+        part: prevNext.part || "",
+        qty:  coerceNum(prevNext.qty, 0),
+        due:  prevNext.due  || "",
+        lot:  prevNext.lot  || ""
+      });
+    }
+
+    // NOW → NEXT
+    to.next = {
+      job:  prevNow.job  || "",
+      part: prevNow.part || "",
+      qty:  coerceNum(prevNow.total, 0),
+      due:  prevNow.due  || "",
+      lot:  prevNow.lot  || ""
+    };
+  }
+
+  // The incoming job becomes NOW at destination
+  to.now = moved;
+
+  to.history.unshift({
+    ts: Date.now(),
+    event: "Received reassigned job " + (moved.job || "-") +
+           " (" + (moved.part || "part") + ")" +
+           (moved.lot ? " • Skid " + moved.lot : "") +
+           " from " + (from.name || "")
+  });
+
+  /* ------------------ SOURCE STATION PIPELINE ------------------ */
+
+  var fromNext = from.next || {};
+  from.queue = Array.isArray(from.queue) ? from.queue : [];
+
+  from.history.unshift({
+    ts: Date.now(),
+    event: "Reassigned current job " + (cur.job || "-") +
+           " (" + (cur.part || "part") + ")" +
+           (cur.lot ? " • Skid " + cur.lot : "") +
+           " to " + (to.name || "")
+  });
+
+  // Case 1 — NEXT exists → NEXT becomes NOW
+  if (fromNext.job || fromNext.part || fromNext.qty) {
+
+    from.now = {
+      job:  fromNext.job  || "",
+      part: fromNext.part || "",
+      total: coerceNum(fromNext.qty, 0),
+      left:  coerceNum(fromNext.qty, 0),
+      due:  fromNext.due  || "",
+      lot:  fromNext.lot  || ""
+    };
+
+    // Promote queue to NEXT
+    if (from.queue.length) {
+      var newNext = from.queue.shift();
+      from.next = {
+        job:  newNext.job  || "",
+        part: newNext.part || "",
+        qty:  coerceNum(newNext.qty, 0),
+        due:  newNext.due  || "",
+        lot:  newNext.lot  || ""
+      };
+    } else {
+      from.next = {job:"",part:"",qty:0,due:"",lot:""};
     }
   }
 
-  function redraw(){ ensureLogoLoaded(draw); }
+  // Case 2 — no NEXT, but queue exists → queue[0] becomes NOW
+  else if (from.queue.length) {
+    var first = from.queue.shift();
 
-  /* ------------ Events ------------ */
-  window.addEventListener('resize', ()=>requestAnimationFrame(redraw));
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) redraw(); });
-  window.addEventListener('storage', ()=>redraw());
+    from.now = {
+      job:  first.job  || "",
+      part: first.part || "",
+      total: coerceNum(first.qty, 0),
+      left:  coerceNum(first.qty, 0),
+      due:  first.due  || "",
+      lot:  first.lot  || ""
+    };
 
-  window.addEventListener('keydown', (e)=>{
-    if(e.key==='f'||e.key==='F'){
-      const el=document.documentElement;
-      (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen)?.call(el);
-    }else if(e.key==='r'||e.key==='R'){
-      redraw();
-    }else if(e.key==='d'||e.key==='D'){
-      tvShift='day'; localStorage.setItem("asi.activeShift","day"); redraw();
-    }else if(e.key==='n'||e.key==='N'){
-      tvShift='night'; localStorage.setItem("asi.activeShift","night"); redraw();
-    }else if(e.key==='a'||e.key==='A'){
-      autoFit = !autoFit;
-      localStorage.setItem("asi.tv.autofit", autoFit?"on":"off");
-      redraw();
-    }else if(e.key===']'){
-      autoFit = false;
-      manualScale = (parseFloat(manualScale)||1) + 0.08;
-      localStorage.setItem("asi.tv.autofit","off");
-      localStorage.setItem("asi.tv.manualScale", manualScale.toFixed(2));
-      redraw();
-    }else if(e.key==='['){
-      autoFit = false;
-      manualScale = (parseFloat(manualScale)||1) - 0.08;
-      localStorage.setItem("asi.tv.autofit","off");
-      localStorage.setItem("asi.tv.manualScale", manualScale.toFixed(2));
-      redraw();
-    }else if(e.key==='0'){
-      manualScale = 1;
-      autoFit = true;
-      localStorage.setItem("asi.tv.manualScale","1.00");
-      localStorage.setItem("asi.tv.autofit","on");
-      redraw();
+    // Queue[1] → NEXT
+    if (from.queue.length) {
+      var second = from.queue[0];
+      from.next = {
+        job:  second.job  || "",
+        part: second.part || "",
+        qty:  coerceNum(second.qty, 0),
+        due:  second.due  || "",
+        lot:  second.lot  || ""
+      };
+    } else {
+      from.next = {job:"",part:"",qty:0,due:"",lot:""};
+    }
+  }
+
+  // Case 3 — nothing at all → blank station
+  else {
+    from.now  = {job:"",part:"",total:0,left:0,due:"",lot:""};
+    from.next = {job:"",part:"",qty:0,due:"",lot:""};
+  }
+
+  saveState();
+  render();
+}
+
+/************** DRAG & DROP **************/
+function enableDragAndDrop(){
+  var cards=document.querySelectorAll(".card[draggable='true']");
+  cards.forEach(function(card){
+    card.addEventListener("dragstart",function(e){
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed="move";
+      e.dataTransfer.setData("text/plain",card.dataset.id);
+    });
+    card.addEventListener("dragend",function(){
+      card.classList.remove("dragging");
+      document.querySelectorAll(".drop-indicator").forEach(function(di){di.classList.remove("active");});
+    });
+    card.addEventListener("dragover",function(e){
+      e.preventDefault();
+      var ind=card.querySelector(".drop-indicator");
+      var rect=card.getBoundingClientRect();
+      var before=(e.clientY-rect.top)<rect.height/2;
+      ind.classList.add("active");
+      ind.style.order=before?-1:9999;
+    });
+    card.addEventListener("dragleave",function(){
+      var ind=card.querySelector(".drop-indicator");
+      if(ind) ind.classList.remove("active");
+    });
+    card.addEventListener("drop",function(e){
+      e.preventDefault();
+      var fromId=e.dataTransfer.getData("text/plain");
+      var toId=card.dataset.id;
+      if(!fromId || fromId===toId) return;
+      var fromIdx=state.findIndex(function(s){return s.id===fromId;});
+      var toIdx=state.findIndex(function(s){return s.id===toId;});
+      if(fromIdx<0 || toIdx<0) return;
+      var rect=card.getBoundingClientRect();
+      var before=(e.clientY-rect.top)<rect.height/2;
+      var item=state.splice(fromIdx,1)[0];
+      var insert=before?(fromIdx<toIdx?toIdx-1:toIdx):(fromIdx<toIdx?toIdx:toIdx+1);
+      if(insert<0) insert=0;
+      if(insert>state.length) insert=state.length;
+      state.splice(insert,0,item);
+      saveState(); render();
+    });
+  });
+}
+
+/************** KPI VIEW **************/
+function yyyymm(iso){ return (iso||"").slice(0,7); }
+function filterKPIByMonth(kpi,ym){
+  return (kpi.records||[]).filter(function(r){ return yyyymm(r.completed)===ym; });
+}
+function groupRows(rows,mode){
+  if(mode==="station") return rows.slice();
+  var map={};
+  rows.forEach(function(r){
+    var job=r.job||"", lot=r.lot||"", due=r.due||"";
+    var key=(mode==="job")?(job+"|"+due):(job+"|"+lot+"|"+due);
+    if(!map[key]){
+      map[key]={job:job,lot:lot,due:due,latest:r.completed||"",qty:coerceNum(r.qty||0,0)};
+    }else{
+      if((r.completed||"")>map[key].latest) map[key].latest=r.completed||"";
+      map[key].qty+=coerceNum(r.qty||0,0);
+    }
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var g=map[k];
+    var status="unscheduled";
+    if(g.due){
+      if(g.latest<g.due) status="early";
+      else if(g.latest===g.due) status="on_time";
+      else status="late";
+    }
+    out.push({
+      completed:g.latest,
+      due:g.due,
+      status:status,
+      stationName:"",
+      job:g.job,
+      lot:g.lot,
+      qty:g.qty
+    });
+  });
+  return out;
+}
+function aggregateKPI(rows){
+  var dept={early:0,on_time:0,late:0,unscheduled:0,total:0};
+  var bySt={};
+  rows.forEach(function(r){
+    var s=r.status||"unscheduled";
+    if(!dept[s]) dept[s]=0;
+    dept[s]++; dept.total++;
+    var name=r.stationName||"Unknown";
+    if(!bySt[name]) bySt[name]={early:0,on_time:0,late:0,unscheduled:0,total:0};
+    bySt[name][s]++; bySt[name].total++;
+  });
+  return {dept:dept,byStation:bySt};
+}
+function openKPIModal(){
+  $("#kpiShiftLabel").textContent=activeShift;
+  var ym=(new Date()).toISOString().slice(0,7);
+  if(!$("#kpiMonth").value) $("#kpiMonth").value=ym;
+  renderKPI();
+  $("#kpiModal").style.display="flex";
+}
+function closeKPIModal(){ $("#kpiModal").style.display="none"; }
+function renderKPI(){
+  var k=loadKPI();
+  var ym=$("#kpiMonth").value || (new Date()).toISOString().slice(0,7);
+  var mode=$("#kpiGroup").value || "station";
+  var rowsRaw=filterKPIByMonth(k,ym);
+  var rows=groupRows(rowsRaw,mode==="station"?"station":mode);
+  var agg=aggregateKPI(rowsRaw);
+
+  $("#kpiEarly").textContent=agg.dept.early||0;
+  $("#kpiOnTime").textContent=agg.dept.on_time||0;
+  $("#kpiLate").textContent=agg.dept.late||0;
+  $("#kpiUnk").textContent=agg.dept.unscheduled||0;
+
+  var tbl=$("#kpiTable"), title=$("#kpiTableTitle");
+  if(mode==="station") title.textContent="Per-station breakdown";
+  else if(mode==="job") title.textContent="By Job # (combined)";
+  else title.textContent="By Job # + Skid (combined)";
+
+  if(!rowsRaw.length){
+    tbl.textContent="No completions logged for this month.";
+    return;
+  }
+
+  if(mode==="station"){
+    var html="<table style='width:100%;border-collapse:collapse'><thead><tr>"+
+      "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border)'>Station</th>"+
+      "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border)'>Ahead</th>"+
+      "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border)'>On</th>"+
+      "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border)'>Late</th>"+
+      "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border)'>No due</th>"+
+      "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border)'>Total</th>"+
+      "</tr></thead><tbody>";
+    Object.keys(agg.byStation).sort().forEach(function(name){
+      var s=agg.byStation[name];
+      html+="<tr>"+
+        "<td style='padding:4px;border-bottom:1px dashed var(--border)'>"+escapeHtml(name)+"</td>"+
+        "<td style='padding:4px;text-align:right;border-bottom:1px dashed var(--border)'>"+(s.early||0)+"</td>"+
+        "<td style='padding:4px;text-align:right;border-bottom:1px dashed var(--border)'>"+(s.on_time||0)+"</td>"+
+        "<td style='padding:4px;text-align:right;border-bottom:1px dashed var(--border)'>"+(s.late||0)+"</td>"+
+        "<td style='padding:4px;text-align:right;border-bottom:1px dashed var(--border)'>"+(s.unscheduled||0)+"</td>"+
+        "<td style='padding:4px;text-align:right;border-bottom:1px dashed var(--border)'>"+(s.total||0)+"</td>"+
+      "</tr>";
+    });
+    html+="</tbody></table>";
+    tbl.innerHTML=html;
+  }else{
+    var html2="<table style='width:100%;border-collapse:collapse'><thead><tr>"+
+      "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border)'>"+(mode==="job"?"Job #":"Job # + Skid")+"</th>"+
+      "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border)'>Due</th>"+
+      "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border)'>Completed</th>"+
+      "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border)'>Status</th>"+
+      "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border)'>Qty Sum</th>"+
+      "</tr></thead><tbody>";
+    rows.forEach(function(r){
+      var key=(mode==="job")
+        ? escapeHtml(r.job||"-")
+        : escapeHtml(r.job||"-")+(r.lot?(" — Skid "+escapeHtml(r.lot)):"");
+      html2+="<tr>"+
+        "<td style='padding:4px;border-bottom:1px dashed var(--border)'>"+key+"</td>"+
+        "<td style='padding:4px;border-bottom:1px dashed var(--border)'>"+(r.due||"-")+"</td>"+
+        "<td style='padding:4px;border-bottom:1px dashed var(--border)'>"+(r.completed||"-")+"</td>"+
+        "<td style='padding:4px;border-bottom:1px dashed var(--border)'>"+(r.status||"-")+"</td>"+
+        "<td style='padding:4px;text-align:right;border-bottom:1px dashed var(--border)'>"+(r.qty||0)+"</td>"+
+      "</tr>";
+    });
+    html2+="</tbody></table>";
+    tbl.innerHTML=html2;
+  }
+}
+function exportKPIToCSV(){
+  var k=loadKPI();
+  var ym=$("#kpiMonth").value || (new Date()).toISOString().slice(0,7);
+  var rows=filterKPIByMonth(k,ym);
+  if(!rows.length){ alert("No data for that month."); return; }
+  var cols=["completed","due","status","stationName","job","part","lot","qty"];
+  var csv=[cols.join(",")];
+  rows.forEach(function(r){
+    var line=cols.map(function(c){
+      var v=r[c]==null?"":String(r[c]);
+      if(/[" ,]/.test(v)) v='"'+v.replace(/"/g,'""')+'"';
+      return v;
+    }).join(",");
+    csv.push(line);
+  });
+  var blob=new Blob([csv.join("\n")],{type:"text/csv"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="ASI_Completions_"+activeShift+"_"+ym+".csv";
+  a.click();
+}
+function clearMonthKPI(){
+  var ym=$("#kpiMonth").value || (new Date()).toISOString().slice(0,7);
+  if(!confirm("Clear all completion records for "+ym+" ("+activeShift+" shift)?")) return;
+  var k=loadKPI();
+  k.records=(k.records||[]).filter(function(r){return yyyymm(r.completed)!==ym;});
+  saveKPI(k);
+  renderKPI();
+}
+
+/************** QUEUE MODAL **************/
+(function initQueueModal(){
+  var overlay=document.createElement("div");
+  overlay.id="queueModal";
+  overlay.className="modal-overlay";
+  overlay.innerHTML=
+    '<div class="modal-card" style="max-width:520px">'+
+      '<div class="modal-header">Add job to queue</div>'+
+      '<div class="modal-body">'+
+        '<label>Job #<input id="qmJob" type="text"></label>'+
+        '<label style="margin-top:6px">Part #<input id="qmPart" type="text"></label>'+
+        '<label style="margin-top:6px">Qty<input id="qmQty" type="number" min="0"></label>'+
+        '<label style="margin-top:6px">Due (mm/dd/yyyy)<input id="qmDue" type="text" placeholder="optional"></label>'+
+        '<label style="margin-top:6px">Skid / Lot<input id="qmLot" type="text" placeholder="optional"></label>'+
+      '</div>'+
+      '<div class="modal-footer">'+
+        '<button class="modal-btn" id="qmCancel">Cancel</button>'+
+        '<button class="modal-btn primary" id="qmAdd">Add</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(overlay);
+
+  var ctxId=null;
+  function close(){ overlay.style.display="none"; ctxId=null; }
+  function parseDue(v){
+    v=(v||"").trim(); if(!v) return "";
+    var m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if(!m) return "";
+    var mm=("0"+m[1]).slice(-2), dd=("0"+m[2]).slice(-2), yy=m[3];
+    return yy+"-"+mm+"-"+dd;
+  }
+  function submit(){
+    var job=$("#qmJob").value.trim();
+    var part=$("#qmPart").value.trim();
+    var qty=coerceNum($("#qmQty").value,0);
+    var dueIso=parseDue($("#qmDue").value);
+    var lot=$("#qmLot").value.trim();
+    if(!job){ alert("Job # required."); return; }
+    if(!part){ alert("Part # required."); return; }
+    pushQueue(ctxId,{job:job,part:part,qty:qty,due:dueIso,lot:lot});
+    close();
+  }
+  on($("#qmCancel"),"click",close);
+  on($("#qmAdd"),"click",submit);
+  overlay.addEventListener("click",function(e){ if(e.target===overlay) close(); });
+  window.addEventListener("keydown",function(e){
+    if(!ctxId) return;
+    if(e.key==="Escape") close();
+    if(e.key==="Enter") submit();
+  });
+  window.openQueueModal=function(id){
+    ctxId=id;
+    overlay.style.display="flex";
+    $("#qmJob").value=""; $("#qmPart").value="";
+    $("#qmQty").value=""; $("#qmDue").value=""; $("#qmLot").value="";
+    setTimeout(function(){ $("#qmJob").focus(); },30);
+  };
+})();
+
+/************** RECORD MADE MODAL **************/
+/* Handles the “Record Mirrors Made / Packed” popup,
+   including extra checks for packing stations. */
+(function initMadeModal(){
+  var overlay = document.createElement("div");
+  overlay.id = "madeModal";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML =
+    '<div class="modal-card" style="max-width:520px">' +
+      '<div class="modal-header"><span id="madeTitle">Record Mirrors Made</span></div>' +
+      '<div class="modal-body">' +
+        '<div id="madeContext" style="margin-bottom:8px;font-size:15px;font-weight:600;"></div>' +
+        '<label>Qty<input id="madeQty" type="number" min="0"></label>' +
+        '<div id="madePackExtras" style="margin-top:10px;display:none">' +
+          '<label class="smallnote" style="display:flex;align-items:center;gap:6px;margin-top:4px;">' +
+            '<input id="madeTicket" type="checkbox"> Ticket written and given to packing?' +
+          '</label>' +
+          '<label class="smallnote" style="display:flex;align-items:center;gap:6px;margin-top:4px;">' +
+            '<input id="madeLabel" type="checkbox"> Big printed label included?' +
+          '</label>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="modal-btn" id="madeCancel">Cancel</button>' +
+        '<button class="modal-btn primary" id="madeSave">Add</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  var ctxId = null;
+  var ctxIsPack = false;
+
+  // Enable/disable “Add” button depending on packing checks
+  function updatePackState(){
+    var saveBtn = $("#madeSave");
+    if(!saveBtn) return;
+
+    if(!ctxIsPack){
+      saveBtn.disabled = false;
+      return;
+    }
+
+    var t = $("#madeTicket");
+    var l = $("#madeLabel");
+    var ok = t && l && t.checked && l.checked;
+    saveBtn.disabled = !ok;
+  }
+
+  function close(){
+    overlay.style.display = "none";
+    ctxId = null;
+  }
+
+  function submit(){
+    if(!ctxId){
+      close();
+      return;
+    }
+
+    var qtyVal = coerceNum($("#madeQty").value, NaN);
+    if(!Number.isFinite(qtyVal) || qtyVal <= 0){
+      alert("Enter a positive number.");
+      return;
+    }
+
+    var ticket = null;
+    var label  = null;
+
+    if(ctxIsPack){
+      var t = $("#madeTicket");
+      var l = $("#madeLabel");
+      var ok = t && l && t.checked && l.checked;
+
+      if(!ok){
+        alert(
+          "To record packed mirrors, please confirm that:\n" +
+          "• Ticket was written and given to packing\n" +
+          "• Big printed label was included."
+        );
+        return;
+      }
+
+      ticket = "YES ticket given";
+      label  = "YES big label included";
+    }
+
+    // Uses existing logMade() to update history + left qty
+    logMade(ctxId, qtyVal, ticket, label);
+    close();
+  }
+
+  // Button + overlay wiring
+  on($("#madeCancel"), "click", close);
+  on($("#madeSave"), "click", submit);
+
+  overlay.addEventListener("click", function(e){
+    if(e.target === overlay) close();
+  });
+
+  // Packing checkboxes
+  on($("#madeTicket"), "change", updatePackState);
+  on($("#madeLabel"),  "change", updatePackState);
+
+  // Keyboard shortcuts while modal is open
+  window.addEventListener("keydown", function(e){
+    if(!ctxId) return;
+    if(e.key === "Escape") close();
+    if(e.key === "Enter")  submit();
+  });
+
+  // Public function called from the “Record Mirrors Made…” button
+  window.openMadeModal = function(id){
+    var st = findStation(id);
+    if(!st) return;
+    ctxId = id;
+    ctxIsPack = isPackingStationName(st.name);
+
+    var titleEl = $("#madeTitle");
+    if(titleEl){
+      titleEl.textContent = ctxIsPack
+        ? "Record Mirrors Packed"
+        : "Record Mirrors Made";
+    }
+
+    var ctx = $("#madeContext");
+    if (ctx) {
+      var part = (st.now.part || "").trim();
+      var job  = (st.now.job  || "").trim();
+      var name = st.name || "this station";
+      var verb = ctxIsPack ? "pack" : "make";
+
+      var subject = part ? (part + " mirrors") : "mirrors";
+      var line = "How many " +
+                 subject +
+                 (job ? (" for Job " + job) : "") +
+                 " did " + name + " " + verb + "?";
+
+      ctx.textContent = line;
+    }
+
+    var extra = $("#madePackExtras");
+    if(extra) extra.style.display = ctxIsPack ? "block" : "none";
+
+    $("#madeQty").value = "";
+    if($("#madeTicket")) $("#madeTicket").checked = false;
+    if($("#madeLabel"))  $("#madeLabel").checked  = false;
+
+    updatePackState();
+
+    overlay.style.display = "flex";
+    setTimeout(function(){ $("#madeQty").focus(); }, 30);
+  };
+})();
+/************** DEMOTE NEXT CONFIRM MODAL **************/
+/* Handles the confirmation popup when you click
+   “Demote next job to queue” on a station. */
+(function initDemoteModal(){
+  var overlay = document.createElement("div");
+  overlay.id = "demoteModal";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML =
+    '<div class="modal-card" style="max-width:520px">' +
+      '<div class="modal-header">Move NEXT job to Queue</div>' +
+      '<div class="modal-body">' +
+        '<div id="demoteText" style="margin-bottom:8px;font-size:15px;font-weight:600;"></div>' +
+        '<div class="smallnote">This will move the current NEXT job into the Queue list for this station.</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="modal-btn" id="demoteCancel">Cancel</button>' +
+        '<button class="modal-btn primary" id="demoteConfirm">Move to Queue</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  var ctxId = null;
+
+  function close(){
+    overlay.style.display = "none";
+    ctxId = null;
+  }
+
+  function submit(){
+    if (!ctxId){
+      close();
+      return;
+    }
+    // Uses your existing demoteNextCore() logic
+    demoteNextCore(ctxId);
+    close();
+  }
+
+  // Button wiring
+  on($("#demoteCancel"), "click", close);
+  on($("#demoteConfirm"), "click", submit);
+
+  overlay.addEventListener("click", function(e){
+    if(e.target === overlay) close();
+  });
+
+  // Keyboard shortcuts while modal is open
+  window.addEventListener("keydown", function(e){
+    if(!ctxId) return;
+    if(e.key === "Escape") close();
+    if(e.key === "Enter")  submit();
+  });
+
+  // Public function, called by demoteNext(id)
+  window.openDemoteModal = function(id){
+    var st = findStation(id);
+    if(!st) return;
+
+    var nxt = st.next || {};
+    if(!(nxt.job || nxt.part || nxt.qty)){
+      alert("There is no NEXT job to demote.");
+      return;
+    }
+
+    ctxId = id;
+
+    var jobLabel  = nxt.job  || "-";
+    var partLabel = nxt.part || "-";
+    var msg = "Are you sure you want to move Job " +
+              jobLabel + ", Part " + partLabel +
+              " to the queue list?";
+
+    var textEl = $("#demoteText");
+    if(textEl) textEl.textContent = msg;
+
+    overlay.style.display = "flex";
+  };
+})();
+
+/************** MATERIAL TEMPLATE MASTER LIST **************/
+var MATERIAL_KEY = "mirror.v25.materialTemplates";
+
+function defaultMaterialTemplates(){
+  // You can change this default list anytime
+  return ["glass", "channel", "H-Bracket", "paper"];
+}
+
+function loadMaterialTemplates(){
+  try{
+    var raw = localStorage.getItem(MATERIAL_KEY);
+    if(!raw) return defaultMaterialTemplates();
+    var arr = JSON.parse(raw);
+    return (Array.isArray(arr) && arr.length) ? arr : defaultMaterialTemplates();
+  }catch(e){
+    return defaultMaterialTemplates();
+  }
+}
+
+function saveMaterialTemplates(list){
+  materialTemplates = (list || []).map(function(x){
+    return (x || "").trim();
+  }).filter(function(x){ return x; });
+  localStorage.setItem(MATERIAL_KEY, JSON.stringify(materialTemplates));
+}
+
+var materialTemplates = loadMaterialTemplates();
+
+
+/************** LOW MATERIAL MODAL **************/
+(function initMaterialModal(){
+  var overlay=document.createElement("div");
+  overlay.id="materialModal";
+  overlay.className="modal-overlay";
+  overlay.innerHTML =
+    '<div class="modal-card" style="max-width:620px">' +
+      '<div class="modal-header">Report Low Material</div>' +
+      '<div class="modal-body">' +
+        '<div id="matContext" class="smallnote" style="margin-bottom:8px;"></div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<thead><tr>' +
+            '<th style="text-align:left;padding:4px;border-bottom:1px solid var(--border);">Material</th>' +
+            '<th style="text-align:right;padding:4px;border-bottom:1px solid var(--border);width:120px;">Qty Needed</th>' +
+            '<th style="padding:4px;border-bottom:1px solid var(--border);width:40px;"></th>' +
+          '</tr></thead>' +
+          '<tbody id="matTbody"></tbody>' +
+        '</table>' +
+        '<div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<button class="btn icon" id="matEditToggle">✏️ Edit material list</button>' +
+          '<button class="btn" id="matAddRow">+ Add Row</button>' +
+        '</div>' +
+        '<div id="matEditBlock" style="margin-top:8px;padding:8px;border-radius:10px;border:1px dashed var(--border);display:none;">' +
+          '<div class="smallnote" style="margin-bottom:6px;">' +
+            'These are the base material names. The current part number for the station will be added in front ' +
+            '(e.g., "0620-2436 glass").' +
+          '</div>' +
+          '<div id="matEditRows" style="display:flex;flex-direction:column;gap:4px;"></div>' +
+          '<div style="margin-top:6px;display:flex;justify-content:flex-end;gap:6px;">' +
+            '<button class="btn" id="matEditAdd">+ Add template</button>' +
+            '<button class="btn primary" id="matEditSave">Save list</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="modal-btn" id="matCancel">Cancel</button>' +
+        '<button class="modal-btn danger" id="matClear">Clear All</button>' +
+        '<button class="modal-btn primary" id="matSave">Save</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  var ctxId=null;
+
+  function currentPartForCtx(){
+    var st = findStation(ctxId);
+    return (st && (st.now.part || "").trim()) || "";
+  }
+
+  function buildMaterialSelect(part, selectedBase, isCustom){
+    var select = document.createElement("select");
+    select.className = "mat-type";
+    select.style.width = "100%";
+
+    var prefix = part ? (part + " ") : "";
+
+    function addOpt(value, label, selected){
+      var o = document.createElement("option");
+      o.value = value;
+      o.textContent = label;
+      if(selected) o.selected = true;
+      select.appendChild(o);
+    }
+
+    addOpt("", "— choose material —", !selectedBase && !isCustom);
+
+    materialTemplates.forEach(function(base){
+      var full = prefix + base;
+      addOpt(base, full, (!!selectedBase && !isCustom && base.toLowerCase() === selectedBase.toLowerCase()));
+    });
+
+    addOpt("__custom", "Custom…", !!isCustom);
+
+    return select;
+  }
+
+  function addRow(baseName, qty, customLabel, part, forceCustom){
+    var tbody=$("#matTbody");
+    if(!tbody) return;
+
+    var tr=document.createElement("tr");
+    tr.innerHTML =
+      '<td style="padding:4px;border-bottom:1px dashed var(--border);"></td>' +
+      '<td style="padding:4px;border-bottom:1px dashed var(--border);text-align:right;"></td>' +
+      '<td style="padding:4px;border-bottom:1px dashed var(--border);text-align:right;"></td>';
+    tbody.appendChild(tr);
+
+    var tdMat = tr.children[0];
+    var tdQty = tr.children[1];
+    var tdBtn = tr.children[2];
+
+    var isCustom = !!forceCustom;
+    var partLabel = part || "";
+
+    // If we got a full name like "0620-2436 glass", try to strip the part prefix
+    if(!forceCustom && baseName && partLabel){
+      var lowerPart = partLabel.toLowerCase();
+      var lowerName = baseName.toLowerCase();
+      if(lowerName.indexOf(lowerPart + " ") === 0){
+        baseName = baseName.slice(partLabel.length + 1);
+      }
+    }
+
+    // If baseName is not in templates, treat as custom
+    if(baseName && !forceCustom){
+      var inTemplates = materialTemplates.some(function(t){
+        return t.toLowerCase() === baseName.toLowerCase();
+      });
+      if(!inTemplates){
+        isCustom = true;
+        customLabel = customLabel || (partLabel ? baseName : (baseName));
+        baseName = "";
+      }
+    }
+
+    var select = buildMaterialSelect(partLabel, baseName, isCustom);
+    var customInput = document.createElement("input");
+    customInput.type = "text";
+    customInput.className = "mat-custom";
+    customInput.placeholder = "Custom material name";
+    customInput.style.cssText = "width:100%;margin-top:4px;display:" + (isCustom ? "block" : "none") + ";";
+    customInput.value = customLabel || "";
+
+    select.addEventListener("change", function(){
+      if(select.value === "__custom"){
+        customInput.style.display = "block";
+      }else{
+        customInput.style.display = "none";
+      }
+    });
+
+    tdMat.appendChild(select);
+    tdMat.appendChild(customInput);
+
+    var qtyInput = document.createElement("input");
+    qtyInput.type = "number";
+    qtyInput.min = "0";
+    qtyInput.className = "mat-qty";
+    qtyInput.style.cssText = "width:100%;text-align:right;";
+    qtyInput.value = qty || 0;
+    tdQty.appendChild(qtyInput);
+
+    var rm = document.createElement("button");
+    rm.className = "btn danger mat-remove";
+    rm.textContent = "X";
+    rm.onclick = function(){ tr.remove(); };
+    tdBtn.appendChild(rm);
+  }
+
+  function buildFromStation(){
+    var tbody=$("#matTbody");
+    if(!tbody) return;
+    tbody.innerHTML="";
+
+    var st=findStation(ctxId);
+    var part = currentPartForCtx();
+    var arr = st && Array.isArray(st.materialAlerts) ? st.materialAlerts : [];
+
+    if(!arr.length){
+      addRow("", 0, "", part, false);
+    }else{
+      arr.forEach(function(m){
+        var name = m.name || m.material || "";
+        var qty  = coerceNum(m.qty,0);
+        var base = name;
+        var custom = "";
+        var forceCustom = false;
+
+        if(part && name.toLowerCase().indexOf(part.toLowerCase() + " ") === 0){
+          base = name.slice(part.length + 1);
+        }
+
+        var inTemplates = materialTemplates.some(function(t){
+          return t.toLowerCase() === base.toLowerCase();
+        });
+
+        if(inTemplates){
+          addRow(base, qty, "", part, false);
+        }else{
+          custom = name;
+          forceCustom = true;
+          addRow("", qty, custom, part, forceCustom);
+        }
+      });
+    }
+
+    var ctxEl=$("#matContext");
+    if(ctxEl && st){
+      ctxEl.textContent = "Station: " + (st.name || "") +
+        (part ? (" • Current part: " + part) : "");
+    }
+  }
+
+  function saveFromModal(){
+    var st=findStation(ctxId);
+    if(!st){ close(); return; }
+    var tbody=$("#matTbody");
+    if(!tbody){ close(); return; }
+
+    var part = currentPartForCtx();
+    var mats=[];
+    tbody.querySelectorAll("tr").forEach(function(tr){
+      var typeEl   = tr.querySelector(".mat-type");
+      var customEl = tr.querySelector(".mat-custom");
+      var qtyEl    = tr.querySelector(".mat-qty");
+      if(!typeEl || !qtyEl) return;
+
+      var sel = typeEl.value || "";
+      var qty = coerceNum(qtyEl.value,0);
+      if(!qty) return;
+
+      var name = "";
+      if(sel === "__custom"){
+        name = (customEl && customEl.value.trim()) || "";
+      }else if(sel){
+        name = part ? (part + " " + sel) : sel;
+      }
+
+      if(name){
+        mats.push({name:name,qty:qty});
+      }
+    });
+
+    var hadAlerts = Array.isArray(st.materialAlerts) && st.materialAlerts.length>0;
+    st.materialAlerts = mats;
+
+    if(mats.length){
+      st.history.unshift({
+        ts:Date.now(),
+        event:"Reported low material: " + mats.map(function(m){
+          return (m.name || "material") + " (" + m.qty + ")";
+        }).join(", ")
+      });
+    }else if(hadAlerts){
+      st.history.unshift({
+        ts:Date.now(),
+        event:"Cleared low material alerts."
+      });
+    }
+
+    saveState();
+    render();
+    close();
+  }
+
+  function clearAll(){
+    var st=findStation(ctxId);
+    if(!st){ close(); return; }
+    var hadAlerts = Array.isArray(st.materialAlerts) && st.materialAlerts.length>0;
+    st.materialAlerts=[];
+    if(hadAlerts){
+      st.history.unshift({
+        ts:Date.now(),
+        event:"Cleared low material alerts."
+      });
+    }
+    saveState();
+    render();
+    close();
+  }
+
+  function close(){
+    overlay.style.display="none";
+    ctxId=null;
+  }
+
+  /***** TEMPLATE EDITOR INSIDE MODAL *****/
+  function buildTemplateEditor(){
+    var rows = $("#matEditRows");
+    if(!rows) return;
+    rows.innerHTML = "";
+
+    materialTemplates.forEach(function(base){
+      var row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:6px;align-items:center;";
+      row.innerHTML =
+        '<input type="text" class="mat-edit-name" value="'+escapeAttr(base)+'" ' +
+        'style="flex:1;padding:6px 8px;border-radius:8px;border:1px solid var(--border);">' +
+        '<button class="btn danger mat-edit-remove">X</button>';
+      rows.appendChild(row);
+    });
+
+    rows.querySelectorAll(".mat-edit-remove").forEach(function(btn){
+      btn.onclick = function(){
+        btn.parentElement.remove();
+      };
+    });
+  }
+
+  on($("#matEditToggle"),"click",function(){
+    var block = $("#matEditBlock");
+    if(!block) return;
+    var visible = (block.style.display === "block");
+    if(visible){
+      block.style.display = "none";
+    }else{
+      buildTemplateEditor();
+      block.style.display = "block";
     }
   });
 
-  /* DPR watcher */
-  let lastDPR = window.devicePixelRatio || 1;
-  setInterval(()=>{
-    const dpr = window.devicePixelRatio || 1;
-    if(Math.abs(dpr - lastDPR) > 0.001){
-      lastDPR = dpr;
-      requestAnimationFrame(redraw);
-    }
-  }, 300);
+  on($("#matEditAdd"),"click",function(){
+    var rows = $("#matEditRows");
+    if(!rows) return;
+    var row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:6px;align-items:center;";
+    row.innerHTML =
+      '<input type="text" class="mat-edit-name" placeholder="e.g., glass, channel" ' +
+      'style="flex:1;padding:6px 8px;border-radius:8px;border:1px solid var(--border);">' +
+      '<button class="btn danger mat-edit-remove">X</button>';
+    rows.appendChild(row);
 
-  /* Initial draw */
-  redraw(); setTimeout(redraw, 300);
+    var rm = row.querySelector(".mat-edit-remove");
+    if(rm){
+      rm.onclick = function(){ row.remove(); };
+    }
+  });
+
+  on($("#matEditSave"),"click",function(){
+    var rows = document.querySelectorAll("#matEditRows .mat-edit-name");
+    var list = [];
+    rows.forEach(function(inp){
+      var v = (inp.value || "").trim();
+      if(v) list.push(v);
+    });
+    saveMaterialTemplates(list);
+    // Rebuild the dropdowns for this station with the new template list
+    buildFromStation();
+    alert("Material list updated.");
+  });
+
+  /***** WIRES *****/
+  on($("#matAddRow"),"click",function(){
+    var part = currentPartForCtx();
+    addRow("",0,"",part,false);
+  });
+  on($("#matCancel"),"click",close);
+  on($("#matSave"),"click",saveFromModal);
+  on($("#matClear"),"click",clearAll);
+
+  overlay.addEventListener("click",function(e){
+    if(e.target===overlay) close();
+  });
+  window.addEventListener("keydown",function(e){
+    if(!ctxId) return;
+    if(e.key==="Escape") close();
+  });
+
+  window.openMaterialModal=function(id){
+    ctxId=id;
+    buildFromStation();
+    overlay.style.display="flex";
+  };
 })();
+
+/************** REASSIGN CURRENT JOB MODAL **************/
+(function initReassignModal(){
+  var overlay = document.createElement("div");
+  overlay.id = "reassignModal";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML =
+    '<div class="modal-card" style="max-width:620px">' +
+      '<div class="modal-header">Reassign Current Job</div>' +
+      '<div class="modal-body">' +
+        '<div id="reCtx" class="smallnote" style="margin-bottom:8px;"></div>' +
+        '<label>Reassign to' +
+          '<select id="reTarget" style="width:100%;margin-top:4px;"></select>' +
+        '</label>' +
+        '<div class="smallnote" style="margin-top:8px;">' +
+          'The receiving station&apos;s current job will move to <strong>NEXT</strong>, ' +
+          'and its NEXT job will move to the top of the <strong>Queue</strong>.' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="modal-btn" id="reCancel">Cancel</button>' +
+        '<button class="modal-btn primary" id="reConfirm">Reassign</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  var ctxId = null;
+
+  function close(){
+    overlay.style.display = "none";
+    ctxId = null;
+  }
+
+  function build(){
+    var st = findStation(ctxId);
+    var ctxEl = $("#reCtx");
+    var sel   = $("#reTarget");
+    if(!sel) return;
+
+    sel.innerHTML = "";
+
+    if(ctxEl && st){
+      var cur = st.now || {};
+      var label =
+        "Station: " + (st.name || "") +
+        " • Current job: " + (cur.job || "-") +
+        " — " + (cur.part || "no part") +
+        " • Qty " + (coerceNum(cur.total,0) || 0);
+      ctxEl.textContent = label;
+    }
+
+    // Default option
+    var opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "— choose station —";
+    sel.appendChild(opt);
+
+    // All other stations as choices
+    state.forEach(function(s){
+      if(!s || s.id === ctxId) return;
+      var o = document.createElement("option");
+      o.value = s.id;
+      o.textContent = s.name || "(unnamed station)";
+      sel.appendChild(o);
+    });
+  }
+
+  function submit(){
+    var targetSel = $("#reTarget");
+    if(!targetSel){ close(); return; }
+
+    var targetId = targetSel.value;
+    if(!targetId){
+      alert("Choose a station to reassign this job to.");
+      return;
+    }
+    reassignCurrentJobCore(ctxId, targetId);
+    close();
+  }
+
+  on($("#reCancel"), "click", close);
+  on($("#reConfirm"), "click", submit);
+
+  overlay.addEventListener("click", function(e){
+    if(e.target === overlay) close();
+  });
+
+  window.addEventListener("keydown", function(e){
+    if(!ctxId) return;
+    if(e.key === "Escape") close();
+    if(e.key === "Enter")  submit();
+  });
+
+  // Called from the button on each card
+  window.openReassignModal = function(id){
+    ctxId = id;
+    var st = findStation(id);
+    if(!st){
+      alert("Could not find that station.");
+      ctxId = null;
+      return;
+    }
+    var cur = st.now || {};
+    if(!(cur.job || cur.part || cur.total)){
+      alert("There is no current job to reassign on "+(st.name || "this station")+".");
+      ctxId = null;
+      return;
+    }
+    build();
+    overlay.style.display = "flex";
+  };
+})();
+
+/************** SCHEDULE CSV IMPORT + ASSIGN **************/
+var importedJobs = loadScheduleJobs();
+var currentSchedIndex = -1;
+
+function keySchedule(){ return "mirror.v25.schedule"; }
+function loadScheduleJobs(){
+  try{
+    var raw = localStorage.getItem(keySchedule());
+    if(!raw) return [];
+    var parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  }catch(e){
+    return [];
+  }
+}
+function saveScheduleJobs(){
+  localStorage.setItem(keySchedule(), JSON.stringify(importedJobs || []));
+}
+
+function splitCsvLine(line){
+  var out = [], cur = "", inQuotes = false;
+  for(var i=0;i<line.length;i++){
+    var ch = line[i];
+    if(ch === '"'){
+      if(inQuotes && line[i+1] === '"'){ cur += '"'; i++; }
+      else inQuotes = !inQuotes;
+    }else if(ch === ',' && !inQuotes){
+      out.push(cur);
+      cur = "";
+    }else{
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function parseScheduleCsv(text){
+  // Keep ALL lines and scan for the real header row
+  var rawLines = text.split(/\r?\n/);
+  if(!rawLines.length) return [];
+
+  var header = null;
+  var headerLineIndex = -1;
+
+  // Find the first line that looks like a proper header:
+  // it must contain both "job" and "part" somewhere.
+  for(var i=0; i<rawLines.length; i++){
+    var line = rawLines[i];
+    if(!line || !line.trim()) continue;
+
+    var cols = splitCsvLine(line);
+    var lower = cols.map(function(h){ return (h||"").trim().toLowerCase(); });
+
+    var joined = lower.join(" ");
+    if(joined.indexOf("job") !== -1 && joined.indexOf("part") !== -1){
+      header = lower;
+      headerLineIndex = i;
+      break;
+    }
+  }
+
+  // If we never found a usable header, bail out
+  if(!header || headerLineIndex === -1) return [];
+
+  // Helper to find column index by any of a list of names
+  function idx(names){
+    for(var i=0;i<names.length;i++){
+      var target = names[i].toLowerCase();
+      var j = header.findIndex(function(h){ return h === target; });
+      if(j >= 0) return j;
+    }
+    return -1;
+  }
+
+  // Map your CSV’s columns
+  var jobIdx  = idx(["job"]);
+  var partIdx = idx(["part","part #","part#"]);
+  var prodIdx = idx(["prod qty","prod. qty","prod_qty","prodqty","prod qy"]);
+  var balIdx  = idx(["balance","bal"]);
+  var dueIdx  = idx(["req. by","req by","req_by","required by","req"]);
+  var descIdx = idx(["description","desc"]);
+
+
+
+  var jobs = [];
+
+  // Start reading *after* the header row we found
+  for(var li = headerLineIndex + 1; li < rawLines.length; li++){
+    var row = rawLines[li];
+    if(!row || !row.trim()) continue;
+
+    var cols = splitCsvLine(row);
+    if(!cols.length) continue;
+
+    var job  = jobIdx  >= 0 ? (cols[jobIdx]  || "").trim() : "";
+    var part = partIdx >= 0 ? (cols[partIdx] || "").trim() : "";
+    if(!job && !part) continue;
+
+    var prod = prodIdx >= 0 ? coerceNum(cols[prodIdx], 0) : 0;
+    var bal  = balIdx  >= 0 ? coerceNum(cols[balIdx],  0) : 0;
+    var qty  = bal > 0 ? bal : prod;
+    if(!qty) continue;
+
+    var dueRaw = dueIdx >= 0 ? (cols[dueIdx] || "").trim() : "";
+    var dueIso = "";
+    if(dueRaw){
+      var m = dueRaw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      if(m){
+        var mm = ("0"+m[1]).slice(-2),
+            dd = ("0"+m[2]).slice(-2),
+            yy = m[3];
+        if(yy.length === 2) yy = "20" + yy;
+        dueIso = yy + "-" + mm + "-" + dd;
+      }
+    }
+
+    var desc = descIdx >= 0 ? (cols[descIdx] || "").trim() : "";
+
+    jobs.push({
+      job:  job,
+      part: part,
+      total: qty,
+      due:  dueIso,
+      desc: desc,
+      splits: []
+    });
+  }
+
+  return jobs;
+}
+
+function handleScheduleFile(e){
+  var f = e.target.files[0];
+  if(!f) return;
+  var r = new FileReader();
+  r.onload = function(ev){
+    try{
+      importedJobs = parseScheduleCsv(ev.target.result);
+      saveScheduleJobs();
+      alert("Imported "+ importedJobs.length +" mirror jobs from schedule.");
+      openScheduleModal();
+    }catch(err){
+      alert("Import failed: "+ err.message);
+    }
+  };
+  r.readAsText(f);
+}
+
+function openScheduleModal(){
+  var overlay = $("#scheduleModal");
+  if (!overlay) return;
+
+  // If nothing is selected yet but we have jobs, select the first one
+  if (currentSchedIndex < 0 && importedJobs.length) {
+    currentSchedIndex = 0;
+  }
+
+  renderScheduleJobList();
+  renderScheduleDetail();
+  overlay.style.display = "flex";
+}
+
+function closeScheduleModal(){
+  var overlay = $("#scheduleModal");
+  if(overlay) overlay.style.display = "none";
+  currentSchedIndex = -1;
+}
+
+function renderScheduleJobList(){
+  var box = $("#schedJobList");
+  if(!box) return;
+
+  if(!importedJobs.length){
+    box.innerHTML =
+      "<div class='smallnote'>No imported mirror schedule yet. Use “Import Mirror Schedule (.csv)” above.</div>";
+    return;
+  }
+
+  var html =
+    "<table style='width:100%;border-collapse:collapse;table-layout:fixed;'>" +
+      "<thead><tr>" +
+        "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border);width:80px;'>Job</th>" +
+        "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border);'>Part</th>" +
+        "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border);width:70px;'>Qty</th>" +
+        "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border);width:90px;'>Req. By</th>" +
+      "</tr></thead><tbody>";
+
+  importedJobs.forEach(function(j, ix){
+    var activeClass = (ix === currentSchedIndex) ? " sched-active" : "";
+    html +=
+      "<tr data-ix='" + ix + "' class='" + activeClass + "' style='cursor:pointer;'>" +
+        "<td style='padding:4px;border-bottom:1px dashed var(--border);white-space:nowrap;'>" +
+          escapeHtml(j.job || "-") +
+        "</td>" +
+        "<td style='padding:4px;border-bottom:1px dashed var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>" +
+          escapeHtml(j.part || "-") +
+        "</td>" +
+        "<td style='padding:4px;border-bottom:1px dashed var(--border);text-align:right;'>" +
+          (+j.total || 0) +
+        "</td>" +
+        "<td style='padding:4px;border-bottom:1px dashed var(--border);'>" +
+          (j.due || "-") +
+        "</td>" +
+      "</tr>";
+  });
+
+  html += "</tbody></table>";
+  box.innerHTML = html;
+
+  // handle clicks: update selected index, re-render list (to move highlight), then refresh detail panel
+  box.querySelectorAll("tr[data-ix]").forEach(function(row){
+    row.onclick = function(){
+      currentSchedIndex = +row.getAttribute("data-ix");
+      renderScheduleJobList();   // redraw list so .sched-active moves
+      renderScheduleDetail();    // update right-hand details
+    };
+  });
+}
+
+function renderScheduleDetail(){
+  var box = $("#schedDetail");
+  if(!box) return;
+
+  var job = importedJobs[currentSchedIndex];
+  if(!job){
+    box.innerHTML = "<div class='smallnote'>Select a job on the left to assign quantities per station.</div>";
+    return;
+  }
+
+  var stations = (state || []).map(function(s){ return s.name || ""; });
+
+  if(!job.splits || !job.splits.length){
+    job.splits = [{station:"",qty:job.total||0}];
+  }
+
+  var sumAssigned = job.splits.reduce(function(t,s){ return t + coerceNum(s.qty,0); },0);
+  var warn = (sumAssigned !== coerceNum(job.total,0));
+
+  var html = "";
+  html += "<div class='smallnote' style='margin-bottom:6px;'>";
+  html += "<strong>Job "+escapeHtml(job.job||"-")+"</strong> — Part "+escapeHtml(job.part||"-");
+  html += " • Total Qty "+(+job.total||0);
+  if(job.due) html += " • Req. By "+job.due;
+  html += "</div>";
+
+  if(job.desc){
+    html += "<div class='smallnote' style='margin-bottom:6px;'>"+escapeHtml(job.desc)+"</div>";
+  }
+
+  html += "<div class='smallnote' style='margin-bottom:6px;"+(warn?"color:var(--danger);":"")+"'>"+
+    "Assigned: "+sumAssigned+" / "+(+job.total||0)+" pcs"+
+    (warn ? " — does not match job total." : " — matches job total.")+
+    "</div>";
+
+  html += "<table style='width:100%;border-collapse:collapse;font-size:12px;margin-top:4px;'>"+
+    "<thead><tr>"+
+      "<th style='text-align:left;padding:4px;border-bottom:1px solid var(--border);width:50%;'>Station</th>"+
+      "<th style='text-align:right;padding:4px;border-bottom:1px solid var(--border);width:30%;'>Qty</th>"+
+      "<th style='padding:4px;border-bottom:1px solid var(--border);width:20%;'></th>"+
+    "</tr></thead><tbody>";
+
+  job.splits.forEach(function(sp,ix){
+    var options = ['<option value="">(choose station)</option>'].concat(
+      stations.map(function(name){
+        var sel = (name === sp.station) ? " selected" : "";
+        return '<option'+sel+'>'+escapeHtml(name)+'</option>';
+      })
+    ).join("");
+
+    html += "<tr>"+
+      "<td style='padding:4px;border-bottom:1px dashed var(--border);'>"+
+        "<select data-ix='"+ix+"' data-k='station' style='width:100%;'>"+options+"</select>"+
+      "</td>"+
+      "<td style='padding:4px;border-bottom:1px dashed var(--border);text-align:right;'>"+
+        "<input data-ix='"+ix+"' data-k='qty' type='number' min='0' value='"+coerceNum(sp.qty,0)+"' style='width:100%;text-align:right;'>"+
+      "</td>"+
+      "<td style='padding:4px;border-bottom:1px dashed var(--border);text-align:right;'>"+
+        "<button class='btn danger' data-remove='"+ix+"'>X</button>"+
+      "</td>"+
+    "</tr>";
+  });
+
+  html += "</tbody></table>";
+
+  html += "<div style='margin-top:8px;display:flex;justify-content:flex-end;gap:8px;'>"+
+    "<button class='btn' id='schedAddSplit'>+ Add Row</button>"+
+  "</div>";
+
+  box.innerHTML = html;
+
+  // Station + qty controls: re-render only when the value actually changes
+  box.querySelectorAll("select[data-ix],input[data-ix]").forEach(function(el){
+    el.onchange = function(){
+      var ix = +el.getAttribute("data-ix");
+      var k  = el.getAttribute("data-k");
+      if(!job.splits[ix]) return;
+
+      if(k === "station"){
+        job.splits[ix].station = el.value;
+      }else if(k === "qty"){
+        job.splits[ix].qty = coerceNum(el.value,0);
+      }
+
+      saveScheduleJobs();
+      renderScheduleDetail();
+    };
+  });
+
+
+  box.querySelectorAll("[data-remove]").forEach(function(btn){
+    btn.onclick = function(){
+      var ix = +btn.getAttribute("data-remove");
+      job.splits.splice(ix,1);
+      if(!job.splits.length){
+        job.splits.push({station:"",qty:0});
+      }
+      saveScheduleJobs();
+      renderScheduleDetail();
+    };
+  });
+
+  var addBtn = $("#schedAddSplit");
+  if(addBtn){
+    addBtn.onclick = function(){
+      job.splits.push({station:"",qty:0});
+      saveScheduleJobs();
+      renderScheduleDetail();
+    };
+  }
+}
+
+function applyScheduleToStations(){
+  var job = importedJobs[currentSchedIndex];
+  if(!job){
+    alert("Select a job first.");
+    return;
+  }
+  var total = coerceNum(job.total,0);
+  var sumAssigned = job.splits.reduce(function(t,s){ return t + coerceNum(s.qty,0); },0);
+
+  if(sumAssigned !== total){
+    var ok = confirm(
+      "Assigned qty ("+sumAssigned+") does not equal job total ("+total+").\n\n"+
+      "Do you still want to push these splits into station queues?"
+    );
+    if(!ok) return;
+  }
+
+  var applied = 0;
+  (job.splits||[]).forEach(function(sp){
+    var qty = coerceNum(sp.qty,0);
+    var stationName = (sp.station||"").trim();
+    if(!stationName || !qty) return;
+
+    var st = (state||[]).find(function(s){ return (s.name||"") === stationName; });
+    if(!st) return;
+
+    pushQueue(st.id,{
+      job: job.job || "",
+      part: job.part || "",
+      qty: qty,
+      due: job.due || "",
+      lot: ""
+    });
+    applied += qty;
+  });
+
+  if(!applied){
+    alert("No valid station assignments to apply.");
+    return;
+  }
+
+  alert("Applied "+applied+" pcs from Job "+(job.job||"-")+" into station queues.");
+}
+
+/************** IMPORT/EXPORT + TV + EFF DASH **************/
+function openTV(){
+  window.open("Mirror_TV_Display_ASI_v25_shiftToggle.html","_blank");
+}
+
+// NEW: Worker Efficiency dashboard
+function openWorker(){
+  // 🔁 change filename if yours is different
+  window.open("Worker_Efficiency_Dashboard_v1.html","_blank");
+}
+
+// Mirror Department KPI / efficiency dashboard
+function openEfficiency(){
+  window.open("Mirror_Dept_KPI_Dashboard_v1.html","_blank");
+}
+
+// NEW: Master ASI dashboard (plant-wide)
+function openMaster(){
+  // 🔁 change filename when your master dashboard file name is final
+  window.open("ASI_Master_Ops_Dashboard.html","_blank");
+}
+
+/************** SHIFT TOGGLE **************/
+function updateShiftLabels(){
+  var lbl=$("#shiftLabel");
+  if(lbl) lbl.textContent = activeShift==="night"?"Night":"Day";
+  var btn=$("#shiftToggleBtn");
+  if(btn) btn.textContent = activeShift==="night"?"Switch to Day Shift":"Switch to Night Shift";
+}
+function switchShift(){
+  saveShiftState(activeShift,state);
+  activeShift = (activeShift==="night")?"day":"night";
+  localStorage.setItem("asi.activeShift",activeShift);
+  state = loadShiftState(activeShift);
+  render();
+}
+
+/************** INIT **************/
+document.addEventListener("DOMContentLoaded",function(){
+  applyTheme(localStorage.getItem(THEME_KEY)||"dark");
+
+  on($("#themeToggle"),"click",toggleTheme);
+  on($("#search"),"input",render);
+  on($("#addBtn"),"click",addStation);
+  on($("#resetBtn"),"click",resetAll);
+  on($("#openTVBtn"),"click",openTV);
+  on($("#openWorkerBtn"),"click",openWorker);
+  on($("#openEffBtn"),"click",openEfficiency);
+  on($("#openMasterBtn"),"click",openMaster);
+  on($("#shiftToggleBtn"),"click",switchShift);
+
+  on($("#kpiBtn"),"click",openKPIModal);
+  on($("#kpiClose"),"click",closeKPIModal);
+  on($("#kpiExport"),"click",exportKPIToCSV);
+  on($("#kpiClearMonth"),"click",clearMonthKPI);
+  on($("#kpiMonth"),"input",renderKPI);
+  on($("#kpiGroup"),"change",renderKPI);
+
+  // schedule CSV import & modal wiring
+  on($("#schedFile"), "change", handleScheduleFile);
+  on($("#schedOpenBtn"), "click", openScheduleModal);
+  on($("#scheduleClose"), "click", closeScheduleModal);
+  on($("#scheduleCloseTop"), "click", closeScheduleModal);
+  var schedOverlay = $("#scheduleModal");
+  if(schedOverlay){
+    schedOverlay.addEventListener("click", function(e){
+      if(e.target === schedOverlay) closeScheduleModal();
+    });
+  }
+  on($("#scheduleApply"), "click", applyScheduleToStations);
+
+  // Apply config-based labels
+  document.title = "ASI — " + (DASHBOARD_CONFIG.lineTitle || "Control Dashboard");
+
+  var bt = $("#brandTitle");
+  if(bt) bt.textContent = DASHBOARD_CONFIG.lineTitle || "Mirror Control Dashboard";
+
+  var fd = $("#footerDept");
+  if(fd) fd.textContent = DASHBOARD_CONFIG.departmentName || "Mirror Department";
+ 
+ updateShiftLabels();
+  render();
+});
 </script>
 </body>
 </html>
