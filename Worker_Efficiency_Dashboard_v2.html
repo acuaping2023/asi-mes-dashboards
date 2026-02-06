@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1291,13 +1292,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#toDate").value   = todayIso();
   $("#fromDate").value = isoNDaysAgo(6);
 
-  // Always hide 0% rows
-  const nz = $("#nonZeroToggle");
-  if (nz) {
-    nz.checked = true;
-    nz.addEventListener("change", () => renderAll(lastRows));
-  }
-
   const baselineSel = $("#baselineMode");
   if (baselineSel){
     baselineSel.addEventListener("change", () => renderAll(lastRows));
@@ -1488,13 +1482,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const fname = `mirror_assembly_${dates[0]}_to_${dates[dates.length-1]}_baseline_${baselineMode}.pdf`;
     doc.save(fname);
     }
-
-
-  // ---------- DAILY PRODUCTION REPORT (PDF) ----------
-function safeNum(n){
-  const v = Number(n);
-  return isNaN(v) ? 0 : v;
-}
 
 function groupSum(rows, keyFn){
   const out = {};
@@ -2266,22 +2253,16 @@ function renderWorkerBarChart(rows){
   labels.forEach(name => {
     const info = byWorker[name];
 
-    // Daily avg (weighted) = most recent day only (SUM actual ÷ SUM target)
-    let dailyAvg = NaN;
+    // ✅ Range avg (weighted) = SUM(actual) ÷ SUM(target) across selected date range
+    let rangeAvg = null;
     if (info.rows.length){
-    const latestDate = [...info.rows]
-        .map(r => (r.log_date || "").slice(0,10))
-        .filter(Boolean)
-        .sort()
-        .pop();
-
-    const latestDayRows = info.rows.filter(r => (r.log_date || "").slice(0,10) === latestDate);
-    const e = weightedEffPct(latestDayRows);
-    if (e != null && !isNaN(e)) dailyAvg = e;
+      const e = weightedEffPct(info.rows);
+      if (e != null && !isNaN(e)) rangeAvg = e;
     }
 
-    const dailyAvgRounded = Math.round(dailyAvg * 10) / 10;
-    dataVals.push(dailyAvgRounded);
+const rangeAvgRounded = (rangeAvg == null) ? null : (Math.round(rangeAvg * 10) / 10);
+dataVals.push(rangeAvgRounded);
+
 
     // Weekly stats (latest week only)
     const rowsSorted = [...info.rows].sort((a,b) =>
@@ -2313,7 +2294,7 @@ function renderWorkerBarChart(rows){
     }
 
 
-    if (weeklyAvg === null) weeklyAvg = dailyAvg;
+    if (weeklyAvg === null) weeklyAvg = rangeAvg;
     if (!weeklyUnits) weeklyUnits = 0;
 
     // Trend label (no pts/week)
@@ -2356,7 +2337,7 @@ function renderWorkerBarChart(rows){
 
     workerDetails.push({
       name,
-      dailyAvg: dailyAvgRounded,
+      rangeAvg: rangeAvgRounded,     // ✅ renamed
       weeklyAvg: weeklyAvg,
       weeklyUnits: weeklyUnits,
       trendLabel: trendLabel
@@ -2364,10 +2345,10 @@ function renderWorkerBarChart(rows){
   });
 
   if(title){
-    title.textContent = "Average efficiency by worker / station (selected filters)";
+    title.textContent = "Range average efficiency by worker / station (weighted: SUM actual ÷ SUM target)";
   }
 
-  const colors = dataVals.map(v => getEfficiencyColor(v));
+  const colors = dataVals.map(v => (v == null || isNaN(v)) ? "#9ca3af" : getEfficiencyColor(v));
 
   const data = {
     labels,
@@ -2419,8 +2400,10 @@ function renderWorkerBarChart(rows){
             const idx = item.dataIndex;
             const w   = workerDetails[idx];
             if (!w) return "";
-            return `Daily avg: ${w.dailyAvg.toFixed(1)}%`;
+            if (w.rangeAvg == null) return "Range avg: —";
+            return `Range avg: ${w.rangeAvg.toFixed(1)}%`;
           },
+
           afterBody: (items) => {
             if (!items.length) return [];
             const idx = items[0].dataIndex;
@@ -2505,33 +2488,66 @@ function renderWorkerBarChart(rows){
         labels,
         datasets:[{
         label:"Efficiency (%)",
-        data:effs,
-        tension:0.3,
+        data: effs,
+        tension: 0.3,
+
+        // ✅ allow a little drawing beyond chartArea so points don't get sliced
+        clip: 12,
+
         borderColor: lineColor,
         backgroundColor: lineColor,
         pointBackgroundColor: lineColor,
         pointBorderColor: lineColor
-        }]
+      }]
     };
 
-    const options = {
-        responsive:true,
-        maintainAspectRatio:false,
-        scales:{
+    // --- prevent line/points from getting clipped at top ---
+    const maxEff = Math.max(...effs);
+    const dynamicMax = Math.max(120, Math.ceil((maxEff + 6) / 5) * 5); // adds headroom + rounds to 5s
+
+        const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+
+      layout: {
+        padding: { top: 14, right: 10, bottom: 6, left: 6 }
+      },
+
+      elements: {
+        point: { radius: 3, hoverRadius: 4 }
+      },
+
+      scales: {
         x: { ticks: { color: chartTextColor() } },
-        y: { beginAtZero:true, max:120, ticks: { color: chartTextColor() } }
-        },
-        plugins:{
-        legend:{ display:false },
+        y: {
+          beginAtZero: true,
+          suggestedMax: dynamicMax,
+          grace: "6%",
+          ticks: { color: chartTextColor() }
+        }
+      },
+
+      plugins: {
+        legend: { display: false },
         tooltip: {
-            backgroundColor: "#111827",
-            borderColor: "#111827",
-            borderWidth: 1,
-            titleColor: "#f9fafb",
-            bodyColor: "#f9fafb",
+          backgroundColor: "#111827",
+          borderColor: "#111827",
+          borderWidth: 1,
+          titleColor: "#f9fafb",
+          bodyColor: "#f9fafb",
         }
-        }
+      }
     };
+
+    // ✅ THIS must be inside the function (it was outside due to extra braces)
+    if(trendChartInstance){
+      trendChartInstance.data    = data;
+      trendChartInstance.options = options;
+      trendChartInstance.update();
+    }else{
+      trendChartInstance = new Chart(ctx, { type:'line', data, options });
+    }
+
 
     if(trendChartInstance){
         trendChartInstance.data    = data;
@@ -2542,22 +2558,22 @@ function renderWorkerBarChart(rows){
     }
     }
 
-    // ---------- WEEKLY LEADERBOARD ----------
+   // ---------- WEEKLY LEADERBOARD ----------
     function renderWeeklyLeaderboard(rows){
-    const tbody = $("#leaderBody");
-    const title = $("#leaderTitle");
-    if(!tbody) return;
+      const tbody = $("#leaderBody");
+      const title = $("#leaderTitle");
+      if(!tbody) return;
 
-    if(!rows || !rows.length){
+      if(!rows || !rows.length){
         tbody.innerHTML =
-        '<tr><td colspan="5" style="text-align:center;padding:8px;">No data for this filter.</td></tr>';
+          '<tr><td colspan="5" style="text-align:center;padding:8px;">No data for this filter.</td></tr>';
         if(title) title.textContent = "Weekly leaderboard (latest week in range)";
         return;
-    }
+      }
 
-    // group by week + worker, but compute WEIGHTED eff using sums
-    const groups = {};
-    rows.forEach(r => {
+      // group by week + worker, but compute WEIGHTED eff using sums
+      const groups = {};
+      rows.forEach(r => {
         const dateStr = r.log_date || r.day || "";
         const weekKey = getWeekKey(dateStr);
         if(!weekKey) return;
@@ -2567,57 +2583,99 @@ function renderWorkerBarChart(rows){
 
         if(!groups[gKey]) groups[gKey] = { week: weekKey, name, rows: [] };
         groups[gKey].rows.push(r);
-    });
+      });
 
-    const arr = Object.values(groups).map(g => {
+      const arr = Object.values(groups).map(g => {
         const s = sumActualTarget(g.rows);
         const avg = s.target > 0 ? (s.actual / s.target) * 100 : null;
 
         // days counted = unique days that had a standard
         const daySet = new Set();
         g.rows.forEach(r => {
-        if (getTarget(r) == null) return;
-        daySet.add((r.log_date || "").slice(0,10));
+          if (getTarget(r) == null) return;
+          daySet.add((r.log_date || "").slice(0,10));
         });
 
-        return {
-        week: g.week,
-        name: g.name,
-        avg,
-        days: daySet.size
-        };
-    }).filter(x => x.avg != null);
+        return { week: g.week, name: g.name, avg, days: daySet.size };
+      }).filter(x => x.avg != null);
 
-    if(!arr.length){
+      if(!arr.length){
         tbody.innerHTML =
-        '<tr><td colspan="5" style="text-align:center;padding:8px;">No efficiency data for leaderboard.</td></tr>';
+          '<tr><td colspan="5" style="text-align:center;padding:8px;">No efficiency data for leaderboard.</td></tr>';
         if(title) title.textContent = "Weekly leaderboard (latest week in range)";
         return;
-    }
+      }
 
-    let latestWeek = null;
-    arr.forEach(g => { if(!latestWeek || g.week > latestWeek) latestWeek = g.week; });
+      // find latest week
+      let latestWeek = null;
+      arr.forEach(g => { if(!latestWeek || g.week > latestWeek) latestWeek = g.week; });
 
-    const latestRows = arr.filter(g => g.week === latestWeek).sort((a,b) => b.avg - a.avg);
-    const top = latestRows.slice(0,5);
+      const latestRows = arr
+        .filter(g => g.week === latestWeek)
+        .sort((a,b) => b.avg - a.avg)
+        .slice(0,5);
 
-    if(title) title.textContent = `Weekly leaderboard — ${latestWeek}`;
+      if(title) title.textContent = `Weekly leaderboard — ${latestWeek}`;
 
-    let html = "";
-    top.forEach((g, idx) => {
+      let html = "";
+      latestRows.forEach((g, idx) => {
         html += `
-        <tr>
+          <tr>
             <td>${idx+1}</td>
             <td>${g.week}</td>
             <td>${g.name.replace(/</g,"&lt;")}</td>
             <td style="text-align:right;">${g.avg.toFixed(1)}</td>
             <td style="text-align:right;">${g.days}</td>
-        </tr>
+          </tr>
         `;
-    });
+      });
 
-    tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
+      tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
     }
+
+// ---------- DETAIL TABLE ----------
+function renderTable(rows){
+  const tbody = $("#detailBody");
+  if(!tbody) return;
+
+  if(!rows || !rows.length){
+    tbody.innerHTML =
+      '<tr><td colspan="9" style="text-align:center;padding:10px;">No rows for this filter.</td></tr>';
+    return;
+  }
+
+  let html = "";
+  rows.forEach(r => {
+    const eff = getEff(r);
+    const band = getEfficiencyBand(eff);
+    const effClass = band ? `eff-${band}` : "";
+    const target = getTarget(r);
+    const effDisplay = (eff == null || isNaN(eff)) ? "—" : eff.toFixed(2);
+    const targetDisplay = (target == null) ? "— (missing standard)" : target.toLocaleString();
+
+    html += `
+      <tr
+        class="detail-row-drill"
+        data-date="${r.log_date || ''}"
+        data-worker="${(r.worker_name || '').replace(/"/g,'&quot;')}"
+        style="cursor:pointer;"
+      >
+        <td>${r.log_date || '-'}</td>
+        <td>${(r.role || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.worker_name || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.part_number || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.mirror_type || '').replace(/</g,"&lt;")}</td>
+        <td>${(r.mirror_class || '').replace(/</g,"&lt;")}</td>
+        <td style="text-align:right;">${(Number(r.daily_total)||0).toLocaleString()}</td>
+        <td style="text-align:right;">${targetDisplay}</td>
+        <td style="text-align:right;" class="${effClass}">${effDisplay}</td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+
 
 // ---------- HELPER: GET CURRENT FILTERED ROWS (MATCHES DETAIL TABLE) ----------
 function getCurrentFilteredRows() {
