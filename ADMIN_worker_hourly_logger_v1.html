@@ -363,6 +363,11 @@
       <span id="todayTag" class="tag" style="margin-left:6px;"></span>
     </div>
 
+        <!-- DAILY TOTALS -->
+    <div id="dailyTotalsLine" class="tag" style="display:inline-block; margin:6px 0 10px 0;">
+      Totals: —
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -642,6 +647,56 @@ const HOUR_BLOCK_ORDER = {
 };
 function getHourBlockSortValue(block){ return HOUR_BLOCK_ORDER[block] || 999; }
 
+/* -------------------- BREAK-AWARE HOURS + TOTALS -------------------- */
+const HOUR_BLOCK_MULTIPLIER = {
+  "9am-10am (15m break)": 45/60,           // 0.75
+  "1:30pm-2:30pm (10m break)": 50/60       // 0.8333...
+};
+
+function hourMultiplier(block){
+  const b = (block || "").trim();
+  return HOUR_BLOCK_MULTIPLIER[b] ?? 1;
+}
+
+function renderDailyTotals(rows){
+  const el = document.getElementById("dailyTotalsLine");
+  if(!el) return;
+
+  const data = Array.isArray(rows) ? rows : [];
+  if(!data.length){
+    el.textContent = "Totals: —";
+    return;
+  }
+
+   const totalPieces = data.reduce((a,r) => a + Number(r.qty || 0), 0);
+
+  // “Hours” = unique worker+role+hour_block (so split/multiple entries in same hour only count once),
+  // adjusted for break blocks per your rule.
+  const uniqueHourKeys = new Set();
+  let adjustedHours = 0;
+
+  data.forEach(r => {
+    const w = (r.worker_name || "").trim();
+    const role = (r.role || "").trim();
+    const hb = (r.hour_block || "").trim();
+    if(!w || !role || !hb) return;
+
+    const key = `${w}||${role}||${hb}`;
+    if(uniqueHourKeys.has(key)) return;
+
+    uniqueHourKeys.add(key);
+    adjustedHours += hourMultiplier(hb);
+  });
+
+  const pph = adjustedHours > 0 ? (totalPieces / adjustedHours) : 0;
+
+
+  el.textContent =
+    `Totals: ${totalPieces.toLocaleString()} pcs • ` +
+    `${adjustedHours.toFixed(2)} adj hrs • ` +
+    `${pph.toFixed(2)} pcs/adj-hr`;
+}
+
 function autoSelectHourBlock(){
   const select = $("#hourBlock");
   if(!select) return;
@@ -873,6 +928,7 @@ async function loadTodayEntries(){
     if(!data.length){
       tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
       if(tag) tag.textContent = date;
+      renderDailyTotals([]);
       setFreshness(`Last updated: ${nowStamp()} (Demo)`);
       return;
     }
@@ -913,6 +969,7 @@ async function loadTodayEntries(){
 
     tbody.innerHTML = html;
     if(tag) tag.textContent = `${date} • ${data.length} entries`;
+    renderDailyTotals(data);
     setFreshness(`Last updated: ${nowStamp()} (Demo)`);
     updateRealtimeValidation();
     return;
@@ -922,6 +979,7 @@ async function loadTodayEntries(){
   if(!session?.user){
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view entries.</td></tr>';
     if(tag) tag.textContent = "";
+    renderDailyTotals([]);
     return;
   }
 
@@ -952,6 +1010,7 @@ async function loadTodayEntries(){
     if(!data || !data.length){
       tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>';
       if(tag) tag.textContent = date;
+      renderDailyTotals([]);
       setFreshness(`Last updated: ${nowStamp()}`);
       return;
     }
@@ -999,6 +1058,7 @@ async function loadTodayEntries(){
 
     tbody.innerHTML = html;
     if(tag) tag.textContent = `${date} • ${data.length} entries`;
+    renderDailyTotals(data);
     setFreshness(`Last updated: ${nowStamp()}`);
     updateRealtimeValidation();
   }catch(err){
