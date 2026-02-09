@@ -2616,15 +2616,41 @@ document.addEventListener("DOMContentLoaded", async () => {
     </div>
 
     <div style="font-size:13px; color:var(--text); line-height:1.45; margin-top:10px;">
-      Live mode writes to Supabase and loads “Today’s entries” with hardened limits/timeouts to prevent lockups.<br/><br/>
-      Demo mode stores entries locally in your browser for testing/training/portfolio without touching Supabase.<br/><br/>
-      Standards are enforced before saving:
-      <ul style="margin:6px 0 0 18px;">
-        <li>Assembler parts must exist in <code>mirror_standards</code></li>
-        <li>Packer parts must exist in <code>packing_standards</code></li>
+
+      <b>Modes</b>
+      <ul style="margin:6px 0 10px 18px;">
+        <li><b>Live mode</b> (default): loads + writes to Supabase tables. “Today’s entries” uses hardened limits/timeouts to prevent lockups.</li>
+        <li><b>Demo mode</b>: stores entries + worker names locally in your browser (no Supabase reads/writes). Good for training/testing.</li>
       </ul>
-      If missing, you’ll be prompted to add the standard inline.
+
+      <b>Step-by-step logging</b>
+      <ol style="margin:6px 0 10px 18px;">
+        <li>Select <b>Date</b>, <b>Hour block</b>, <b>Role</b>, and <b>Worker/Station</b>.</li>
+        <li>Enter <b>Part #</b> (Mirror type auto-detects from 0600/0620 in the part number when possible).</li>
+        <li>Select <b>Category</b> (Standard/Special), then enter <b>Qty</b>.</li>
+        <li>Optional: add <b>Job Ref</b> + <b>Order Qty</b> to track remaining and catch over-logs.</li>
+        <li>Click <b>Save entry</b> (or <b>Save &amp; stay</b> to keep the same worker/hour flow and advance the hour block).</li>
+      </ol>
+
+      <b>Standards enforcement (required before saving)</b>
+      <ul style="margin:6px 0 10px 18px;">
+        <li><b>Assembler</b> parts must exist in <code>mirror_standards</code></li>
+        <li><b>Packer</b> parts must exist in <code>packing_standards</code> (active)</li>
+      </ul>
+      If a standard is missing, you’ll be prompted to add it inline, then re-click <b>Save entry</b>.
+
+      <div style="margin-top:10px;">
+        <b>Smart helpers</b>
+        <ul style="margin:6px 0 0 18px;">
+          <li><b>Continue from last hour?</b> If you pick a worker/role/hour with no fields filled, it can carry forward the previous hour’s Job/Part/Order Qty so you only type Qty.</li>
+          <li><b>Real-time validation</b> flags potential double-logs for the same hour block and shows job progress when Job Ref + Order Qty are provided.</li>
+          <li><b>Daily totals</b> shows total pieces and <b>adjusted hours</b> (break blocks are weighted) to calculate pcs/adj-hr.</li>
+          <li><b>Manage</b> opens the worker/station directory editor (Live = <code>worker_directory</code>, Demo = local storage).</li>
+        </ul>
+      </div>
+
     </div>
+
   </div>
 </div>
 
