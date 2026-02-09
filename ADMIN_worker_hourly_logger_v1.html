@@ -74,10 +74,30 @@
 
     .form-grid{
       display:grid;
-      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
       gap:10px 12px;
       margin-bottom:10px;
       align-items:flex-end;
+    }
+
+    /* Worker/Station select + Manage button */
+    .worker-station-row{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px;
+      align-items:center;
+      width:100%;
+    }
+
+    .worker-station-row select{
+      min-width:0;
+      width:100%;
+    }
+
+    #manageWorkersBtn{
+      height: 36px;
+      padding: 0 12px;
+      white-space: nowrap;
     }
 
     .field{ display:flex; flex-direction:column; gap:4px; font-size:12px; }
@@ -142,7 +162,7 @@
     }
     .status-ok{ color:var(--ok); }
     .status-err{ color:var(--danger); }
-    .status-warn{ color:#b45309; } /* amber-ish */
+    .status-warn{ color:#b45309; }
 
     .quick-qty-row{
       display:flex;
@@ -291,9 +311,12 @@
 
       <div class="field">
         <label for="workerName">Worker / Station</label>
-        <select id="workerName">
-          <option value="">Select...</option>
-        </select>
+        <div class="worker-station-row">
+          <select id="workerName">
+            <option value="">Select...</option>
+          </select>
+          <button class="btn btn-mini" id="manageWorkersBtn" type="button">Manage</button>
+        </div>
       </div>
 
       <div class="field">
@@ -363,7 +386,7 @@
       <span id="todayTag" class="tag" style="margin-left:6px;"></span>
     </div>
 
-        <!-- DAILY TOTALS -->
+    <!-- DAILY TOTALS -->
     <div id="dailyTotalsLine" class="tag" style="display:inline-block; margin:6px 0 10px 0;">
       Totals: —
     </div>
@@ -454,7 +477,7 @@ function debounce(fn, wait=300){
 }
 
 /* -------------------- REAL-TIME VALIDATION -------------------- */
-const STATS_CACHE = new Map(); // key: `${worker}|${role}` -> { ts, mean, std, n }
+const STATS_CACHE = new Map();
 const STATS_TTL_MS = 5 * 60_000;
 
 function meanStd(nums){
@@ -462,7 +485,7 @@ function meanStd(nums){
   const n = arr.length;
   if(n < 2) return { mean: n ? arr[0] : 0, std: 0, n };
   const mean = arr.reduce((a,b)=>a+b,0) / n;
-  const varPop = arr.reduce((a,b)=>a + Math.pow(b-mean,2), 0) / (n - 1); // sample variance
+  const varPop = arr.reduce((a,b)=>a + Math.pow(b-mean,2), 0) / (n - 1);
   const std = Math.sqrt(varPop);
   return { mean, std, n };
 }
@@ -476,7 +499,6 @@ async function getWorkerHourlyStats(workerName, role, excludeDate){
   const cached = STATS_CACHE.get(key);
   if(cached && (Date.now() - cached.ts) < STATS_TTL_MS) return cached;
 
-  // Demo mode: derive stats from local demo entries
   if(demoMode){
     const rows = loadDemoEntries();
     const nums = (rows || [])
@@ -488,7 +510,6 @@ async function getWorkerHourlyStats(workerName, role, excludeDate){
     return out;
   }
 
-  // Live mode: pull last ~400 qty points for this worker/role (fast enough, no aggregates needed)
   try{
     const { data: { session } } = await sb.auth.getSession();
     if(!session?.user) return { mean: 0, std: 0, n: 0 };
@@ -525,7 +546,7 @@ async function getWorkerHourlyStats(workerName, role, excludeDate){
   }
 }
 
-function setRtBox(html, level){ // level: ok|warn|err
+function setRtBox(html, level){
   const el = document.getElementById("rtValidationBox");
   if(!el) return;
   el.classList.remove("status-ok","status-warn","status-err");
@@ -550,20 +571,17 @@ const updateRealtimeValidation = debounce(async () => {
   const orderQtyStr = (document.getElementById("orderQty")?.value || "").trim();
   const orderQtyNow = orderQtyStr === "" ? null : parseInt(orderQtyStr, 10);
 
-  // If nothing selected yet, keep it clean
   if(!worker || !role){
     setRtBox("", "ok");
     return;
   }
 
-  // Use loaded cache for the date that’s currently shown in table
   const rowsForDate = (TODAY_ROWS_CACHE || []).filter(r => r.log_date === date);
   const rowsForWorker = rowsForDate.filter(r => (r.worker_name || "") === worker && (r.role || "") === role);
 
   const dayTotal = sumQty(rowsForWorker);
-  const hourCount = new Set(rowsForWorker.map(r => r.hour_block)).size; // “hours logged” approx as distinct blocks
+  const hourCount = new Set(rowsForWorker.map(r => r.hour_block)).size;
 
-  // Detect double-logging an hour (multiple entries same worker/hour/role)
   let dupWarn = "";
   if(hourBlock){
     const sameHour = rowsForDate.filter(r =>
@@ -576,12 +594,11 @@ const updateRealtimeValidation = debounce(async () => {
     }
   }
 
-  // Worker 3σ check (current hour qty vs historical hourly mean/std)
   let sigmaHtml = "";
   let sigmaLevel = "ok";
   if(qtyNow != null && Number.isFinite(qtyNow)){
     const stats = await getWorkerHourlyStats(worker, role, date);
-    if(stats.n >= 12 && stats.std > 0){ // need enough history to be meaningful
+    if(stats.n >= 12 && stats.std > 0){
       const threshold = stats.mean - 3 * stats.std;
       const isLow = qtyNow < threshold;
       sigmaLevel = isLow ? "warn" : "ok";
@@ -595,12 +612,11 @@ const updateRealtimeValidation = debounce(async () => {
     }
   }
 
-  // JobRef vs Order Qty validation (cumulative)
   let jobHtml = "";
   let jobLevel = "ok";
   if(jobRef){
     const jobRows = rowsForDate.filter(r => (r.job_ref || "") === jobRef);
-    const jobTotal = sumQty(jobRows) + (Number.isFinite(qtyNow) ? qtyNow : 0); // include current input as “pending”
+    const jobTotal = sumQty(jobRows) + (Number.isFinite(qtyNow) ? qtyNow : 0);
     const inferredOrder = orderQtyNow ?? (jobRows.find(r => r.order_qty != null)?.order_qty ?? null);
     if(inferredOrder != null && Number.isFinite(Number(inferredOrder))){
       const remaining = Number(inferredOrder) - jobTotal;
@@ -615,7 +631,6 @@ const updateRealtimeValidation = debounce(async () => {
     }
   }
 
-  // Build box
   const header = `<b>Real-time validation</b> • ${escapeHtml(worker)} (${escapeHtml(role)}) • ${escapeHtml(date)}`;
   const totals = `Day total so far: <b>${dayTotal.toLocaleString()}</b> • Hour blocks logged: <b>${hourCount}</b>`;
 
@@ -627,12 +642,10 @@ const updateRealtimeValidation = debounce(async () => {
     jobHtml ? `<div style="margin-top:6px;">${jobHtml}</div>` : ""
   ].filter(Boolean).join("");
 
-  // Choose worst severity
   const level = (dupWarn || jobLevel === "warn" || sigmaLevel === "warn") ? "warn" : "ok";
   setRtBox(parts, level);
 
 }, 250);
-
 
 /* -------------------- HOUR BLOCK ORDER -------------------- */
 const HOUR_BLOCK_ORDER = {
@@ -646,11 +659,159 @@ const HOUR_BLOCK_ORDER = {
   "2:30pm-3:30pm": 8
 };
 function getHourBlockSortValue(block){ return HOUR_BLOCK_ORDER[block] || 999; }
+/* -------------------- SAME JOB PROMPT (LAST HOUR CARRY-FORWARD) -------------------- */
+const ORDERED_BLOCKS = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
+
+let SAMEJOB_CTX = null;            // holds last-hour row when modal opens
+let SAMEJOB_LAST_PROMPT_KEY = "";  // prevents repeat prompting for same selection
+
+function getPreviousHourBlock(currentBlock){
+  const idx = ORDERED_BLOCKS.indexOf((currentBlock || "").trim());
+  if(idx <= 0) return null;
+  return ORDERED_BLOCKS[idx - 1];
+}
+
+function findLastHourRow({ logDate, role, workerName, hourBlock }){
+  const prevBlock = getPreviousHourBlock(hourBlock);
+  if(!prevBlock) return null;
+
+  const rows = Array.isArray(TODAY_ROWS_CACHE) ? TODAY_ROWS_CACHE : [];
+  // Only rows for date + same worker + role + previous hour block
+  const candidates = rows.filter(r =>
+    (r.log_date || "") === logDate &&
+    (r.role || "") === role &&
+    (r.worker_name || "") === workerName &&
+    (r.hour_block || "") === prevBlock
+  );
+
+  if(!candidates.length) return null;
+
+  // Prefer most recent by numeric id if available; else just last in array
+  candidates.sort((a,b) => {
+    const ai = Number(a.id || 0);
+    const bi = Number(b.id || 0);
+    return bi - ai;
+  });
+
+  return candidates[0];
+}
+
+function openSameJobModal(){
+  const m = document.getElementById("sameJobModal");
+  if(m) m.style.display = "flex";
+}
+function closeSameJobModal(){
+  const m = document.getElementById("sameJobModal");
+  if(m) m.style.display = "none";
+  SAMEJOB_CTX = null;
+}
+
+function setCarryForwardFromRow(row){
+  if(!row) return;
+
+  // Keep same info from last hour:
+  const part = (row.part_number || "").trim();
+  const mt   = (row.mirror_type || "").trim();
+  const mc   = (row.mirror_class || "").trim();
+  const job  = (row.job_ref || "").trim();
+  const oq   = row.order_qty == null ? "" : String(row.order_qty);
+
+  const partEl = document.getElementById("partNumber");
+  const mtEl   = document.getElementById("mirrorType");
+  const mcEl   = document.getElementById("mirrorClass");
+  const jobEl  = document.getElementById("jobRef");
+  const oqEl   = document.getElementById("orderQty");
+
+  if(partEl) partEl.value = part;
+  if(mtEl)   mtEl.value = mt;
+  if(mcEl)   mcEl.value = mc;
+  if(jobEl)  jobEl.value = job;
+  if(oqEl)   oqEl.value = oq;
+
+  // Re-run helpers that depend on part/type
+  autoSetMirrorTypeFromPart(part);
+  refreshPartSuggestions();
+  updateRealtimeValidation();
+
+  // Put cursor on Qty so they just type how many they made
+  const qtyEl = document.getElementById("qty");
+  if(qtyEl){
+    qtyEl.value = "";
+    qtyEl.focus();
+  }
+
+  setStatus("Carried forward Job/Part/Order Qty from last hour. Enter Qty for this hour.", true);
+}
+
+function clearForNewJobEntry(){
+  const partEl = document.getElementById("partNumber");
+  const mtEl   = document.getElementById("mirrorType");
+  const mcEl   = document.getElementById("mirrorClass");
+  const jobEl  = document.getElementById("jobRef");
+  const oqEl   = document.getElementById("orderQty");
+  const qtyEl  = document.getElementById("qty");
+
+  if(partEl) partEl.value = "";
+  if(mtEl)   mtEl.value = "";
+  if(mcEl)   mcEl.value = "";
+  if(jobEl)  jobEl.value = "";
+  if(oqEl)   oqEl.value = "";
+  if(qtyEl)  qtyEl.value = "";
+
+  refreshPartSuggestions();
+  updateRealtimeValidation();
+
+  // Guide user to enter new job fields
+  if(jobEl) jobEl.focus();
+  setStatus("Enter new Job Ref, Part #, and Order Qty, then Qty for this hour.", true);
+}
+
+function maybePromptSameJob(){
+  const logDate     = (document.getElementById("logDate")?.value || todayIso());
+  const hourBlock   = (document.getElementById("hourBlock")?.value || "").trim();
+  const role        = (document.getElementById("role")?.value || "").trim();
+  const workerName  = (document.getElementById("workerName")?.value || "").trim();
+
+  if(!logDate || !hourBlock || !role || !workerName) return;
+
+  // Don’t interrupt if user already started typing new details
+  const partNow = (document.getElementById("partNumber")?.value || "").trim();
+  const jobNow  = (document.getElementById("jobRef")?.value || "").trim();
+  const oqNow   = (document.getElementById("orderQty")?.value || "").trim();
+  if(partNow || jobNow || oqNow) return;
+
+  const promptKey = `${logDate}|${role}|${workerName}|${hourBlock}`;
+  if(promptKey === SAMEJOB_LAST_PROMPT_KEY) return;
+
+  const lastRow = findLastHourRow({ logDate, role, workerName, hourBlock });
+  if(!lastRow) return;
+
+  SAMEJOB_LAST_PROMPT_KEY = promptKey;
+  SAMEJOB_CTX = lastRow;
+
+  const prevBlock = getPreviousHourBlock(hourBlock) || "last hour";
+  const jobLabel  = (lastRow.job_ref || "").trim() ? escapeHtml(lastRow.job_ref) : "—";
+  const partLabel = (lastRow.part_number || "").trim() ? escapeHtml(lastRow.part_number) : "—";
+  const oqLabel   = lastRow.order_qty == null ? "—" : Number(lastRow.order_qty).toLocaleString();
+
+  const promptEl = document.getElementById("sameJobPromptText");
+  const tagEl    = document.getElementById("sameJobDetailsTag");
+
+  if(promptEl){
+    promptEl.innerHTML = `Is <b>${escapeHtml(workerName)}</b> still working on <b>${jobLabel}</b> for part <b>${partLabel}</b>?`;
+  }
+  if(tagEl){
+    tagEl.textContent = `From ${prevBlock} • Job: ${lastRow.job_ref || "—"} • Part: ${lastRow.part_number || "—"} • Order Qty: ${oqLabel}`;
+  }
+
+  openSameJobModal();
+}
+
 
 /* -------------------- BREAK-AWARE HOURS + TOTALS -------------------- */
 const HOUR_BLOCK_MULTIPLIER = {
-  "9am-10am (15m break)": 45/60,           // 0.75
-  "1:30pm-2:30pm (10m break)": 50/60       // 0.8333...
+  "9am-10am (15m break)": 45/60,
+  "1:30pm-2:30pm (10m break)": 50/60
 };
 
 function hourMultiplier(block){
@@ -668,10 +829,8 @@ function renderDailyTotals(rows){
     return;
   }
 
-   const totalPieces = data.reduce((a,r) => a + Number(r.qty || 0), 0);
+  const totalPieces = data.reduce((a,r) => a + Number(r.qty || 0), 0);
 
-  // “Hours” = unique worker+role+hour_block (so split/multiple entries in same hour only count once),
-  // adjusted for break blocks per your rule.
   const uniqueHourKeys = new Set();
   let adjustedHours = 0;
 
@@ -689,7 +848,6 @@ function renderDailyTotals(rows){
   });
 
   const pph = adjustedHours > 0 ? (totalPieces / adjustedHours) : 0;
-
 
   el.textContent =
     `Totals: ${totalPieces.toLocaleString()} pcs • ` +
@@ -743,8 +901,10 @@ const sb = window.supabase.createClient(
 /* -------------------- DEMO MODE -------------------- */
 const DEMO_KEY = "WHL_DEMO_MODE_v1";
 const DEMO_STORAGE_KEY = "WHL_DEMO_ENTRIES_v1";
+const DEMO_WORKERS_KEY = "WHL_DEMO_WORKERS_v1";
 let demoMode = false;
 
+/* ✅ CHANGE 2A: Keep ONE demo-entry implementation (remove duplicates) */
 function loadDemoEntries(){
   try{ return JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY) || "[]"); }
   catch(_e){ return []; }
@@ -752,9 +912,26 @@ function loadDemoEntries(){
 function saveDemoEntries(rows){
   localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(rows || []));
 }
-function demoWorkers(){
+
+// Demo worker directory (editable)
+function defaultDemoWorkers(){
   return ["Station 1 — Demo","Station 2 — Demo","Station 3 — Demo","Packer A — Demo","Packer B — Demo"];
 }
+function loadDemoWorkers(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(DEMO_WORKERS_KEY) || "null");
+    if(Array.isArray(raw) && raw.length) return raw;
+  }catch(_e){}
+  const seed = defaultDemoWorkers();
+  localStorage.setItem(DEMO_WORKERS_KEY, JSON.stringify(seed));
+  return seed;
+}
+function saveDemoWorkers(list){
+  const clean = Array.from(new Set((list || []).map(x => String(x||"").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+  localStorage.setItem(DEMO_WORKERS_KEY, JSON.stringify(clean));
+  return clean;
+}
+
 function setWriteEnabled(enabled){
   ["submitBtn","saveAndStayBtn","enterStandardBtn","enterPackingStandardBtn"].forEach(id => {
     const el = document.getElementById(id);
@@ -792,7 +969,7 @@ function setStatus(message, ok=true){
 
 /* -------------------- PART SUGGESTIONS (CACHED + DEBOUNCED) -------------------- */
 let PART_CACHE = [];
-let PART_SUGGESTIONS_CACHE = new Map(); // key = `${date}|${mirrorType}` -> { ts, parts[] }
+let PART_SUGGESTIONS_CACHE = new Map();
 const PART_CACHE_TTL_MS = 60_000;
 
 function setPartSuggestions(parts){
@@ -824,21 +1001,19 @@ async function refreshPartSuggestionsCore(){
     return;
   }
 
-  // Cache hit
   const cached = PART_SUGGESTIONS_CACHE.get(cacheKey);
   if(cached && (Date.now() - cached.ts) < PART_CACHE_TTL_MS){
     setPartSuggestions(cached.parts);
     return;
   }
 
-  // FAST query: only required cols, limited
   try{
     const q = sb
       .from("worker_hourly_log")
       .select("part_number, mirror_type")
       .eq("log_date", date)
       .order("id", { ascending: false })
-      .limit(300); // keep small to prevent timeouts
+      .limit(300);
 
     const { data, error } = await withTimeoutRetry(
       () => q,
@@ -860,59 +1035,292 @@ async function refreshPartSuggestionsCore(){
     setPartSuggestions(parts);
   }catch(err){
     console.error("Part suggestions timeout:", err);
-    setPartSuggestions([]); // don’t block the page
+    setPartSuggestions([]);
   }
 }
 const refreshPartSuggestions = debounce(refreshPartSuggestionsCore, 350);
 
 /* -------------------- WORKER DIRECTORY DROPDOWN -------------------- */
+let WORKER_DIR_CACHE = [];
+let WORKER_DIR_CHANNEL = null;
+
+function setWorkerDirStatus(message, ok=true){
+  const el = document.getElementById("workerDirStatus");
+  if(!el) return;
+  el.textContent = message || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+
+function renderWorkerDirManager(){
+  const body = document.getElementById("workerDirBody");
+  if(!body) return;
+
+  const rows = Array.isArray(WORKER_DIR_CACHE) ? WORKER_DIR_CACHE : [];
+  if(!rows.length){
+    body.innerHTML = `<tr><td colspan="2" style="text-align:center; padding:10px; color:var(--muted);">No names yet.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const id = r.id;
+    const name = r.worker_name || "";
+    return `
+      <tr>
+        <td>
+          <input type="text" value="${escapeHtml(name)}" data-wd-input="${escapeHtml(id)}"
+                 style="width:100%; background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-size:14px;" />
+        </td>
+        <td>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-mini" type="button" data-wd-action="save" data-wd-id="${escapeHtml(id)}">Save</button>
+            <button class="btn btn-mini btn-danger" type="button" data-wd-action="delete" data-wd-id="${escapeHtml(id)}">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
 async function loadWorkerDirectory(){
   const selectEl = document.getElementById("workerName");
   if(!selectEl) return;
 
+  const prev = (selectEl.value || "").trim();
   selectEl.innerHTML = '<option value="">Select...</option>';
 
   if(demoMode){
-    demoWorkers().forEach(name => {
+    const list = loadDemoWorkers();
+    WORKER_DIR_CACHE = list.map((name, idx) => ({ id: `demo-${idx}`, worker_name: name }));
+    list.forEach(name => {
       const opt = document.createElement("option");
       opt.value = name; opt.textContent = name;
       selectEl.appendChild(opt);
     });
+    if(prev && list.includes(prev)) selectEl.value = prev;
+    renderWorkerDirManager();
     return;
   }
 
   const { data: { session } } = await sb.auth.getSession();
   if(!session?.user){
-    return; // don’t query while signed out
+    WORKER_DIR_CACHE = [];
+    renderWorkerDirManager();
+    return;
   }
 
   try{
     const { data, error } = await withTimeoutRetry(
-      () => sb.from("worker_directory").select("worker_name").order("worker_name", { ascending:true }).limit(300),
+      () => sb.from("worker_directory").select("id, worker_name").order("worker_name", { ascending:true }).limit(400),
       { ms: 20000, label: "worker_directory load", retries: 1, backoffMs: 700 }
     );
 
     if(error){
       console.error("Worker directory error:", error);
+      WORKER_DIR_CACHE = [];
+      renderWorkerDirManager();
       return;
     }
 
-    (data || [])
+    const clean = (data || [])
       .filter(row => row.worker_name && row.worker_name.trim() !== "")
-      .forEach(row => {
-        const opt = document.createElement("option");
-        opt.value = row.worker_name;
-        opt.textContent = row.worker_name;
-        selectEl.appendChild(opt);
-      });
+      .map(row => ({ id: row.id, worker_name: row.worker_name.trim() }));
+
+    WORKER_DIR_CACHE = clean;
+
+    clean.forEach(row => {
+      const opt = document.createElement("option");
+      opt.value = row.worker_name;
+      opt.textContent = row.worker_name;
+      selectEl.appendChild(opt);
+    });
+
+    if(prev && clean.some(x => x.worker_name === prev)) selectEl.value = prev;
+    renderWorkerDirManager();
+
   }catch(err){
     console.error("Worker directory timeout:", err);
+    WORKER_DIR_CACHE = [];
+    renderWorkerDirManager();
   }
 }
 
-/* -------------------- TODAY ENTRIES (NO select(*) + LIMIT) -------------------- */
+function normalizeName(s){ return String(s || "").trim().replace(/\s+/g, " "); }
+
+function isDuplicateName(name, excludeId=null){
+  const n = normalizeName(name).toLowerCase();
+  return (WORKER_DIR_CACHE || []).some(r => {
+    const same = normalizeName(r.worker_name).toLowerCase() === n;
+    return excludeId ? (same && String(r.id) !== String(excludeId)) : same;
+  });
+}
+
+async function addWorkerName(nameRaw){
+  const name = normalizeName(nameRaw);
+  if(!name){
+    setWorkerDirStatus("Enter a name.", false);
+    return;
+  }
+  if(isDuplicateName(name)){
+    setWorkerDirStatus("That name already exists.", false);
+    return;
+  }
+
+  if(demoMode){
+    const list = loadDemoWorkers();
+    list.push(name);
+    saveDemoWorkers(list);
+    setWorkerDirStatus("Added (Demo).", true);
+    await loadWorkerDirectory();
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session?.user){
+    setWorkerDirStatus("Sign in to edit the directory.", false);
+    return;
+  }
+
+  setWorkerDirStatus("Adding...", true);
+  try{
+    const { error } = await withTimeoutRetry(
+      () => sb.from("worker_directory").insert([{ worker_name: name }]),
+      { ms: 20000, label: "worker_directory insert", retries: 1, backoffMs: 800 }
+    );
+    if(error){
+      console.error("Insert worker error:", error);
+      setWorkerDirStatus(`Error adding: ${error.message}`, false);
+      return;
+    }
+    setWorkerDirStatus("Added.", true);
+    await loadWorkerDirectory();
+  }catch(err){
+    console.error("Insert worker timeout:", err);
+    setWorkerDirStatus("Timed out adding. Try again.", false);
+  }
+}
+
+async function updateWorkerName(id, nextNameRaw){
+  const nextName = normalizeName(nextNameRaw);
+  if(!nextName){
+    setWorkerDirStatus("Name cannot be blank.", false);
+    return;
+  }
+  if(isDuplicateName(nextName, id)){
+    setWorkerDirStatus("That name already exists.", false);
+    return;
+  }
+
+  if(demoMode){
+    const list = loadDemoWorkers();
+    const idx = WORKER_DIR_CACHE.findIndex(x => String(x.id) === String(id));
+    if(idx >= 0){
+      list[idx] = nextName;
+      saveDemoWorkers(list);
+      setWorkerDirStatus("Saved (Demo).", true);
+      await loadWorkerDirectory();
+    }
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session?.user){
+    setWorkerDirStatus("Sign in to edit the directory.", false);
+    return;
+  }
+
+  setWorkerDirStatus("Saving...", true);
+  try{
+    const { error } = await withTimeoutRetry(
+      () => sb.from("worker_directory").update({ worker_name: nextName }).eq("id", id),
+      { ms: 20000, label: "worker_directory update", retries: 1, backoffMs: 800 }
+    );
+    if(error){
+      console.error("Update worker error:", error);
+      setWorkerDirStatus(`Error saving: ${error.message}`, false);
+      return;
+    }
+    setWorkerDirStatus("Saved.", true);
+    await loadWorkerDirectory();
+  }catch(err){
+    console.error("Update worker timeout:", err);
+    setWorkerDirStatus("Timed out saving. Try again.", false);
+  }
+}
+
+async function deleteWorkerName(id){
+  if(demoMode){
+    const idx = WORKER_DIR_CACHE.findIndex(x => String(x.id) === String(id));
+    if(idx >= 0){
+      const list = loadDemoWorkers();
+      list.splice(idx, 1);
+      saveDemoWorkers(list);
+      setWorkerDirStatus("Deleted (Demo).", true);
+      await loadWorkerDirectory();
+    }
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session?.user){
+    setWorkerDirStatus("Sign in to edit the directory.", false);
+    return;
+  }
+
+  setWorkerDirStatus("Deleting...", true);
+  try{
+    const { error } = await withTimeoutRetry(
+      () => sb.from("worker_directory").delete().eq("id", id),
+      { ms: 20000, label: "worker_directory delete", retries: 1, backoffMs: 800 }
+    );
+    if(error){
+      console.error("Delete worker error:", error?.message || error, error);
+      setWorkerDirStatus(`Error deleting: ${error.message}`, false);
+      return;
+    }
+    setWorkerDirStatus("Deleted.", true);
+    await loadWorkerDirectory();
+  }catch(err){
+    console.error("Delete worker timeout:", err);
+    setWorkerDirStatus("Timed out deleting. Try again.", false);
+  }
+}
+
+/* -------------------- WORKER DIRECTORY REALTIME -------------------- */
+async function unsubscribeWorkerDirectoryRealtime(){
+  try{
+    if(WORKER_DIR_CHANNEL){
+      await sb.removeChannel(WORKER_DIR_CHANNEL);
+      WORKER_DIR_CHANNEL = null;
+    }
+  }catch(err){
+    console.warn("Realtime unsubscribe error:", err);
+  }
+}
+
+async function subscribeWorkerDirectoryRealtime(){
+  await unsubscribeWorkerDirectoryRealtime();
+
+  if(demoMode) return;
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session?.user) return;
+
+  WORKER_DIR_CHANNEL = sb
+    .channel("worker_directory_changes")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "worker_directory" },
+      async () => {
+        await loadWorkerDirectory();
+      }
+    )
+    .subscribe();
+}
+
+/* -------------------- TODAY ENTRIES -------------------- */
 let ENTRIES_REQ = 0;
-let TODAY_ROWS_CACHE = []; // keeps the currently loaded date’s rows for validation
+let TODAY_ROWS_CACHE = [];
 
 async function loadTodayEntries(){
   const reqId = ++ENTRIES_REQ;
@@ -984,7 +1392,6 @@ async function loadTodayEntries(){
   }
 
   try{
-    // Only needed columns (big timeout fix)
     const q = sb
       .from("worker_hourly_log")
       .select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty")
@@ -997,7 +1404,7 @@ async function loadTodayEntries(){
       { ms: 25000, label: "today entries load", retries: 1, backoffMs: 900 }
     );
 
-    if(reqId !== ENTRIES_REQ) return; // stale
+    if(reqId !== ENTRIES_REQ) return;
 
     if(error){
       console.error("Today entries error:", error);
@@ -1015,9 +1422,7 @@ async function loadTodayEntries(){
       return;
     }
 
-    // Cache rows for real-time validation (LIVE)
     TODAY_ROWS_CACHE = (data || []).map(r => ({ ...r }));
-
 
     data.sort((a, b) => {
       const oa = getHourBlockSortValue(a.hour_block || "");
@@ -1083,7 +1488,7 @@ function initQuickQtyButtons(){
   });
 }
 
-/* -------------------- STANDARDS LOOKUPS (FAST: limit(1), no count) -------------------- */
+/* -------------------- STANDARDS LOOKUPS -------------------- */
 async function mirrorStandardExists(partNumber){
   if(demoMode) return true;
   const pn = (partNumber || "").trim();
@@ -1307,7 +1712,6 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
       return;
     }
 
-    // Gate save with standards (fast lookups)
     if(!demoMode){
       const exists = (role === "packer")
         ? await packingStandardExists(partNumber)
@@ -1332,7 +1736,6 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
       }
     }
 
-    // DEMO save
     if(demoMode){
       const rows = loadDemoEntries();
       const idx = (rows || []).findIndex(r =>
@@ -1380,14 +1783,12 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
 
       $("#qty").value = "";
       await loadTodayEntries();
-      refreshPartSuggestions(); // debounced
+      refreshPartSuggestions();
       return;
     }
 
-    // LIVE save
     setStatus("Saving entry...", true);
 
-    // Fast “find existing”: only id, limit 1
     const { data: existing, error: findErr } = await withTimeoutRetry(
       () => sb
         .from("worker_hourly_log")
@@ -1464,7 +1865,7 @@ async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
 
     $("#qty").value = "";
     await loadTodayEntries();
-    refreshPartSuggestions(); // debounced
+    refreshPartSuggestions();
 
   }catch(err){
     console.error("saveEntry crashed:", err);
@@ -1507,7 +1908,9 @@ function closeEditModal(){
 
 async function fetchRowById(id){
   const { data, error } = await withTimeoutRetry(
-    () => sb.from("worker_hourly_log").select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty").eq("id", id).limit(1),
+    () => sb.from("worker_hourly_log")
+      .select("id, log_date, hour_block, role, worker_name, part_number, mirror_type, mirror_class, job_ref, order_qty, qty")
+      .eq("id", id).limit(1),
     { ms: 20000, label: "fetch row by id", retries: 1, backoffMs: 900 }
   );
   if(error) throw error;
@@ -1608,6 +2011,7 @@ function getWorkerListForPrint(){
   return Array.from(new Set(opts));
 }
 
+/* (print template builder unchanged from your version) */
 function buildPrintTemplateHtml({ date, roleLabel, workers }){
   const hourBlocks = [
     "7am-8am","8am-9am","9am-10am (15m break)","10am-11am",
@@ -1748,7 +2152,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await refreshAuthUI();
 
-  // IMPORTANT: don’t double-load on auth + sign-in click (major timeout cause)
   sb.auth.onAuthStateChange(async () => {
     await refreshAuthUI();
 
@@ -1760,6 +2163,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadWorkerDirectory();
       await loadTodayEntries();
       refreshPartSuggestions();
+      await subscribeWorkerDirectoryRealtime();
       return;
     }
 
@@ -1768,14 +2172,48 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadWorkerDirectory();
       await loadTodayEntries();
       refreshPartSuggestions();
+      await subscribeWorkerDirectoryRealtime();
     }
 
     if(!signedIn){
       didInitialAuthedLoad = false;
+      await unsubscribeWorkerDirectoryRealtime();
       const tbody = document.getElementById("entriesBody");
       if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view today’s entries.</td></tr>';
     }
   });
+
+    /* -------------------- SAME JOB MODAL WIRING -------------------- */
+  const sameJobModal = document.getElementById("sameJobModal");
+  const sameJobCloseBtn = document.getElementById("sameJobCloseBtn");
+  const sameJobYesBtn = document.getElementById("sameJobYesBtn");
+  const sameJobNoBtn = document.getElementById("sameJobNoBtn");
+
+  if(sameJobCloseBtn) sameJobCloseBtn.addEventListener("click", closeSameJobModal);
+  if(sameJobYesBtn) sameJobYesBtn.addEventListener("click", () => {
+    const row = SAMEJOB_CTX;
+    closeSameJobModal();
+    setCarryForwardFromRow(row);
+  });
+  if(sameJobNoBtn) sameJobNoBtn.addEventListener("click", () => {
+    closeSameJobModal();
+    clearForNewJobEntry();
+  });
+  if(sameJobModal){
+    sameJobModal.addEventListener("click", (e) => {
+      if(e.target === sameJobModal) closeSameJobModal();
+    });
+  }
+
+  // Trigger prompt when worker/hour/role changes
+  const workerSel = document.getElementById("workerName");
+  const hourSel   = document.getElementById("hourBlock");
+  const roleSel   = document.getElementById("role");
+
+  if(workerSel) workerSel.addEventListener("change", () => setTimeout(maybePromptSameJob, 0));
+  if(hourSel)   hourSel.addEventListener("change", () => setTimeout(maybePromptSameJob, 0));
+  if(roleSel)   roleSel.addEventListener("change", () => setTimeout(maybePromptSameJob, 0));
+  /* -------------------- END SAME JOB MODAL WIRING -------------------- */
 
   // Sign in
   const signInBtn = document.getElementById("signInBtn");
@@ -1798,8 +2236,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           setStatus(`Sign in failed: ${error.message}`, false);
           return;
         }
-
-        // Let onAuthStateChange do the data loading (prevents double-load)
         setStatus("Signed in.", true);
       }catch(err){
         console.error("Sign in timeout:", err);
@@ -1813,6 +2249,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if(signOutBtn){
     signOutBtn.addEventListener("click", async () => {
       await sb.auth.signOut();
+      await unsubscribeWorkerDirectoryRealtime();
       setStatus("Signed out. Writes disabled.", true);
       await refreshAuthUI();
     });
@@ -1829,6 +2266,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadWorkerDirectory();
       await loadTodayEntries();
       refreshPartSuggestions();
+      await subscribeWorkerDirectoryRealtime();
+
+      // keep Manage modal tag accurate
+      const modeTag = document.getElementById("workerDirModeTag");
+      if(modeTag) modeTag.textContent = demoMode ? "Demo mode" : "Live mode";
     });
   }
 
@@ -1842,6 +2284,80 @@ document.addEventListener("DOMContentLoaded", async () => {
   if(howModal){
     howModal.addEventListener("click", (e) => { if(e.target === howModal) howModal.style.display = "none"; });
   }
+
+  /* ✅ CHANGE 1A: Manage Workers modal wiring (open/close/add + delegation fix) */
+  const manageModal = document.getElementById("manageWorkersModal");
+  const manageOpenBtn = document.getElementById("manageWorkersBtn");
+  const manageCloseBtn = document.getElementById("manageWorkersCloseBtn");
+  const addWorkerBtn = document.getElementById("addWorkerBtn");
+  const newWorkerInput = document.getElementById("newWorkerName");
+  const modeTag = document.getElementById("workerDirModeTag");
+  const mwBody = document.getElementById("workerDirBody"); // <-- this fixes your undefined mwBody reference
+
+  function openManageWorkers(){
+    if(modeTag) modeTag.textContent = demoMode ? "Demo mode" : "Live mode";
+    if(manageModal) manageModal.style.display = "flex";
+  }
+  function closeManageWorkers(){
+    if(manageModal) manageModal.style.display = "none";
+  }
+
+  if(manageOpenBtn && manageModal){
+    manageOpenBtn.addEventListener("click", () => openManageWorkers());
+  }
+  if(manageCloseBtn && manageModal){
+    manageCloseBtn.addEventListener("click", () => closeManageWorkers());
+  }
+  if(manageModal){
+    manageModal.addEventListener("click", (e) => {
+      if(e.target === manageModal) closeManageWorkers();
+    });
+  }
+
+  if(addWorkerBtn){
+    addWorkerBtn.addEventListener("click", async () => {
+      const name = (newWorkerInput?.value || "").trim();
+      await addWorkerName(name);
+      if(newWorkerInput) newWorkerInput.value = "";
+      // optional UX: keep modal open, dropdown will refresh via loadWorkerDirectory()
+    });
+  }
+  if(newWorkerInput){
+    newWorkerInput.addEventListener("keydown", async (e) => {
+      if(e.key === "Enter"){
+        e.preventDefault();
+        const name = (newWorkerInput.value || "").trim();
+        await addWorkerName(name);
+        newWorkerInput.value = "";
+      }
+    });
+  }
+
+  // Delegation for Save/Delete in manager table
+  if(mwBody){
+    mwBody.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-wd-action]");
+      if(!btn) return;
+
+      const action = btn.getAttribute("data-wd-action");
+      const id = btn.getAttribute("data-wd-id");
+
+      if(action === "save"){
+        const input = document.querySelector(`input[data-wd-input="${CSS.escape(id)}"]`);
+        const next = input ? input.value : "";
+        await updateWorkerName(id, next);
+      }
+
+      if(action === "delete"){
+        const row = (WORKER_DIR_CACHE || []).find(x => String(x.id) === String(id));
+        const name = row?.worker_name || "this name";
+        const ok = confirm(`Delete "${name}" from the directory?`);
+        if(!ok) return;
+        await deleteWorkerName(id);
+      }
+    });
+  }
+  /* ✅ END CHANGE 1A */
 
   autoSelectHourBlock();
   initQuickQtyButtons();
@@ -1913,12 +2429,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#partNumber").addEventListener("change", (e) => autoSetMirrorTypeFromPart(e.target.value));
 
   ["logDate","hourBlock","role","workerName","qty","jobRef","orderQty"].forEach(id => {
-  const el = document.getElementById(id);
-  if(!el) return;
-  el.addEventListener("input", () => updateRealtimeValidation());
-  el.addEventListener("change", () => updateRealtimeValidation());
-});
-
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("input", () => updateRealtimeValidation());
+    el.addEventListener("change", () => updateRealtimeValidation());
+  });
 
   // Edit modal
   const editModal = document.getElementById("editEntryModal");
@@ -1986,6 +2501,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadWorkerDirectory();
     await loadTodayEntries();
     refreshPartSuggestions();
+    await subscribeWorkerDirectoryRealtime();
   }else{
     const { data: { session } } = await sb.auth.getSession();
     if(session?.user){
@@ -1993,10 +2509,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadWorkerDirectory();
       await loadTodayEntries();
       refreshPartSuggestions();
+      await subscribeWorkerDirectoryRealtime();
     }else{
       const tb = document.getElementById("entriesBody");
       if(tb) tb.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view today’s entries.</td></tr>';
-      refreshPartSuggestions(); // will clear suggestions in signed-out live mode
+      refreshPartSuggestions();
     }
   }
 });
@@ -2212,6 +2729,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     <div id="psStatusLine" class="status-line" style="margin-top:8px;"></div>
   </div>
 </div>
+
+<!-- MANAGE WORKERS MODAL -->
+<div id="manageWorkersModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10001;">
+  <div style="width:min(760px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Manage workers / stations</div>
+      <button class="btn" id="manageWorkersCloseBtn" type="button">Close</button>
+    </div>
+
+    <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+      Add / rename / delete names here. The dropdown updates automatically.
+      <span class="tag" id="workerDirModeTag" style="margin-left:6px;">—</span>
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+      <input id="newWorkerName" type="text" placeholder="New worker/station name"
+             style="flex:1; min-width:240px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-size:14px;" />
+      <button class="btn btn-primary" id="addWorkerBtn" type="button">Add</button>
+    </div>
+
+    <div id="workerDirStatus" class="status-line" style="margin-top:8px;"></div>
+
+    <div class="table-wrap" style="margin-top:10px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:55%;">Name</th>
+            <th style="width:45%;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="workerDirBody"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:10px; font-size:12px; color:var(--muted); line-height:1.45;">
+      Notes:
+      <ul style="margin:6px 0 0 18px;">
+        <li>Live mode writes to <code>worker_directory</code> (requires sign-in + RLS permissions).</li>
+        <li>Demo mode stores names locally in the browser.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SAME JOB CONFIRM MODAL -->
+<div id="sameJobModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10002;">
+  <div style="width:min(640px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Continue from last hour?</div>
+      <button class="btn" id="sameJobCloseBtn" type="button">Close</button>
+    </div>
+
+    <div id="sameJobPromptText" style="margin-top:10px; font-size:13px; color:var(--text); line-height:1.45;"></div>
+
+    <div class="tag" id="sameJobDetailsTag" style="display:inline-block; margin-top:10px;"></div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-primary" id="sameJobYesBtn" type="button">Yes</button>
+      <button class="btn" id="sameJobNoBtn" type="button">No</button>
+    </div>
+
+    <div class="status-line" style="margin-top:8px; color:var(--muted);">
+      <b>Yes</b> = keep Job/Part/Order Qty from last hour (you just enter Qty). • <b>No</b> = clear fields so you can enter a new Job/Part/Order Qty.
+    </div>
+  </div>
+</div>
+
 
 </body>
 </html>
