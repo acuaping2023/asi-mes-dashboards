@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Central Supervisor Dashboard — Mirror Department</title>
+
+  <style>
+  :root{
+    --accent:#E41E26;
+    --burnt:#CC5500;
+    --ok:#2ecc71;
+    --warn:#ffd84d;
+    --danger:#ff6b6b;
+    --bg:#ffffff;
+    --panel:#ffffff;
+    --panel-2:#f6f7f9;
+    --text:#111111;
+    --muted:#5b6573;
+    --border:#e5e8ef;
+    --button:#f3f6fa;
+
+    --sidebar-w: 292px;
+    --sidebar-collapsed: 64px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Times New Roman", Times, serif;
+  }
+
+  /* Dark mode tokens */
+  html[data-theme="dark"]{
+    --bg:#121212;
+    --panel:#1b1b1b;
+    --panel-2:#161616;
+    --text:#f1f1f1;
+    --muted:#c0c6cf;
+    --border:#2e2e2e;
+    --button:#222428;
+    color-scheme: dark;
+  }
+  html[data-theme="dark"] body{background:var(--bg);}
+  html[data-theme="dark"] input,
+  html[data-theme="dark"] select,
+  html[data-theme="dark"] textarea{
+    background:#101214;
+    border-color:#3a3f46;
+    color:#f1f1f1;
+  }
+  html[data-theme="dark"] .btn{
+    background:#2f343d;
+    border-color:#4b5563;
+    color:#f9fafb;
+  }
+  html[data-theme="dark"] .btn:hover{
+    background:#4b5563;
+    border-color:#6b7280;
+  }
+
+  /* Topbar */
+  .topbar-corner{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:10px 16px;
+    border-bottom:3px solid var(--accent);
+    background:var(--panel);
+    position:sticky;
+    top:0;
+    z-index:50;
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width: 260px;
+  }
+  .asi-logo{height:34px;width:auto;}
+  .brand-text{display:flex;flex-direction:column;line-height:1.1;}
+  .brand-text strong{font-size:18px;font-weight:800;color:var(--burnt);}
+  .brand-text span{font-size:13px;color:var(--muted);}
+
+  .topbar-right{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:7px 10px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--button);
+    font-size:13px;
+    user-select:none;
+  }
+
+  .btn{
+    background:var(--button);
+    border:1px solid var(--border);
+    color:#1f2a37;
+    padding:7px 12px;
+    border-radius:10px;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .btn:hover{
+    background:#e9edf3;
+    border-color:#b9c6d8;
+  }
+
+  /* App layout */
+  .app{
+    display:grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: calc(100vh - 56px);
+  }
+
+  /* Sidebar */
+  .sidebar{
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    position:sticky;
+    top:56px;
+    height: calc(100vh - 56px);
+    overflow:auto;
+    padding:12px;
+    transition: width .18s ease;
+    width: var(--sidebar-w);
+  }
+
+  .sidebar.collapsed{
+    width: var(--sidebar-collapsed);
+    padding:12px 8px;
+  }
+
+  .nav-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    margin-bottom:10px;
+  }
+
+  .nav-title{
+    font-size:12px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-weight:700;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .sidebar.collapsed .nav-title{ display:none; }
+
+  .nav{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  .nav-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 10px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    border-radius:12px;
+    cursor:pointer;
+    user-select:none;
+    transition: transform .06s ease;
+  }
+  .nav-item:hover{ transform: translateY(-1px); }
+
+  .nav-item.active{
+    border-color: rgba(204,85,0,.45);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  }
+
+  .nav-ico{
+    width:28px;
+    height:28px;
+    border-radius:10px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid var(--border);
+    background:var(--button);
+    font-weight:800;
+    color:var(--burnt);
+    flex:0 0 auto;
+  }
+
+  .nav-text{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
+  }
+  .nav-text strong{
+    font-size:14px;
+    color:var(--text);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .nav-text span{
+    font-size:12px;
+    color:var(--muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .sidebar.collapsed .nav-text{ display:none; }
+
+  .sidebar .divider{
+    height:1px;
+    background:var(--border);
+    margin:10px 2px;
+  }
+
+  /* Content */
+  .content{
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+
+  .summary-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:12px;
+  }
+
+  .summary-card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:10px 12px;
+    box-shadow:0 1px 3px rgba(16,24,40,.05);
+  }
+  html[data-theme="dark"] .summary-card{ box-shadow:none; }
+
+  .summary-label{ font-size:12px; color:var(--muted); }
+  .summary-value{ font-size:18px; font-weight:800; margin-top:4px; }
+  .summary-sub{ font-size:11px; color:var(--muted); margin-top:2px; }
+
+  .section{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:10px 12px;
+    box-shadow:0 1px 3px rgba(16,24,40,.05);
+  }
+  html[data-theme="dark"] .section{ box-shadow:none; }
+
+  .section-title{
+    font-size:14px;
+    font-weight:700;
+    margin-bottom:8px;
+    color:var(--burnt);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+
+  .row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  input[type="text"],
+  input[type="url"],
+  select{
+    background:#ffffff;
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:8px 10px;
+    border-radius:10px;
+    font-size:14px;
+    outline:none;
+  }
+
+  input:focus, select:focus{
+    border-color:#b9c6d8;
+    box-shadow:0 0 0 2px rgba(204,85,0,.15);
+  }
+
+  .mini-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+    gap:12px;
+  }
+  .doc-card{
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:10px 12px;
+    background:var(--panel-2);
+  }
+  .doc-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .doc-title{
+    font-weight:800;
+    color:var(--text);
+    margin:0;
+    font-size:14px;
+  }
+  .doc-sub{
+    margin:4px 0 0 0;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .doc-actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 8px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--button);
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .embed-wrap{
+    border:1px solid var(--border);
+    border-radius:14px;
+    overflow:hidden;
+    background:var(--panel-2);
+  }
+  .embed-toolbar{
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .embed-title{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:240px;
+  }
+  .embed-title strong{
+    font-size:14px;
+    color:var(--text);
+  }
+  .embed-title span{
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  iframe{
+    width:100%;
+    height:72vh;
+    border:0;
+    display:block;
+    background:#fff;
+  }
+  html[data-theme="dark"] iframe{ background:#0b0b0b; }
+
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th, td{
+    padding:8px 10px;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  th{
+    background:var(--panel-2);
+    font-weight:600;
+    font-size:12px;
+    color:var(--muted);
+    text-align:left;
+  }
+  tbody tr:nth-child(even){ background:var(--panel-2); }
+
+  @media (max-width: 980px){
+    .app{ grid-template-columns: 1fr; }
+    .sidebar{
+      position:relative;
+      top:auto;
+      height:auto;
+      width:auto !important;
+      border-right:0;
+      border-bottom:1px solid var(--border);
+    }
+    .sidebar.collapsed{ padding:12px; }
+    .sidebar.collapsed .nav-title{ display:block; }
+    .sidebar.collapsed .nav-text{ display:flex; }
+  }
+
+  .footer{
+    padding:10px 16px;
+    text-align:center;
+    font-size:12px;
+    color:var(--muted);
+    border-top:1px solid var(--border);
+    background:var(--panel);
+  }
+
+  #filePicker{ display:none; }
+  </style>
+</head>
+
+<body>
+  <header class="topbar-corner">
+    <div class="brand">
+      <img class="asi-logo" src="asi_logo.png" alt="ASI Logo">
+      <div class="brand-text">
+        <strong>Central Supervisor Dashboard</strong>
+        <span>Mirror Department — One-stop hub</span>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <span class="chip" id="activeTag">Active: —</span>
+      <button class="btn" id="openInNewTabBtn" type="button">Open active in new tab</button>
+      <button class="btn" id="themeToggle" type="button">Dark mode</button>
+    </div>
+  </header>
+
+  <div class="app">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="nav-header">
+        <div class="nav-title">Navigation</div>
+        <button class="btn" id="sidebarToggle" type="button" title="Collapse / Expand">☰</button>
+      </div>
+
+      <div class="nav" id="nav">
+        <div class="nav-item active" data-key="attendance">
+          <div class="nav-ico">A</div>
+          <div class="nav-text">
+            <strong>Attendance</strong>
+            <span>Import Excel + quick view</span>
+          </div>
+        </div>
+
+        <div class="nav-item" data-key="worker_logger">
+          <div class="nav-ico">WL</div>
+          <div class="nav-text">
+            <strong>Worker Logger</strong>
+            <span>Open dashboard / embed</span>
+          </div>
+        </div>
+
+        <div class="nav-item" data-key="packing_logger">
+          <div class="nav-ico">PL</div>
+          <div class="nav-text">
+            <strong>Packing Logger</strong>
+            <span>Open dashboard / embed</span>
+          </div>
+        </div>
+
+        <div class="nav-item" data-key="worker_efficiency">
+          <div class="nav-ico">WE</div>
+          <div class="nav-text">
+            <strong>Worker Efficiency</strong>
+            <span>Open dashboard / embed</span>
+          </div>
+        </div>
+
+        <div class="nav-item" data-key="mirror_control">
+          <div class="nav-ico">MC</div>
+          <div class="nav-text">
+            <strong>Mirror Control Dashboard</strong>
+            <span>Open dashboard / embed</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="nav-item" data-key="gameplan">
+          <div class="nav-ico">GP</div>
+          <div class="nav-text">
+            <strong>Mirror Dept Gameplan</strong>
+            <span>Embed doc + notes</span>
+          </div>
+        </div>
+
+        <div class="nav-item" data-key="library">
+          <div class="nav-ico">📁</div>
+          <div class="nav-text">
+            <strong>Document Library</strong>
+            <span>Upload files + open later</span>
+          </div>
+        </div>
+
+        <div class="nav-item" data-key="settings">
+          <div class="nav-ico">⚙</div>
+          <div class="nav-text">
+            <strong>Links & Settings</strong>
+            <span>Set URLs once, reuse</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+      <section class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-label">What this is</div>
+          <div class="summary-value">Your supervisor “home base”</div>
+          <div class="summary-sub">One page that launches dashboards and stores files/links.</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Persistence</div>
+          <div class="summary-value">Saved in your browser</div>
+          <div class="summary-sub">Links are stored with <code>localStorage</code>.</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Note on file://</div>
+          <div class="summary-value">Packing Logger is local</div>
+          <div class="summary-sub">Most browsers will block embedding file URLs. Use “Open”.</div>
+        </div>
+      </section>
+
+      <!-- ATTENDANCE -->
+      <section class="section" id="section-attendance">
+        <div class="section-title">
+          <span>Attendance</span>
+          <span class="badge" id="attendanceBadge">No file loaded</span>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="importAttendanceBtn" type="button">Import Attendance Excel/CSV</button>
+          <button class="btn" id="clearAttendanceBtn" type="button">Clear</button>
+          <span style="font-size:12px;color:var(--muted);">
+            CSV is supported natively. XLSX requires converting to CSV (or add SheetJS).
+          </span>
+        </div>
+
+        <div class="table-wrap" style="margin-top:10px;">
+          <table>
+            <thead id="attendanceHead">
+              <tr><th>—</th></tr>
+            </thead>
+            <tbody id="attendanceBody">
+              <tr><td style="color:var(--muted);">No attendance data loaded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- WORKER LOGGER -->
+      <section class="section" id="section-worker_logger" style="display:none;">
+        <div class="section-title">
+          <span>Worker Logger Dashboard</span>
+          <span class="badge" id="wlBadge">URL set</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="doc-card">
+            <div class="doc-head">
+              <div>
+                <p class="doc-title">Open Worker Logger</p>
+                <p class="doc-sub">Launch or embed the hourly logger from the saved URL.</p>
+              </div>
+              <span class="badge">Dashboard</span>
+            </div>
+            <div class="doc-actions">
+              <button class="btn" id="wlOpenBtn" type="button">Open</button>
+              <button class="btn" id="wlEmbedBtn" type="button">Embed below</button>
+              <button class="btn" id="wlClearEmbedBtn" type="button">Clear embed</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="embed-wrap" style="margin-top:12px;">
+          <div class="embed-toolbar">
+            <div class="embed-title">
+              <strong>Embedded view</strong>
+              <span id="wlEmbedSub">—</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="wlPopoutBtn" type="button">Pop out</button>
+            </div>
+          </div>
+          <iframe id="wlFrame" src="about:blank" title="Worker Logger Embed"></iframe>
+        </div>
+      </section>
+
+      <!-- PACKING LOGGER -->
+      <section class="section" id="section-packing_logger" style="display:none;">
+        <div class="section-title">
+          <span>Packing Logger Dashboard</span>
+          <span class="badge" id="plBadge">Local (file://)</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="doc-card">
+            <div class="doc-head">
+              <div>
+                <p class="doc-title">Open Packing Logger</p>
+                <p class="doc-sub">
+                  Your URL is a local file path. Browsers usually block embedding <code>file://</code> inside an iframe.
+                  Use <b>Open</b> (or map this to an internal HTTP/SharePoint link if you want embedding).
+                </p>
+              </div>
+              <span class="badge">Dashboard</span>
+            </div>
+            <div class="doc-actions">
+              <button class="btn" id="plOpenBtn" type="button">Open</button>
+              <button class="btn" id="plEmbedBtn" type="button">Try embed (may be blocked)</button>
+              <button class="btn" id="plClearEmbedBtn" type="button">Clear embed</button>
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <div class="doc-head">
+              <div>
+                <p class="doc-title">If you want embedding</p>
+                <p class="doc-sub">
+                  Put the Packing Log HTML on a shared location (SharePoint/GitHub Pages/internal web server).
+                  Then replace the URL in Links & Settings with the https link.
+                </p>
+              </div>
+              <span class="badge">Tip</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="embed-wrap" style="margin-top:12px;">
+          <div class="embed-toolbar">
+            <div class="embed-title">
+              <strong>Embedded view</strong>
+              <span id="plEmbedSub">—</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="plPopoutBtn" type="button">Pop out</button>
+            </div>
+          </div>
+          <iframe id="plFrame" src="about:blank" title="Packing Logger Embed"></iframe>
+        </div>
+      </section>
+
+      <!-- WORKER EFFICIENCY -->
+      <section class="section" id="section-worker_efficiency" style="display:none;">
+        <div class="section-title">
+          <span>Worker Efficiency Dashboard</span>
+          <span class="badge" id="weBadge">URL set</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="doc-card">
+            <div class="doc-head">
+              <div>
+                <p class="doc-title">Open Worker Efficiency</p>
+                <p class="doc-sub">Launch or embed the efficiency dashboard.</p>
+              </div>
+              <span class="badge">Dashboard</span>
+            </div>
+            <div class="doc-actions">
+              <button class="btn" id="weOpenBtn" type="button">Open</button>
+              <button class="btn" id="weEmbedBtn" type="button">Embed below</button>
+              <button class="btn" id="weClearEmbedBtn" type="button">Clear embed</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="embed-wrap" style="margin-top:12px;">
+          <div class="embed-toolbar">
+            <div class="embed-title">
+              <strong>Embedded view</strong>
+              <span id="weEmbedSub">—</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="wePopoutBtn" type="button">Pop out</button>
+            </div>
+          </div>
+          <iframe id="weFrame" src="about:blank" title="Worker Efficiency Embed"></iframe>
+        </div>
+      </section>
+
+      <!-- MIRROR CONTROL -->
+      <section class="section" id="section-mirror_control" style="display:none;">
+        <div class="section-title">
+          <span>Mirror Control Dashboard</span>
+          <span class="badge" id="mcBadge">URL set</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="doc-card">
+            <div class="doc-head">
+              <div>
+                <p class="doc-title">Open Mirror Control</p>
+                <p class="doc-sub">Launch or embed the mirror control dashboard.</p>
+              </div>
+              <span class="badge">Dashboard</span>
+            </div>
+            <div class="doc-actions">
+              <button class="btn" id="mcOpenBtn" type="button">Open</button>
+              <button class="btn" id="mcEmbedBtn" type="button">Embed below</button>
+              <button class="btn" id="mcClearEmbedBtn" type="button">Clear embed</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="embed-wrap" style="margin-top:12px;">
+          <div class="embed-toolbar">
+            <div class="embed-title">
+              <strong>Embedded view</strong>
+              <span id="mcEmbedSub">—</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="mcPopoutBtn" type="button">Pop out</button>
+            </div>
+          </div>
+          <iframe id="mcFrame" src="about:blank" title="Mirror Control Embed"></iframe>
+        </div>
+      </section>
+
+      <!-- GAMEPLAN -->
+      <section class="section" id="section-gameplan" style="display:none;">
+        <div class="section-title">
+          <span>Mirror Department Gameplan</span>
+          <span class="badge" id="gpBadge">Not linked</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="doc-card">
+            <div class="doc-head">
+              <div>
+                <p class="doc-title">Gameplan doc</p>
+                <p class="doc-sub">Paste a URL (Google Doc/Sheet, SharePoint, GitHub page, PDF link).</p>
+              </div>
+              <span class="badge">Doc</span>
+            </div>
+
+            <div class="row" style="margin-top:10px;">
+              <input id="gpUrl" type="url" style="flex:1 1 520px; min-width:240px;" placeholder="Paste Gameplan URL (https://...)">
+              <button class="btn" id="gpSaveBtn" type="button">Save</button>
+              <button class="btn" id="gpOpenBtn" type="button">Open</button>
+              <button class="btn" id="gpEmbedBtn" type="button">Embed</button>
+              <button class="btn" id="gpClearEmbedBtn" type="button">Clear</button>
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <div class="doc-head">
+              <div>
+                <p class="doc-title">Quick notes</p>
+                <p class="doc-sub">Fast scratchpad for shift handoff / priorities. Auto-saves.</p>
+              </div>
+              <span class="badge">Notes</span>
+            </div>
+            <textarea id="gpNotes" rows="7" style="width:100%; margin-top:10px; border-radius:12px; border:1px solid var(--border); padding:10px; font-family:inherit;"></textarea>
+          </div>
+        </div>
+
+        <div class="embed-wrap" style="margin-top:12px;">
+          <div class="embed-toolbar">
+            <div class="embed-title">
+              <strong>Embedded view</strong>
+              <span id="gpEmbedSub">—</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="gpPopoutBtn" type="button">Pop out</button>
+            </div>
+          </div>
+          <iframe id="gpFrame" src="about:blank" title="Gameplan Embed"></iframe>
+        </div>
+      </section>
+
+      <!-- LIBRARY -->
+      <section class="section" id="section-library" style="display:none;">
+        <div class="section-title">
+          <span>Document Library</span>
+          <span class="badge" id="libBadge">0 items</span>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="addFilesBtn" type="button">Add files (PDF/XLSX/CSV/etc.)</button>
+          <button class="btn" id="clearLibBtn" type="button">Clear library</button>
+          <span style="font-size:12px;color:var(--muted);">
+            Stored as browser-safe object URLs for quick access during this session.
+          </span>
+        </div>
+
+        <div class="table-wrap" style="margin-top:10px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Added</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="libBody">
+              <tr><td colspan="5" style="color:var(--muted);">No files added yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <input id="filePicker" type="file" multiple />
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="section" id="section-settings" style="display:none;">
+        <div class="section-title">
+          <span>Links & Settings</span>
+          <span class="badge">Set once</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="doc-card">
+            <p class="doc-title">Worker Logger URL</p>
+            <p class="doc-sub">Saved default is already set.</p>
+            <div class="row" style="margin-top:10px;">
+              <input id="wlUrl" type="url" style="flex:1 1 520px; min-width:240px;" placeholder="https://...">
+              <button class="btn" id="wlSaveUrlBtn" type="button">Save</button>
+              <button class="btn" id="wlTestBtn" type="button">Test</button>
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <p class="doc-title">Packing Logger URL</p>
+            <p class="doc-sub">Your default is a local file path (file://).</p>
+            <div class="row" style="margin-top:10px;">
+              <input id="plUrl" type="url" style="flex:1 1 520px; min-width:240px;" placeholder="file:///... or https://...">
+              <button class="btn" id="plSaveUrlBtn" type="button">Save</button>
+              <button class="btn" id="plTestBtn" type="button">Test</button>
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <p class="doc-title">Worker Efficiency URL</p>
+            <p class="doc-sub">Saved default is already set.</p>
+            <div class="row" style="margin-top:10px;">
+              <input id="weUrl" type="url" style="flex:1 1 520px; min-width:240px;" placeholder="https://...">
+              <button class="btn" id="weSaveUrlBtn" type="button">Save</button>
+              <button class="btn" id="weTestBtn" type="button">Test</button>
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <p class="doc-title">Mirror Control URL</p>
+            <p class="doc-sub">Saved default is already set.</p>
+            <div class="row" style="margin-top:10px;">
+              <input id="mcUrl" type="url" style="flex:1 1 520px; min-width:240px;" placeholder="https://...">
+              <button class="btn" id="mcSaveUrlBtn" type="button">Save</button>
+              <button class="btn" id="mcTestBtn" type="button">Test</button>
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <p class="doc-title">Gameplan URL</p>
+            <p class="doc-sub">Paste your gameplan link here too.</p>
+            <div class="row" style="margin-top:10px;">
+              <input id="gpUrlSettings" type="url" style="flex:1 1 520px; min-width:240px;" placeholder="https://...">
+              <button class="btn" id="gpSaveUrlBtn2" type="button">Save</button>
+              <button class="btn" id="gpTestBtn" type="button">Test</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:12px; color:var(--muted); margin-top:10px;">
+          Note: Embedding may be blocked by some sites. If embed is blocked, use “Open”.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="footer">
+    Central Supervisor Dashboard • Links stored in browser • Built to match your existing dashboard aesthetic
+  </div>
+
+<script>
+(() => {
+  // ------------------ STORAGE KEYS ------------------
+  const KEY = {
+    theme: "asiTheme",
+    active: "csd_active_section_v1",
+    sidebarCollapsed: "csd_sidebar_collapsed_v1",
+    urls: "csd_urls_v2", // bumped because we added packing
+    gpNotes: "csd_gameplan_notes_v1",
+    attendance: "csd_attendance_csv_v1",
+  };
+
+  // ------------------ DEFAULT URLS (PRE-SET WITH YOUR LINKS) ------------------
+  const DEFAULT_URLS = {
+    worker_logger: "https://acuaping2023.github.io/asi-mes-dashboards/ADMIN_worker_hourly_logger_v1.html",
+    worker_efficiency: "https://acuaping2023.github.io/asi-mes-dashboards/Worker_Efficiency_Dashboard_v2.html",
+    mirror_control: "https://acuaping2023.github.io/asi-mes-dashboards/Mirror_Control_ASI_v25_shiftToggle_Test.html",
+    packing_logger: "file:///M:/Alexander/Mirror%20Dept/Dashboards/Official%20Dashboards/Packing%20Log%20system.html",
+    gameplan: ""
+  };
+
+  // ------------------ HELPERS ------------------
+  function $(s){ return document.querySelector(s); }
+
+  function safeJsonParse(str, fallback){
+    try { return JSON.parse(str); } catch(e){ return fallback; }
+  }
+
+  function bytesToSize(bytes){
+    const b = Number(bytes) || 0;
+    if (b < 1024) return b + " B";
+    const kb = b/1024;
+    if (kb < 1024) return kb.toFixed(1) + " KB";
+    const mb = kb/1024;
+    if (mb < 1024) return mb.toFixed(1) + " MB";
+    const gb = mb/1024;
+    return gb.toFixed(2) + " GB";
+  }
+
+  function nowStamp(){
+    return new Date().toLocaleString();
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  // ------------------ THEME INIT ------------------
+  const savedTheme = localStorage.getItem(KEY.theme) || "light";
+  document.documentElement.setAttribute("data-theme", savedTheme === "dark" ? "dark" : "light");
+
+  function updateThemeBtn(){
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    $("#themeToggle").textContent = isDark ? "Light mode" : "Dark mode";
+  }
+  updateThemeBtn();
+
+  $("#themeToggle").addEventListener("click", () => {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const next = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem(KEY.theme, next);
+    updateThemeBtn();
+  });
+
+  // ------------------ SIDEBAR COLLAPSE ------------------
+  const sidebar = $("#sidebar");
+  const collapsedSaved = localStorage.getItem(KEY.sidebarCollapsed) === "true";
+  if (collapsedSaved) sidebar.classList.add("collapsed");
+
+  $("#sidebarToggle").addEventListener("click", () => {
+    sidebar.classList.toggle("collapsed");
+    localStorage.setItem(KEY.sidebarCollapsed, sidebar.classList.contains("collapsed") ? "true" : "false");
+  });
+
+  // ------------------ URLS ------------------
+  let urls = safeJsonParse(localStorage.getItem(KEY.urls), null);
+
+  // If no saved urls yet, seed with defaults
+  if(!urls || typeof urls !== "object"){
+    urls = { ...DEFAULT_URLS };
+    localStorage.setItem(KEY.urls, JSON.stringify(urls));
+  } else {
+    // Merge to ensure new keys exist (packing_logger)
+    urls = { ...DEFAULT_URLS, ...urls };
+    localStorage.setItem(KEY.urls, JSON.stringify(urls));
+  }
+
+  function saveUrls(){
+    localStorage.setItem(KEY.urls, JSON.stringify(urls));
+    refreshBadges();
+  }
+
+  function refreshBadges(){
+    $("#wlBadge").textContent = urls.worker_logger ? "URL set" : "URL not set";
+    $("#weBadge").textContent = urls.worker_efficiency ? "URL set" : "URL not set";
+    $("#mcBadge").textContent = urls.mirror_control ? "URL set" : "URL not set";
+    $("#plBadge").textContent = urls.packing_logger ? (urls.packing_logger.startsWith("file:") ? "Local (file://)" : "URL set") : "URL not set";
+    $("#gpBadge").textContent = urls.gameplan ? "Linked" : "Not linked";
+
+    // reflect into settings inputs
+    $("#wlUrl").value = urls.worker_logger || "";
+    $("#plUrl").value = urls.packing_logger || "";
+    $("#weUrl").value = urls.worker_efficiency || "";
+    $("#mcUrl").value = urls.mirror_control || "";
+    $("#gpUrl").value = urls.gameplan || "";
+    $("#gpUrlSettings").value = urls.gameplan || "";
+
+    // note: we also refresh embed sublabels when embedding
+  }
+
+  // Save buttons
+  $("#wlSaveUrlBtn").addEventListener("click", () => { urls.worker_logger = ($("#wlUrl").value || "").trim(); saveUrls(); });
+  $("#plSaveUrlBtn").addEventListener("click", () => { urls.packing_logger = ($("#plUrl").value || "").trim(); saveUrls(); });
+  $("#weSaveUrlBtn").addEventListener("click", () => { urls.worker_efficiency = ($("#weUrl").value || "").trim(); saveUrls(); });
+  $("#mcSaveUrlBtn").addEventListener("click", () => { urls.mirror_control = ($("#mcUrl").value || "").trim(); saveUrls(); });
+  $("#gpSaveUrlBtn2").addEventListener("click", () => { urls.gameplan = ($("#gpUrlSettings").value || "").trim(); saveUrls(); });
+
+  function testUrl(u){
+    const url = (u || "").trim();
+    if(!url){ alert("URL not set yet."); return; }
+    window.open(url, "_blank");
+  }
+
+  $("#wlTestBtn").addEventListener("click", () => testUrl(urls.worker_logger));
+  $("#plTestBtn").addEventListener("click", () => testUrl(urls.packing_logger));
+  $("#weTestBtn").addEventListener("click", () => testUrl(urls.worker_efficiency));
+  $("#mcTestBtn").addEventListener("click", () => testUrl(urls.mirror_control));
+  $("#gpTestBtn").addEventListener("click", () => testUrl(urls.gameplan));
+
+  // ------------------ SECTION SWITCHING ------------------
+  const sectionEls = {
+    attendance: $("#section-attendance"),
+    worker_logger: $("#section-worker_logger"),
+    packing_logger: $("#section-packing_logger"),
+    worker_efficiency: $("#section-worker_efficiency"),
+    mirror_control: $("#section-mirror_control"),
+    gameplan: $("#section-gameplan"),
+    library: $("#section-library"),
+    settings: $("#section-settings"),
+  };
+
+  function setActiveSection(key){
+    document.querySelectorAll(".nav-item").forEach(el => {
+      el.classList.toggle("active", el.dataset.key === key);
+    });
+
+    Object.keys(sectionEls).forEach(k => {
+      sectionEls[k].style.display = (k === key) ? "" : "none";
+    });
+
+    const labelMap = {
+      attendance: "Attendance",
+      worker_logger: "Worker Logger",
+      packing_logger: "Packing Logger",
+      worker_efficiency: "Worker Efficiency",
+      mirror_control: "Mirror Control",
+      gameplan: "Gameplan",
+      library: "Document Library",
+      settings: "Links & Settings"
+    };
+    $("#activeTag").textContent = "Active: " + (labelMap[key] || key);
+
+    localStorage.setItem(KEY.active, key);
+  }
+
+  $("#nav").addEventListener("click", (e) => {
+    const item = e.target.closest(".nav-item");
+    if(!item) return;
+    const key = item.dataset.key;
+    if(!key) return;
+    setActiveSection(key);
+  });
+
+  $("#openInNewTabBtn").addEventListener("click", () => {
+    const activeKey = localStorage.getItem(KEY.active) || "attendance";
+
+    const map = {
+      worker_logger: urls.worker_logger,
+      packing_logger: urls.packing_logger,
+      worker_efficiency: urls.worker_efficiency,
+      mirror_control: urls.mirror_control,
+      gameplan: urls.gameplan
+    };
+
+    const u = map[activeKey] || "";
+    if(!u){
+      alert("This section does not have a URL to open. Use Library or Attendance.");
+      return;
+    }
+    window.open(u, "_blank");
+  });
+
+  const savedActive = localStorage.getItem(KEY.active) || "attendance";
+  setActiveSection(savedActive);
+
+  // ------------------ EMBED HELPERS ------------------
+  function setFrame(frameId, subId, url){
+    const frame = $(frameId);
+    const subEl = $(subId);
+    if(!frame) return;
+
+    if(!url){
+      frame.src = "about:blank";
+      if(subEl) subEl.textContent = "—";
+      return;
+    }
+    frame.src = url;
+    if(subEl) subEl.textContent = url;
+  }
+
+  function openOrAlert(url){
+    if(!url){
+      alert("URL not set yet. Go to Links & Settings and set it.");
+      return;
+    }
+    window.open(url, "_blank");
+  }
+
+  // Worker Logger
+  $("#wlOpenBtn").addEventListener("click", () => openOrAlert(urls.worker_logger));
+  $("#wlEmbedBtn").addEventListener("click", () => setFrame("#wlFrame", "#wlEmbedSub", urls.worker_logger));
+  $("#wlClearEmbedBtn").addEventListener("click", () => setFrame("#wlFrame", "#wlEmbedSub", ""));
+  $("#wlPopoutBtn").addEventListener("click", () => openOrAlert(urls.worker_logger));
+
+  // Packing Logger
+  $("#plOpenBtn").addEventListener("click", () => openOrAlert(urls.packing_logger));
+  $("#plEmbedBtn").addEventListener("click", () => setFrame("#plFrame", "#plEmbedSub", urls.packing_logger));
+  $("#plClearEmbedBtn").addEventListener("click", () => setFrame("#plFrame", "#plEmbedSub", ""));
+  $("#plPopoutBtn").addEventListener("click", () => openOrAlert(urls.packing_logger));
+
+  // Worker Efficiency
+  $("#weOpenBtn").addEventListener("click", () => openOrAlert(urls.worker_efficiency));
+  $("#weEmbedBtn").addEventListener("click", () => setFrame("#weFrame", "#weEmbedSub", urls.worker_efficiency));
+  $("#weClearEmbedBtn").addEventListener("click", () => setFrame("#weFrame", "#weEmbedSub", ""));
+  $("#wePopoutBtn").addEventListener("click", () => openOrAlert(urls.worker_efficiency));
+
+  // Mirror Control
+  $("#mcOpenBtn").addEventListener("click", () => openOrAlert(urls.mirror_control));
+  $("#mcEmbedBtn").addEventListener("click", () => setFrame("#mcFrame", "#mcEmbedSub", urls.mirror_control));
+  $("#mcClearEmbedBtn").addEventListener("click", () => setFrame("#mcFrame", "#mcEmbedSub", ""));
+  $("#mcPopoutBtn").addEventListener("click", () => openOrAlert(urls.mirror_control));
+
+  // Gameplan URL save/open/embed
+  $("#gpSaveBtn").addEventListener("click", () => {
+    urls.gameplan = ($("#gpUrl").value || "").trim();
+    $("#gpUrlSettings").value = urls.gameplan;
+    saveUrls();
+  });
+  $("#gpOpenBtn").addEventListener("click", () => openOrAlert(urls.gameplan));
+  $("#gpEmbedBtn").addEventListener("click", () => setFrame("#gpFrame", "#gpEmbedSub", urls.gameplan));
+  $("#gpClearEmbedBtn").addEventListener("click", () => setFrame("#gpFrame", "#gpEmbedSub", ""));
+  $("#gpPopoutBtn").addEventListener("click", () => openOrAlert(urls.gameplan));
+
+  // ------------------ GAMEPLAN NOTES (AUTO-SAVE) ------------------
+  const notesEl = $("#gpNotes");
+  notesEl.value = localStorage.getItem(KEY.gpNotes) || "";
+  notesEl.addEventListener("input", () => {
+    localStorage.setItem(KEY.gpNotes, notesEl.value || "");
+  });
+
+  // ------------------ ATTENDANCE IMPORT (CSV native) ------------------
+  const attendanceBadge = $("#attendanceBadge");
+  const headEl = $("#attendanceHead");
+  const bodyEl = $("#attendanceBody");
+
+  function renderAttendanceFromParsed(headers, rows){
+    headEl.innerHTML = "<tr>" + headers.map(h => `<th>${escapeHtml(h)}</th>`).join("") + "</tr>";
+
+    if(!rows.length){
+      bodyEl.innerHTML = `<tr><td colspan="${headers.length}" style="color:var(--muted);">No rows found.</td></tr>`;
+      return;
+    }
+
+    const max = Math.min(rows.length, 200);
+    let html = "";
+    for(let i=0;i<max;i++){
+      const r = rows[i];
+      html += "<tr>" + headers.map((h, idx) => `<td>${escapeHtml(r[idx] ?? "")}</td>`).join("") + "</tr>";
+    }
+    if(rows.length > max){
+      html += `<tr><td colspan="${headers.length}" style="color:var(--muted);">Showing first ${max} rows of ${rows.length}.</td></tr>`;
+    }
+    bodyEl.innerHTML = html;
+  }
+
+  function parseCSV(text){
+    const rows = [];
+    let cur = [];
+    let val = "";
+    let inQuotes = false;
+
+    for(let i=0;i<text.length;i++){
+      const ch = text[i];
+      const next = text[i+1];
+
+      if(ch === '"'){
+        if(inQuotes && next === '"'){ val += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+        continue;
+      }
+      if(!inQuotes && ch === ","){
+        cur.push(val); val = ""; continue;
+      }
+      if(!inQuotes && ch === "\n"){
+        cur.push(val); rows.push(cur);
+        cur = []; val = ""; continue;
+      }
+      if(ch === "\r") continue;
+      val += ch;
+    }
+    if(val.length || cur.length){
+      cur.push(val);
+      rows.push(cur);
+    }
+
+    const width = Math.max(...rows.map(r => r.length));
+    rows.forEach(r => { while(r.length < width) r.push(""); });
+
+    const headers = rows.shift() || [];
+    return { headers, rows };
+  }
+
+  function loadAttendanceFromStorage(){
+    const raw = localStorage.getItem(KEY.attendance);
+    if(!raw){
+      attendanceBadge.textContent = "No file loaded";
+      headEl.innerHTML = "<tr><th>—</th></tr>";
+      bodyEl.innerHTML = `<tr><td style="color:var(--muted);">No attendance data loaded.</td></tr>`;
+      return;
+    }
+
+    const parsed = safeJsonParse(raw, null);
+    if(!parsed || !parsed.headers || !parsed.rows){
+      localStorage.removeItem(KEY.attendance);
+      loadAttendanceFromStorage();
+      return;
+    }
+
+    attendanceBadge.textContent = `Loaded • ${parsed.rows.length} rows`;
+    renderAttendanceFromParsed(parsed.headers, parsed.rows);
+  }
+
+  $("#importAttendanceBtn").addEventListener("click", async () => {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = ".csv, text/csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    picker.onchange = async () => {
+      const file = picker.files && picker.files[0];
+      if(!file) return;
+
+      const name = (file.name || "").toLowerCase();
+      if(name.endsWith(".xlsx") || name.endsWith(".xls")){
+        alert("XLSX/XLS selected.\n\nThis page supports CSV natively.\nQuick fix: Save As → CSV in Excel, then re-import.\n\nIf you want true XLSX import, tell me and I’ll add SheetJS.");
+        return;
+      }
+
+      const text = await file.text();
+      const { headers, rows } = parseCSV(text);
+
+      localStorage.setItem(KEY.attendance, JSON.stringify({ headers, rows, loadedAt: nowStamp(), fileName: file.name }));
+      attendanceBadge.textContent = `Loaded • ${rows.length} rows`;
+      renderAttendanceFromParsed(headers, rows);
+    };
+    picker.click();
+  });
+
+  $("#clearAttendanceBtn").addEventListener("click", () => {
+    localStorage.removeItem(KEY.attendance);
+    loadAttendanceFromStorage();
+  });
+
+  loadAttendanceFromStorage();
+
+  // ------------------ DOCUMENT LIBRARY ------------------
+  const filePicker = $("#filePicker");
+  const libBody = $("#libBody");
+  const libBadge = $("#libBadge");
+  let library = [];
+
+  function renderLibrary(){
+    libBadge.textContent = `${library.length} items`;
+    if(!library.length){
+      libBody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);">No files added yet.</td></tr>`;
+      return;
+    }
+
+    let html = "";
+    library.forEach((f, idx) => {
+      html += `
+        <tr>
+          <td>${escapeHtml(f.name)}</td>
+          <td>${escapeHtml(f.type || "—")}</td>
+          <td>${bytesToSize(f.size)}</td>
+          <td>${escapeHtml(f.addedAt)}</td>
+          <td>
+            <button class="btn" data-act="open" data-idx="${idx}" type="button">Open</button>
+            <button class="btn" data-act="remove" data-idx="${idx}" type="button">Remove</button>
+          </td>
+        </tr>
+      `;
+    });
+    libBody.innerHTML = html;
+  }
+
+  $("#addFilesBtn").addEventListener("click", () => filePicker.click());
+
+  filePicker.addEventListener("change", () => {
+    const files = Array.from(filePicker.files || []);
+    files.forEach(file => {
+      const url = URL.createObjectURL(file);
+      library.push({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        addedAt: nowStamp(),
+        url
+      });
+    });
+    filePicker.value = "";
+    renderLibrary();
+  });
+
+  libBody.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if(!btn) return;
+    const act = btn.dataset.act;
+    const idx = Number(btn.dataset.idx);
+    if(Number.isNaN(idx) || !library[idx]) return;
+
+    if(act === "open"){
+      window.open(library[idx].url, "_blank");
+    } else if(act === "remove"){
+      try { URL.revokeObjectURL(library[idx].url); } catch(e) {}
+      library.splice(idx, 1);
+      renderLibrary();
+    }
+  });
+
+  $("#clearLibBtn").addEventListener("click", () => {
+    library.forEach(x => { try { URL.revokeObjectURL(x.url); } catch(e) {} });
+    library = [];
+    renderLibrary();
+  });
+
+  renderLibrary();
+
+  // ------------------ INIT ------------------
+  refreshBadges();
+})();
+</script>
+</body>
+</html>
