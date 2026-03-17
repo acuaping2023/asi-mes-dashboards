@@ -76,8 +76,12 @@
     .summary-sub{font-size:11px;color:var(--muted);margin-top:2px;}
     .section{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:10px 12px;box-shadow:0 1px 3px rgba(16,24,40,.05);margin-top:4px;}
     .section-title{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--burnt);}
-    .chart-wrapper{position:relative;width:100%;height:280px;margin-top:6px;}
+
+    /* Bar chart wrapper — height grows with worker count to prevent label overlap */
+    .chart-wrapper{position:relative;width:100%;margin-top:6px;}
+    .chart-wrapper-fixed{height:280px;}
     #workerBarChart,#workerTrendChart{width:100%!important;height:100%!important;display:block;}
+
     .table-wrap{overflow-x:auto;}
     table{width:100%;border-collapse:collapse;font-size:13px;}
     th,td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;}
@@ -129,6 +133,14 @@
 
   <div class="topbar-right">
     <div class="topbar-right-row">
+      <label class="filter-field compact">
+        <span class="filter-label">Shift</span>
+        <select id="shiftFilter">
+          <option value="all">All shifts</option>
+          <option value="day">Day shift</option>
+          <option value="night">Night shift</option>
+        </select>
+      </label>
       <label class="filter-field compact">
         <span class="filter-label">Role</span>
         <select id="roleFilter"><option value="all">All roles</option><option value="assembler">Assemblers</option><option value="packer">Packing</option></select>
@@ -186,12 +198,15 @@
 
   <section class="section">
     <div class="section-title" id="barTitle">Average efficiency by worker / station (selected filters)</div>
-    <div class="chart-wrapper"><canvas id="workerBarChart"></canvas></div>
+    <!-- bar chart wrapper — height set dynamically by JS based on worker count -->
+    <div class="chart-wrapper" id="barChartWrapper">
+      <canvas id="workerBarChart"></canvas>
+    </div>
   </section>
 
   <section class="section">
     <div class="section-title" id="trendTitle">Daily efficiency trend (select a worker / station)</div>
-    <div class="chart-wrapper"><canvas id="workerTrendChart"></canvas></div>
+    <div class="chart-wrapper chart-wrapper-fixed"><canvas id="workerTrendChart"></canvas></div>
   </section>
 
   <section class="section">
@@ -241,7 +256,7 @@ let refreshTimer=null;
 function scheduleLiveRefresh(reason="live"){
   if(demoMode) return;
   if(refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer=setTimeout(()=>{ console.log("[Realtime] refreshing due to:",reason); loadAndRender(); },450);
+  refreshTimer=setTimeout(()=>{ loadAndRender(); },450);
 }
 
 function startRealtime(){
@@ -252,10 +267,32 @@ function startRealtime(){
     if(!d) return;
     const inRange=(!from||d>=from)&&(!to||d<=to);
     if(inRange) scheduleLiveRefresh(payload.eventType||"change");
-  }).subscribe((status)=>{ console.log("[Realtime] status:",status); });
+  }).subscribe();
 }
 
 const HOURLY_LOG_UPLOADER_URL="https://acuaping2023.github.io/asi-mes-dashboards/ADMIN_worker_hourly_logger_v1.html";
+
+// ── Shift-to-worker mapping loaded from worker_directory ──
+// Keyed by worker_name (lowercase), value: "day"|"night"|"both"
+let WORKER_SHIFT_MAP = {};
+
+async function loadWorkerShiftMap(){
+  try{
+    const{data,error}=await supabase
+      .from("worker_directory")
+      .select("worker_name,shift")
+      .limit(500);
+    if(error){ console.warn("Could not load worker_directory shifts:",error.message); return; }
+    WORKER_SHIFT_MAP={};
+    (data||[]).forEach(r=>{
+      if(r.worker_name) WORKER_SHIFT_MAP[r.worker_name.trim().toLowerCase()]=r.shift||"day";
+    });
+  }catch(e){ console.warn("loadWorkerShiftMap error:",e); }
+}
+
+function getWorkerShift(workerName){
+  return WORKER_SHIFT_MAP[(workerName||"").trim().toLowerCase()]||"both";
+}
 
 function todayIso(){ return new Date().toISOString().slice(0,10); }
 function isoNDaysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
@@ -289,11 +326,17 @@ function getDemoRows(){
   const iso=(d)=>d.toISOString().slice(0,10);
   const days=[];
   for(let i=13;i>=0;i--){ const d=new Date(today); d.setDate(d.getDate()-i); days.push(iso(d)); }
-  const workers=[{name:"Station 1 — Demo",role:"assembler"},{name:"Station 2 — Demo",role:"assembler"},{name:"Packer A — Demo",role:"packer"}];
+  const workers=[
+    {name:"Station 1 — Demo",role:"assembler",shift:"day"},
+    {name:"Station 2 — Demo",role:"assembler",shift:"day"},
+    {name:"Station 3 — Demo",role:"assembler",shift:"night"},
+    {name:"Packer A — Demo",role:"packer",shift:"day"},
+    {name:"Packer B — Demo",role:"packer",shift:"night"}
+  ];
   const out=[];
   days.forEach((day,idx)=>{
     workers.forEach((w,wi)=>{
-      const type=wi===2?"0600":"0620";
+      const type=w.role==="packer"?"0600":"0620";
       const cls=(idx%3===0)?"special":"standard";
       const daily=6+((idx+wi)%6);
       const t75=w.role==="packer"?10:8;
@@ -301,7 +344,8 @@ function getDemoRows(){
       const missingStandard=(idx%10===0&&wi===1);
       const eff75=missingStandard?null:(daily/t75)*100;
       const eff100=missingStandard?null:(daily/t100)*100;
-      out.push({log_date:day,worker_name:w.name,role:w.role,mirror_type:type,mirror_class:cls,part_number:type==="0620"?"0620-2436":"0600-3040",daily_total:daily,target_75:missingStandard?null:t75,target_100:missingStandard?null:t100,daily_efficiency_pct_75:eff75,daily_efficiency_pct_100:eff100});
+      // Store shift in the row so applyShiftFilter can use it
+      out.push({log_date:day,worker_name:w.name,role:w.role,mirror_type:type,mirror_class:cls,part_number:type==="0620"?"0620-2436":"0600-3040",daily_total:daily,target_75:missingStandard?null:t75,target_100:missingStandard?null:t100,daily_efficiency_pct_75:eff75,daily_efficiency_pct_100:eff100,_shift:w.shift});
     });
   });
   return out;
@@ -429,13 +473,10 @@ document.addEventListener("DOMContentLoaded",()=>{
 
   const exportCsvBtn=document.getElementById("exportCsvBtn");
   if(exportCsvBtn){ exportCsvBtn.addEventListener("click",()=>{ const{rows}=getCurrentFilteredRows(); exportRowsToCSV(rows); }); }
-
   const exportPdfBtn=document.getElementById("exportPdfBtn");
   if(exportPdfBtn){ exportPdfBtn.addEventListener("click",()=>exportWorkerPdf()); }
-
   const exportMirrorAssemblyBtn=document.getElementById("exportMirrorAssemblyBtn");
   if(exportMirrorAssemblyBtn){ exportMirrorAssemblyBtn.addEventListener("click",()=>exportMirrorAssemblyPdf_FirstShiftOnly()); }
-
   const exportDailyReportBtn=document.getElementById("exportDailyReportBtn");
   if(exportDailyReportBtn){ exportDailyReportBtn.addEventListener("click",()=>exportDailyProductionReportPdf()); }
 
@@ -446,7 +487,10 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(fromInput) fromInput.addEventListener("change",loadAndRender);
   if(toInput) toInput.addEventListener("change",loadAndRender);
 
+  // All filter dropdowns — shift filter also triggers worker filter repopulation
+  const shiftSel=$("#shiftFilter");
   const roleSel=$("#roleFilter"),mtSel=$("#mirrorTypeFilter"),clsSel=$("#mirrorClassFilter"),workerSel=$("#workerFilter");
+  if(shiftSel){ shiftSel.addEventListener("change",()=>{ populateWorkerFilter(lastRows); renderAll(lastRows); }); }
   if(roleSel){ roleSel.addEventListener("change",()=>{ populateWorkerFilter(lastRows); renderAll(lastRows); }); }
   if(mtSel){ mtSel.addEventListener("change",()=>{ populateWorkerFilter(lastRows); renderAll(lastRows); }); }
   if(clsSel){ clsSel.addEventListener("change",()=>{ populateWorkerFilter(lastRows); renderAll(lastRows); }); }
@@ -476,7 +520,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       else{ startRealtime(); }
       loadAndRender();
     });
-  }else{ console.warn("demoModeToggle not found"); }
+  }
 
   const modal=document.getElementById("howItWorksModal");
   const openBtn=document.getElementById("howItWorksBtn");
@@ -491,13 +535,21 @@ document.addEventListener("DOMContentLoaded",()=>{
 
 async function loadAndRender(){
   const from=$("#fromDate").value||null; const to=$("#toDate").value||null;
+
   if(demoMode){
     const data=getDemoRows().filter(r=>(!from||r.log_date>=from)&&(!to||r.log_date<=to)).sort((a,b)=>(a.log_date>b.log_date?1:-1));
-    lastRows=data||[]; populateWorkerFilter(lastRows); renderAll(lastRows);
-    const shape=validateViewShape(lastRows); if(!shape.ok) console.warn("Demo rows missing fields:",shape.missing);
+    lastRows=data||[];
+    // In demo mode build the shift map from the embedded _shift field
+    WORKER_SHIFT_MAP={};
+    lastRows.forEach(r=>{ if(r.worker_name&&r._shift) WORKER_SHIFT_MAP[r.worker_name.toLowerCase()]=r._shift; });
+    populateWorkerFilter(lastRows); renderAll(lastRows);
     const latest=lastRows.length?lastRows[lastRows.length-1].log_date:"—";
     setFreshness(`Last updated: ${nowStamp()} (Demo) • latest log_date: ${latest}`); return;
   }
+
+  // Load shift assignments alongside efficiency data
+  await loadWorkerShiftMap();
+
   let query=supabase.from('v_worker_daily_efficiency').select('*').order('log_date',{ascending:true}).order('worker_name',{ascending:true});
   if(from) query=query.gte('log_date',from);
   if(to) query=query.lte('log_date',to);
@@ -510,11 +562,24 @@ async function loadAndRender(){
   setFreshness(`Last updated: ${nowStamp()} • latest log_date: ${latest}`);
 }
 
+// ── Shift filter ──
+// Includes a row if: shift filter is "all", OR worker is "both", OR worker matches selected shift
+function applyShiftFilter(rows){
+  const shift=($("#shiftFilter")?.value||"all").toLowerCase();
+  if(shift==="all") return rows||[];
+  return(rows||[]).filter(r=>{
+    const w=getWorkerShift(r.worker_name);
+    return w==="both"||w===shift;
+  });
+}
+
 function applyBaseFilters(rows){
   const role=($("#roleFilter").value||"all").toLowerCase();
   const mType=$("#mirrorTypeFilter").value||"all";
   const mCls=($("#mirrorClassFilter").value||"all").toLowerCase();
-  return(rows||[]).filter(r=>{
+  // Apply shift filter first, then role/type/category
+  const shifted=applyShiftFilter(rows||[]);
+  return shifted.filter(r=>{
     const roleVal=(r.role||"").toLowerCase();
     const typeVal=r.mirror_type||"";
     const classVal=(r.mirror_class||"").toLowerCase();
@@ -590,7 +655,10 @@ function renderSummary(rows){
   const bestEffTxt=bestEff==null?"—":bestEff.toFixed(1)+"%";
   const worstEffTxt=worstEff==null?"—":worstEff.toFixed(1)+"%";
   const missingNote=deptSum.missingRows>0?` • Missing standards: ${deptSum.missingRows} rows (${deptSum.missingUnits.toLocaleString()} units)`:"";
-  box.innerHTML=`<div class="summary-card"><div class="summary-label">Overall efficiency (Actual ÷ Target)</div><div class="summary-value">${deptEffTxt}</div><div class="summary-sub">${deptSum.actual.toLocaleString()} actual vs ${deptSum.target.toLocaleString()} target${missingNote}</div></div><div class="summary-card"><div class="summary-label">Best performer (weighted)</div><div class="summary-value">${bestName}</div><div class="summary-sub">${bestEffTxt} • ${bestUnits.toLocaleString()} units</div></div><div class="summary-card"><div class="summary-label">Lowest performer (weighted)</div><div class="summary-value">${worstName}</div><div class="summary-sub">${worstEffTxt} • ${worstUnits.toLocaleString()} units</div></div>`;
+  // Show shift label in summary if filtered
+  const shiftVal=$("#shiftFilter")?.value||"all";
+  const shiftNote=shiftVal!=="all"?` • ${shiftVal.charAt(0).toUpperCase()+shiftVal.slice(1)} shift only`:"";
+  box.innerHTML=`<div class="summary-card"><div class="summary-label">Overall efficiency (Actual ÷ Target)${shiftNote}</div><div class="summary-value">${deptEffTxt}</div><div class="summary-sub">${deptSum.actual.toLocaleString()} actual vs ${deptSum.target.toLocaleString()} target${missingNote}</div></div><div class="summary-card"><div class="summary-label">Best performer (weighted)</div><div class="summary-value">${bestName}</div><div class="summary-sub">${bestEffTxt} • ${bestUnits.toLocaleString()} units</div></div><div class="summary-card"><div class="summary-label">Lowest performer (weighted)</div><div class="summary-value">${worstName}</div><div class="summary-sub">${worstEffTxt} • ${worstUnits.toLocaleString()} units</div></div>`;
 }
 
 function chartTextColor(){ return document.documentElement.getAttribute("data-theme")==="dark"?"#ffffff":"#111111"; }
@@ -599,12 +667,41 @@ function getEfficiencyBand(value){ const v=Number(value); if(isNaN(v)) return nu
 function applyEfficiencyClassToElement(el,value){ if(!el) return; el.classList.remove("eff-good","eff-warn","eff-bad"); const band=getEfficiencyBand(value); if(!band) return; el.classList.add("eff-"+band); }
 function getEfficiencyColor(value){ const band=getEfficiencyBand(value); switch(band){ case"good":return"#2ecc71"; case"warn":return"#ffd84d"; case"bad":return"#ff6b6b"; default:return"#4b5563"; } }
 
+// ── Bar chart — dynamic height + rotated labels to prevent overlap ──
+// Thresholds: ≤8 workers = horizontal labels, 9–20 = 45°, >20 = 90°
+// Height scales with worker count so bars don't get too thin
+function getBarChartLayout(workerCount){
+  if(workerCount<=8){
+    return{ rotation:0, height:300, padding:{bottom:10} };
+  }else if(workerCount<=20){
+    return{ rotation:-45, height:Math.max(340, workerCount*18), padding:{bottom:60} };
+  }else{
+    return{ rotation:-90, height:Math.max(380, workerCount*14), padding:{bottom:90} };
+  }
+}
+
 function renderWorkerBarChart(rows){
-  const ctx=$("#workerBarChart"); const title=$("#barTitle"); if(!ctx) return;
-  if(!rows||!rows.length){ if(barChartInstance){barChartInstance.destroy();barChartInstance=null;} if(title) title.textContent="Average efficiency by worker / station (no data)"; return; }
+  const ctx=$("#workerBarChart");
+  const wrapper=document.getElementById("barChartWrapper");
+  const title=$("#barTitle");
+  if(!ctx||!wrapper) return;
+
+  if(!rows||!rows.length){
+    if(barChartInstance){barChartInstance.destroy();barChartInstance=null;}
+    wrapper.style.height="300px";
+    if(title) title.textContent="Average efficiency by worker / station (no data)";
+    return;
+  }
+
   const byWorker={};
   rows.forEach(r=>{ const name=r.worker_name||"Unknown"; const e=getEff(r); if(e==null||isNaN(e)) return; if(!byWorker[name]) byWorker[name]={rows:[],effs:[],totalUnitsAll:0}; byWorker[name].rows.push(r); byWorker[name].effs.push(e); byWorker[name].totalUnitsAll+=Number(r.daily_total)||0; });
+
   const labels=Object.keys(byWorker).sort();
+  const layout=getBarChartLayout(labels.length);
+
+  // Dynamically resize wrapper
+  wrapper.style.height=layout.height+"px";
+
   const dataVals=[]; const workerDetails=[];
   labels.forEach(name=>{
     const info=byWorker[name];
@@ -630,14 +727,53 @@ function renderWorkerBarChart(rows){
         trendLabel=descriptor==="stable"?"Trend: stable":`Trend: ${descriptor}`;
       }
     }
-    workerDetails.push({name,rangeAvg:rangeAvgRounded,weeklyAvg,weeklyUnits,trendLabel});
+    // Tag shift for tooltip
+    const shift=getWorkerShift(name);
+    const shiftTag=shift==="both"?"Both shifts":(shift==="night"?"Night shift":"Day shift");
+    workerDetails.push({name,rangeAvg:rangeAvgRounded,weeklyAvg,weeklyUnits,trendLabel,shiftTag});
   });
-  if(title) title.textContent="Range average efficiency by worker / station (weighted: SUM actual ÷ SUM target)";
+
+  if(title){
+    const shiftVal=$("#shiftFilter")?.value||"all";
+    const shiftSuffix=shiftVal!=="all"?` — ${shiftVal.charAt(0).toUpperCase()+shiftVal.slice(1)} shift`:"";
+    title.textContent=`Range average efficiency by worker / station (weighted)${shiftSuffix}`;
+  }
+
   const colors=dataVals.map(v=>(v==null||isNaN(v))?"#9ca3af":getEfficiencyColor(v));
   const data={labels,datasets:[{label:"Avg efficiency (%)",data:dataVals,backgroundColor:colors,borderColor:colors,borderWidth:1}]};
-  const options={responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:chartTextColor(),maxRotation:0,minRotation:0,autoSkip:false}},y:{beginAtZero:true,max:120,ticks:{color:chartTextColor()}}},plugins:{legend:{display:false},tooltip:{backgroundColor:"#111827",borderColor:"#111827",borderWidth:1,titleColor:"#f9fafb",bodyColor:"#f9fafb",callbacks:{title:(items)=>{ if(!items.length) return""; return workerDetails[items[0].dataIndex]?.name||""; },label:(item)=>{ const w=workerDetails[item.dataIndex]; if(!w) return""; return w.rangeAvg==null?"Range avg: —":`Range avg: ${w.rangeAvg.toFixed(1)}%`; },afterBody:(items)=>{ if(!items.length) return[]; const w=workerDetails[items[0].dataIndex]; if(!w) return[]; return[`Weekly avg: ${w.weeklyAvg==null?"—":w.weeklyAvg.toFixed(1)+"%"}`,`Weekly total units: ${w.weeklyUnits.toLocaleString()}`,w.trendLabel]; }}}},onClick:(evt,elements)=>{ if(!elements||!elements.length) return; selectWorkerFromChart(labels[elements[0].index]); }};
-  if(barChartInstance){barChartInstance.data=data;barChartInstance.options=options;barChartInstance.update();}
-  else{barChartInstance=new Chart(ctx,{type:'bar',data,options});}
+
+  const options={
+    responsive:true,
+    maintainAspectRatio:false,
+    layout:{ padding:{ bottom: layout.padding.bottom, top:8 } },
+    scales:{
+      x:{
+        ticks:{
+          color:chartTextColor(),
+          maxRotation: Math.abs(layout.rotation),
+          minRotation: Math.abs(layout.rotation),
+          autoSkip:false,
+          font:{ size: labels.length > 20 ? 10 : 12 }
+        }
+      },
+      y:{beginAtZero:true,max:120,ticks:{color:chartTextColor()}}
+    },
+    plugins:{
+      legend:{display:false},
+      tooltip:{
+        backgroundColor:"#111827",borderColor:"#111827",borderWidth:1,titleColor:"#f9fafb",bodyColor:"#f9fafb",
+        callbacks:{
+          title:(items)=>{ if(!items.length) return""; return workerDetails[items[0].dataIndex]?.name||""; },
+          label:(item)=>{ const w=workerDetails[item.dataIndex]; if(!w) return""; return w.rangeAvg==null?"Range avg: —":`Range avg: ${w.rangeAvg.toFixed(1)}%`; },
+          afterBody:(items)=>{ if(!items.length) return[]; const w=workerDetails[items[0].dataIndex]; if(!w) return[]; return[`Weekly avg: ${w.weeklyAvg==null?"—":w.weeklyAvg.toFixed(1)+"%"}`,`Weekly total units: ${w.weeklyUnits.toLocaleString()}`,w.trendLabel,w.shiftTag]; }
+        }
+      }
+    },
+    onClick:(evt,elements)=>{ if(!elements||!elements.length) return; selectWorkerFromChart(labels[elements[0].index]); }
+  };
+
+  if(barChartInstance){barChartInstance.destroy();barChartInstance=null;}
+  barChartInstance=new Chart(ctx,{type:'bar',data,options});
 }
 
 function renderWorkerTrendChart(rows,workerFilter){
@@ -664,7 +800,9 @@ function renderWeeklyLeaderboard(rows){
   if(!arr.length){ tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:8px;">No efficiency data for leaderboard.</td></tr>'; if(title) title.textContent="Weekly leaderboard (latest week in range)"; return; }
   let latestWeek=null; arr.forEach(g=>{ if(!latestWeek||g.week>latestWeek) latestWeek=g.week; });
   const latestRows=arr.filter(g=>g.week===latestWeek).sort((a,b)=>b.avg-a.avg).slice(0,5);
-  if(title) title.textContent=`Weekly leaderboard — ${latestWeek}`;
+  const shiftVal=$("#shiftFilter")?.value||"all";
+  const shiftSuffix=shiftVal!=="all"?` — ${shiftVal.charAt(0).toUpperCase()+shiftVal.slice(1)} shift`:"";
+  if(title) title.textContent=`Weekly leaderboard — ${latestWeek}${shiftSuffix}`;
   let html="";
   latestRows.forEach((g,idx)=>{ html+=`<tr><td>${idx+1}</td><td>${g.week}</td><td>${g.name.replace(/</g,"&lt;")}</td><td style="text-align:right;">${g.avg.toFixed(1)}</td><td style="text-align:right;">${g.days}</td></tr>`; });
   tbody.innerHTML=html||'<tr><td colspan="5" style="text-align:center;padding:8px;">No leaderboard rows.</td></tr>';
@@ -761,8 +899,8 @@ async function exportDailyProductionReportPdf(){
   doc.text(`Report date: ${to}`,40,64);
   if(from&&to) doc.text(`Dashboard range: ${from} to ${to} (report locks to ${to})`,40,80);
   doc.text(`Baseline: ${baselineMode==="100"?"100% engineering standard":"75% engineering standard"}`,40,96);
-  const roleVal=($("#roleFilter")?.value||"all"); const typeVal=($("#mirrorTypeFilter")?.value||"all"); const clsVal=($("#mirrorClassFilter")?.value||"all");
-  doc.text(`Filters: role=${roleVal}, mirror type=${typeVal}, category=${clsVal}`,40,112);
+  const roleVal=($("#roleFilter")?.value||"all"); const typeVal=($("#mirrorTypeFilter")?.value||"all"); const clsVal=($("#mirrorClassFilter")?.value||"all"); const shiftVal=($("#shiftFilter")?.value||"all");
+  doc.text(`Filters: shift=${shiftVal}, role=${roleVal}, mirror type=${typeVal}, category=${clsVal}`,40,112);
   const effTxt=totals.eff==null?"—":`${totals.eff.toFixed(1)}%`;
   doc.setFont("times","bold"); doc.text(`Total units: ${totals.units.toLocaleString()}   Target: ${totals.target.toLocaleString()}   Efficiency: ${effTxt}`,40,136);
   let y=160;
@@ -801,9 +939,10 @@ async function exportWorkerPdf(){
   doc.setFont("Times","Bold"); doc.setFontSize(16); doc.text("Worker Efficiency 1:1 Report",40,40);
   doc.setFont("Times","Normal"); doc.setFontSize(11);
   doc.text(`Worker / Station: ${worker}`,40,65);
-  doc.text(`Date range: ${from} to ${to}`,40,80);
-  doc.text(`Baseline: ${baselineMode==="100"?"100% engineering standard":"75% engineering standard"}`,40,95);
-  let y=120;
+  doc.text(`Shift: ${(getWorkerShift(worker)||"—")}`,40,80);
+  doc.text(`Date range: ${from} to ${to}`,40,95);
+  doc.text(`Baseline: ${baselineMode==="100"?"100% engineering standard":"75% engineering standard"}`,40,110);
+  let y=130;
   if(stats){
     doc.text(`Range avg efficiency: ${stats.weeklyAverageEfficiency!=null?stats.weeklyAverageEfficiency.toFixed(1)+"%":"—"}`,40,y);y+=15;
     doc.text(`Total units (range): ${stats.weeklyTotalUnits!=null?stats.weeklyTotalUnits.toLocaleString():"—"}`,40,y);y+=15;
@@ -830,9 +969,9 @@ async function exportWorkerPdf(){
       <button class="btn" id="howItWorksCloseBtn" type="button">Close</button>
     </div>
     <div style="font-size:13px;color:var(--text);line-height:1.45;margin-top:10px;">
-      This dashboard reads daily worker output from a single dataset and calculates efficiency against an engineering baseline (75% or 100%). Filters (date range, role, mirror type, category, worker) update all views: summary cards, worker ranking bar chart, individual trend line, weekly leaderboard, and the detail table. Selecting a worker enables the Worker Snapshot panel and 1:1 PDF export. Demo mode loads safe sample data in-browser for portfolio use without connecting to any backend.
+      This dashboard reads daily worker output and calculates efficiency against an engineering baseline (75% or 100%). The <b>Shift filter</b> reads shift assignments from the worker directory — set in the Logger's Manage modal. Filters update all views: summary cards, bar chart, trend line, leaderboard, and detail table. Selecting a worker enables the Worker Snapshot panel and 1:1 PDF export. Bar chart labels rotate automatically when there are many workers to prevent overlap. Demo mode loads safe sample data without connecting to the backend.
     </div>
-    <div style="margin-top:10px;font-size:12px;color:var(--muted);">Tip: Demo mode is ideal for screenshots and recruiter walkthroughs.</div>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted);">Tip: Use the Shift filter to compare day vs night shift performance independently.</div>
   </div>
 </div>
 
