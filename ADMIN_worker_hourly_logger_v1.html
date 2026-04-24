@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>ASI — Worker Hourly Logger (v1.3)</title>
+  <title>ASI — Assembler Hourly Logger (v1.5)</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
     :root{
@@ -65,12 +65,12 @@
   <div class="brand">
     <img class="asi-logo" src="asi_logo.png" alt="ASI Logo">
     <div class="brand-text">
-      <strong>Worker Hourly Logger</strong>
+      <strong>Assembler Hourly Logger</strong>
       <span>American Specialties Inc. — Mirror Department</span>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-    <div class="tag">v1.3 • night shift fix + required standard</div>
+    <div class="tag">v1.5 • assembler only + job autofill + standard prompt</div>
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
       <input type="checkbox" id="demoModeToggle"/>Demo mode
     </label>
@@ -119,10 +119,8 @@
       </div>
       <div class="field">
         <label for="role">Role</label>
-        <select id="role">
-          <option value="">Select...</option>
-          <option value="assembler">Assembler</option>
-          <option value="packer">Packer</option>
+        <select id="role" disabled title="Assembler-only log">
+          <option value="assembler" selected>Assembler</option>
         </select>
       </div>
       <div class="field">
@@ -163,7 +161,7 @@
           <button type="button" data-qty="10">+10</button>
         </div>
       </div>
-      <div class="field"><label for="jobRef">Job Ref</label><input type="text" id="jobRef" placeholder="e.g. JOB-2025-12-16-001"></div>
+      <div class="field"><label for="jobRef">Job #</label><input type="text" id="jobRef" placeholder="e.g. 172205"></div>
       <div class="field"><label for="orderQty">Order Qty (total)</label><input type="number" id="orderQty" min="1" step="1" inputmode="numeric" placeholder="e.g. 600"></div>
     </div>
     <div class="btn-row">
@@ -206,7 +204,7 @@
 </main>
 
 <div class="footer">
-  Writes to Supabase table <code>worker_hourly_log</code> • v1.3 — corrected night shift blocks + required standard value.
+  Writes to Supabase table <code>worker_hourly_log</code> • v1.4 — assembler only + Job Ref autofill.
 </div>
 
 <script>
@@ -272,7 +270,7 @@ function sumQty(rows){ return(rows||[]).reduce((a,r)=>a+Number(r.qty||0),0); }
 
 const updateRealtimeValidation=debounce(async()=>{
   const date=(document.getElementById("logDate")?.value||todayIso());
-  const role=(document.getElementById("role")?.value||"").trim();
+  const role=(document.getElementById("role")?.value||"assembler").trim();
   const worker=(document.getElementById("workerName")?.value||"").trim();
   const hourBlock=(document.getElementById("hourBlock")?.value||"").trim();
   const qtyInput=(document.getElementById("qty")?.value||"").trim();
@@ -407,7 +405,7 @@ function clearForNewJobEntry(){
 function maybePromptSameJob(){
   const logDate=(document.getElementById("logDate")?.value||todayIso());
   const hourBlock=(document.getElementById("hourBlock")?.value||"").trim();
-  const role=(document.getElementById("role")?.value||"").trim();
+  const role=(document.getElementById("role")?.value||"assembler").trim();
   const workerName=(document.getElementById("workerName")?.value||"").trim();
   if(!logDate||!hourBlock||!role||!workerName) return;
   const partNow=(document.getElementById("partNumber")?.value||"").trim();
@@ -430,6 +428,115 @@ function maybePromptSameJob(){
   if(tagEl) tagEl.textContent=`From ${prevBlock} • Job: ${lastRow.job_ref||"—"} • Part: ${lastRow.part_number||"—"} • Order Qty: ${oqLabel}`;
   openSameJobModal();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JOB AUTOFILL — v1.4
+// Add current jobs here when you want instant autofill before the job has been
+// logged before. The app also falls back to previously saved Supabase entries.
+// Format:
+//   "172205": { part_number:"10-0620-2442", order_qty:280, mirror_type:"0620", mirror_class:"standard" },
+// ─────────────────────────────────────────────────────────────────────────────
+const JOB_LOOKUP = {
+  // Paste current schedule jobs here. Examples:
+  // "172205": { part_number:"10-0620-2442", order_qty:280, mirror_type:"0620", mirror_class:"standard" },
+  // "173076": { part_number:"10-0600-5436", order_qty:1, mirror_type:"0600", mirror_class:"special" },
+};
+
+const JOB_LOOKUP_CACHE = new Map();
+const JOB_LOOKUP_TTL_MS = 5 * 60_000;
+
+function normalizeJobKey(job){
+  return String(job||"").trim().replace(/^job[-_\s]*/i,"").toUpperCase();
+}
+
+function inferMirrorTypeFromPartValue(part){
+  const p=String(part||"").toLowerCase();
+  if(p.includes("0600")) return "0600";
+  if(p.includes("0620")) return "0620";
+  return "";
+}
+
+function normalizeJobLookupRow(row){
+  if(!row) return null;
+  const part_number=(row.part_number||row.partNumber||row.part||"").trim();
+  const orderRaw=row.order_qty ?? row.orderQty ?? row.balance ?? row.qty ?? null;
+  const order_qty=(orderRaw===""||orderRaw==null)?null:parseInt(orderRaw,10);
+  const mirror_type=(row.mirror_type||row.mirrorType||inferMirrorTypeFromPartValue(part_number)||"").trim();
+  const mirror_class=(row.mirror_class||row.mirrorClass||row.category||"").trim();
+  if(!part_number && !Number.isFinite(order_qty)) return null;
+  return {
+    part_number,
+    order_qty:Number.isFinite(order_qty)?order_qty:null,
+    mirror_type,
+    mirror_class
+  };
+}
+
+function applyJobAutofill(row,{source="lookup"}={}){
+  const data=normalizeJobLookupRow(row);
+  if(!data) return false;
+  const partEl=document.getElementById("partNumber");
+  const orderEl=document.getElementById("orderQty");
+  const typeEl=document.getElementById("mirrorType");
+  const classEl=document.getElementById("mirrorClass");
+  if(partEl && data.part_number) partEl.value=data.part_number;
+  if(orderEl && data.order_qty!=null) orderEl.value=String(data.order_qty);
+  if(typeEl && data.mirror_type) typeEl.value=data.mirror_type;
+  if(classEl && data.mirror_class) classEl.value=data.mirror_class;
+  autoSetMirrorTypeFromPart(data.part_number);
+  refreshPartSuggestions();
+  updateRealtimeValidation();
+  const label = source==="history" ? "previous saved entry" : source==="today" ? "today's entries" : "job lookup";
+  setStatus(`Autofilled Part # and Order Qty from ${label}.`,true);
+  return true;
+}
+
+async function autofillJobFromRef(jobRaw){
+  const job=normalizeJobKey(jobRaw);
+  if(!job) return false;
+
+  // 1) Manual schedule/job lookup object
+  if(JOB_LOOKUP[job]) return applyJobAutofill(JOB_LOOKUP[job],{source:"lookup"});
+
+  // 2) Today's loaded entries
+  const local=(TODAY_ROWS_CACHE||[]).find(r=>normalizeJobKey(r.job_ref)===job && ((r.part_number||"").trim() || r.order_qty!=null));
+  if(local) return applyJobAutofill(local,{source:"today"});
+
+  // 3) Demo history
+  if(demoMode){
+    const all=loadDemoEntries();
+    const row=(all||[]).slice().reverse().find(r=>normalizeJobKey(r.job_ref)===job && ((r.part_number||"").trim() || r.order_qty!=null));
+    if(row) return applyJobAutofill(row,{source:"history"});
+    setStatus("No saved job info found yet. Enter Part # and Order Qty once, then future entries can autofill.",false);
+    return false;
+  }
+
+  // 4) Supabase historical fallback from worker_hourly_log
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session?.user) return false;
+    const cached=JOB_LOOKUP_CACHE.get(job);
+    if(cached && (Date.now()-cached.ts)<JOB_LOOKUP_TTL_MS){
+      if(cached.row) return applyJobAutofill(cached.row,{source:"history"});
+      return false;
+    }
+    const {data,error}=await withTimeoutRetry(()=>
+      sb.from("worker_hourly_log")
+        .select("job_ref,part_number,mirror_type,mirror_class,order_qty,id,log_date")
+        .eq("job_ref",job)
+        .order("id",{ascending:false})
+        .limit(1),
+      {ms:20000,label:"job autofill lookup",retries:1,backoffMs:700}
+    );
+    if(error){ console.error("Job autofill lookup error:",error); return false; }
+    const row=(data&&data[0])?data[0]:null;
+    JOB_LOOKUP_CACHE.set(job,{ts:Date.now(),row});
+    if(row) return applyJobAutofill(row,{source:"history"});
+    setStatus("No saved job info found yet. Enter Part # and Order Qty once, then future entries can autofill.",false);
+    return false;
+  }catch(err){ console.error("Job autofill lookup timeout:",err); return false; }
+}
+const autofillJobFromRefDebounced = debounce(()=>autofillJobFromRef(document.getElementById("jobRef")?.value||""),350);
 
 function calculateShiftTotals(rows,allowedBlocks){
   const data=(rows||[]).filter(r=>allowedBlocks.has((r.hour_block||"").trim()));
@@ -771,9 +878,20 @@ function showEnterStandardUI(missingPart){
   const pn=(missingPart||"").trim();
   const family=pn.includes("0620")?"0620":(pn.includes("0600")?"0600":"");
   const pnEl=document.getElementById("ms_part_number"),famEl=document.getElementById("ms_mirror_family"),sizeEl=document.getElementById("ms_size_code");
-  if(pnEl) pnEl.value=pn; if(famEl) famEl.value=family; if(sizeEl) sizeEl.value="ALL";
+  if(pnEl) pnEl.value=pn;
+  if(famEl) famEl.value=family;
+  if(sizeEl) sizeEl.value="ALL";
+  const partSpans=document.querySelectorAll("[data-missing-standard-part]");
+  partSpans.forEach(el=>{ el.textContent=pn||"####"; });
+  const stdEl=document.getElementById("ms_std_per_hour_100");
+  if(stdEl){ stdEl.value=""; stdEl.classList.add("input-invalid"); }
+  setMsStatus("Engineering standard missing. Follow the EPICOR Method Tracker steps above, paste the lower assembly Prod Std, then save the standard.",false);
 }
-function openEnterStandardModal(){ const m=document.getElementById("enterStandardModal"); if(m) m.style.display="flex"; }
+function openEnterStandardModal(){
+  const m=document.getElementById("enterStandardModal");
+  if(m) m.style.display="flex";
+  setTimeout(()=>document.getElementById("ms_std_per_hour_100")?.focus(),150);
+}
 function closeEnterStandardModal(){ const m=document.getElementById("enterStandardModal"); if(m) m.style.display="none"; }
 function setMsStatus(msg,ok=true){ const el=document.getElementById("msStatusLine"); if(!el) return; el.textContent=msg||""; el.classList.remove("status-ok","status-err"); el.classList.add(ok?"status-ok":"status-err"); }
 
@@ -794,7 +912,7 @@ async function saveMirrorStandardFromModal(){
   // REQUIRED: must be a positive number — null standard causes duplicate JOIN rows
   if(stdRaw===""||std_per_hour_100===null||isNaN(std_per_hour_100)||std_per_hour_100<=0){
     document.getElementById("ms_std_per_hour_100")?.classList.add("input-invalid");
-    setMsStatus("std_per_hour_100 is required and must be greater than 0. A null or zero standard will corrupt efficiency data.",false);
+    setMsStatus("Prod Std / engineering standard is required and must be greater than 0. A blank or zero standard will corrupt efficiency data.",false);
     return false;
   }
   document.getElementById("ms_std_per_hour_100")?.classList.remove("input-invalid");
@@ -802,7 +920,7 @@ async function saveMirrorStandardFromModal(){
   try{
     const{error}=await withTimeoutRetry(()=>sb.from("mirror_standards").insert([{part_number,mirror_family,size_code,std_per_hour_100,active,notes}]),{ms:25000,label:"mirror_standards insert",retries:1,backoffMs:900});
     if(error){ console.error("mirror_standards insert error:",error); setMsStatus(`Error saving: ${error.message}`,false); return false; }
-    setMsStatus("Standard saved. You can now save the hourly entry.",true); return true;
+    setMsStatus("Engineering standard saved. You can now save the hourly entry.",true); return true;
   }catch(err){ console.error("mirror_standards insert timeout:",err); setMsStatus("Timed out saving standard. Try again.",false); return false; }
 }
 
@@ -844,7 +962,7 @@ async function saveEntry({stayOnWorkerHour}={stayOnWorkerHour:false}){
   try{
     const logDate=$("#logDate").value||todayIso();
     const hourBlock=$("#hourBlock").value.trim();
-    const role=$("#role").value.trim();
+    const role=($("#role")?.value||"assembler").trim();
     const workerName=$("#workerName").value.trim();
     const partNumber=$("#partNumber").value.trim();
     const mirrorType=$("#mirrorType").value.trim();
@@ -874,11 +992,9 @@ async function saveEntry({stayOnWorkerHour}={stayOnWorkerHour:false}){
     if(!demoMode){
       const exists=(role==="packer")?await packingStandardExists(partNumber):await mirrorStandardExists(partNumber);
       if(!exists){
-        const standardType=role==="packer"?"packing standard":"mirror standard";
-        alert(`⚠️ Missing ${standardType} for part "${partNumber}".\n\nThis entry was NOT saved.\n\nClick OK, then use the "${role==="packer"?"Enter packing standard":"Enter mirror standard"}" button that appears to add the standard, and click Save entry again.`);
-        setStatus(`Missing ${standardType} — add it below, then click Save entry again.`,false);
-        if(role==="packer"){ showEnterPackingStandardUI(partNumber); openEnterPackingStandardModal(); }
-        else{ showEnterStandardUI(partNumber); openEnterStandardModal(); }
+        showEnterStandardUI(partNumber);
+        openEnterStandardModal();
+        setStatus(`Engineering standard missing for part ${partNumber}. Paste the lower assembly Prod Std from EPICOR Method Tracker, save the standard, then click Save entry again.`,false);
         return;
       }else{
         const btn1=document.getElementById("enterStandardBtn"); const btn2=document.getElementById("enterPackingStandardBtn");
@@ -891,7 +1007,7 @@ async function saveEntry({stayOnWorkerHour}={stayOnWorkerHour:false}){
       if(idx>=0){ rows[idx].qty=qty; rows[idx].job_ref=job_ref; rows[idx].order_qty=order_qty; }
       else{ rows.push({log_date:logDate,hour_block:hourBlock,role,worker_name:workerName,part_number:partNumber,mirror_type:mirrorType,mirror_class:mirrorClass,qty,job_ref,order_qty}); }
       saveDemoEntries(rows); setStatus("Entry saved (Demo mode).",true);
-      if(!stayOnWorkerHour){ ["hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","jobRef","orderQty"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; }); }
+      if(!stayOnWorkerHour){ ["hourBlock","workerName","partNumber","mirrorType","mirrorClass","jobRef","orderQty"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; }); }
       else{ const idx2=ORDERED_BLOCKS.indexOf(hourBlock); if(idx2>=0&&idx2<ORDERED_BLOCKS.length-1) $("#hourBlock").value=ORDERED_BLOCKS[idx2+1]; }
       $("#qty").value=""; await loadTodayEntries(); refreshPartSuggestions(); return;
     }
@@ -909,7 +1025,7 @@ async function saveEntry({stayOnWorkerHour}={stayOnWorkerHour:false}){
     }
     if(saveErr){ console.error("Save error:",saveErr); setStatus("Error saving entry. Check console for details.",false); return; }
     setStatus("Entry saved.",true);
-    if(!stayOnWorkerHour){ ["hourBlock","role","workerName","partNumber","mirrorType","mirrorClass","jobRef","orderQty"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; }); }
+    if(!stayOnWorkerHour){ ["hourBlock","workerName","partNumber","mirrorType","mirrorClass","jobRef","orderQty"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; }); }
     else{ const idx=ORDERED_BLOCKS.indexOf(hourBlock); if(idx>=0&&idx<ORDERED_BLOCKS.length-1) $("#hourBlock").value=ORDERED_BLOCKS[idx+1]; }
     $("#qty").value=""; await loadTodayEntries(); refreshPartSuggestions();
   }catch(err){ console.error("saveEntry crashed:",err); setStatus(`Save failed: ${err.message||err}`,false); }
@@ -921,7 +1037,7 @@ function openEditModalWithRow(row){
   document.getElementById("editEntryId").value=row.id||"";
   document.getElementById("editLogDate").value=row.log_date||todayIso();
   document.getElementById("editHourBlock").value=row.hour_block||"7am-8am";
-  document.getElementById("editRole").value=row.role||"assembler";
+  document.getElementById("editRole").value="assembler";
   document.getElementById("editWorkerName").value=row.worker_name||"";
   document.getElementById("editPartNumber").value=row.part_number||"";
   document.getElementById("editMirrorType").value=row.mirror_type||"0600";
@@ -943,7 +1059,7 @@ async function saveEditedRow(){
   const payload={
     log_date:document.getElementById("editLogDate").value||todayIso(),
     hour_block:document.getElementById("editHourBlock").value,
-    role:document.getElementById("editRole").value,
+    role:"assembler",
     worker_name:document.getElementById("editWorkerName").value.trim(),
     part_number:document.getElementById("editPartNumber").value.trim(),
     mirror_type:document.getElementById("editMirrorType").value,
@@ -1165,6 +1281,7 @@ document.addEventListener("DOMContentLoaded",async()=>{
   }
 
   autoSelectHourBlock();
+  const roleInit=document.getElementById("role"); if(roleInit) roleInit.value="assembler";
   initQuickQtyButtons();
 
   const enterBtn=document.getElementById("enterStandardBtn");
@@ -1173,7 +1290,7 @@ document.addEventListener("DOMContentLoaded",async()=>{
   const msCancel=document.getElementById("cancelStandardBtn"); if(msCancel) msCancel.addEventListener("click",closeEnterStandardModal);
   const enterModal=document.getElementById("enterStandardModal"); if(enterModal) enterModal.addEventListener("click",(e)=>{ if(e.target===enterModal) closeEnterStandardModal(); });
   const msSave=document.getElementById("saveStandardBtn");
-  if(msSave) msSave.addEventListener("click",async()=>{ const ok=await saveMirrorStandardFromModal(); if(ok){ const b=document.getElementById("enterStandardBtn"); if(b) b.style.display="none"; setStatus("Standard saved. Now click Save entry again.",true); setTimeout(()=>closeEnterStandardModal(),400); } });
+  if(msSave) msSave.addEventListener("click",async()=>{ const ok=await saveMirrorStandardFromModal(); if(ok){ const b=document.getElementById("enterStandardBtn"); if(b) b.style.display="none"; setStatus("Engineering standard saved. Now click Save entry again.",true); setTimeout(()=>closeEnterStandardModal(),400); } });
 
   const enterPackBtn=document.getElementById("enterPackingStandardBtn");
   if(enterPackBtn) enterPackBtn.addEventListener("click",openEnterPackingStandardModal);
@@ -1193,6 +1310,15 @@ document.addEventListener("DOMContentLoaded",async()=>{
   $("#partNumber").addEventListener("input",(e)=>autoSetMirrorTypeFromPart(e.target.value));
   $("#partNumber").addEventListener("change",(e)=>autoSetMirrorTypeFromPart(e.target.value));
   ["logDate","hourBlock","role","workerName","qty","jobRef","orderQty"].forEach(id=>{ const el=document.getElementById(id); if(!el) return; el.addEventListener("input",()=>updateRealtimeValidation()); el.addEventListener("change",()=>updateRealtimeValidation()); });
+  const jobRefEl=document.getElementById("jobRef");
+  if(jobRefEl){
+    jobRefEl.addEventListener("input",()=>{
+      // Autofill as soon as a recognizable job number is entered. Debounced to avoid extra queries.
+      autofillJobFromRefDebounced();
+    });
+    jobRefEl.addEventListener("change",()=>autofillJobFromRef(jobRefEl.value));
+    jobRefEl.addEventListener("blur",()=>autofillJobFromRef(jobRefEl.value));
+  }
 
   const editModal=document.getElementById("editEntryModal");
   const editClose=document.getElementById("editEntryCloseBtn");
@@ -1252,7 +1378,7 @@ document.addEventListener("DOMContentLoaded",async()=>{
           </optgroup>
         </select>
       </div>
-      <div class="field"><label for="editRole">Role</label><select id="editRole"><option value="assembler">Assembler</option><option value="packer">Packer</option></select></div>
+      <div class="field"><label for="editRole">Role</label><select id="editRole" disabled title="Assembler-only log"><option value="assembler" selected>Assembler</option></select></div>
       <div class="field"><label for="editWorkerName">Worker / Station</label><input type="text" id="editWorkerName" placeholder="Exact name/station"></div>
       <div class="field"><label for="editPartNumber">Part #</label><input type="text" id="editPartNumber" placeholder="e.g. 0600-2436"></div>
       <div class="field"><label for="editMirrorType">Mirror type</label><select id="editMirrorType"><option value="0620">0620</option><option value="0600">0600</option></select></div>
@@ -1268,51 +1394,107 @@ document.addEventListener("DOMContentLoaded",async()=>{
 
 <!-- HOW IT WORKS MODAL -->
 <div id="howItWorksModal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);z-index:9999;">
-  <div style="width:min(720px,100%);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.18);">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div class="card-title" style="margin:0;">How it works</div>
+  <div style="width:min(820px,100%);max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;background:var(--panel);padding-bottom:8px;border-bottom:1px solid var(--border);z-index:1;">
+      <div class="card-title" style="margin:0;">How to use the Worker Hourly Logger</div>
       <button class="btn" id="howItWorksCloseBtn" type="button">Close</button>
     </div>
-    <div style="font-size:13px;color:var(--text);line-height:1.45;margin-top:10px;">
-      <b>v1.3 changes</b>
-      <ul style="margin:6px 0 10px 18px;">
-        <li><b>Night shift hour blocks corrected:</b> After the 9pm break, blocks are now 9:30pm–10:30pm, 10:30pm–11:30pm, and 11:30pm–12:30am (10m break, weight 50/60).</li>
-        <li><b>Standard value now required:</b> std_per_hour_100 must be a positive number before saving. Saving a null standard created duplicate JOIN rows that doubled every worker's production count on that part.</li>
+
+    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-top:12px;">
+      <div style="padding:10px 12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:14px;margin-bottom:12px;">
+        <b style="color:#9a3412;">Purpose:</b>
+        This logger is used to record how many mirrors each assembler completes during each hour block. The paper log is used on the floor first, then the supervisor enters the information into this dashboard.
+      </div>
+
+      <b>Step 1 — Print the paper logs</b>
+      <ol style="margin:6px 0 12px 20px;padding:0;">
+        <li>Click <b>Print day shift log</b> for the day shift paper log.</li>
+        <li>Click <b>Print night shift log</b> for the night shift paper log.</li>
+        <li>Give the printed log to the person responsible for collecting hourly production counts.</li>
+      </ol>
+
+      <b>Step 2 — How to fill out the paper log on the floor</b>
+      <ul style="margin:6px 0 12px 18px;padding:0;">
+        <li>The <b>hour block</b> is shown at the top-left of each section of the paper log.</li>
+        <li>Every hour, the delegated worker should walk around and ask each assembler what <b>part number</b> they worked on and how many pieces they made during that hour.</li>
+        <li>Write the assembler’s quantity in the correct hour block. Only count what was completed during that specific hour.</li>
+        <li>At the end of the hour, the completed paper log should be given to the supervisor for entry into the dashboard.</li>
       </ul>
-      <b>Hour block weights (fraction of full hour worked)</b>
-      <ul style="margin:6px 0 10px 18px;">
-        <li>9am–10am (15m break) = 45/60</li>
-        <li>1:30pm–2:30pm (10m break) = 50/60</li>
-        <li>6:00pm–6:45pm (15m break) = 45/60</li>
-        <li>11:30pm–12:30am (10m break) = 50/60</li>
-        <li>All other blocks = 1.0 (full hour)</li>
-        <li>Lunch breaks (12:00pm–12:30pm day shift, 9:00pm–9:30pm night shift) are not loggable blocks</li>
+
+      <b>Step 3 — How to enter the paper log into the dashboard</b>
+      <ol style="margin:6px 0 12px 20px;padding:0;">
+        <li>Select the correct <b>Date</b>.</li>
+        <li>Select the correct <b>Hour block</b>.</li>
+        <li>Select the correct <b>Worker / Station</b>.</li>
+        <li>Enter the <b>Job #</b> from the Excel schedule.</li>
+        <li>If the job was already entered earlier that day, the dashboard will automatically fill in the Part #, Mirror Type, Category, and Order Qty.</li>
+        <li>If the job does not autofill, enter the <b>Part #</b> from the paper log or Excel schedule.</li>
+        <li>The <b>Mirror type</b> will fill in automatically when the part number contains 0600 or 0620.</li>
+        <li>Select the correct <b>Category</b>: Standard or Special.</li>
+        <li>Enter the <b>Quantity this hour</b>, meaning how many pieces that assembler completed in that hour block.</li>
+        <li>Enter the <b>Order Qty</b> from the Excel schedule if it did not autofill.</li>
+        <li>Click <b>Save entry</b>.</li>
+      </ol>
+
+      <b>Step 4 — If the same assembler continues the same job</b>
+      <ul style="margin:6px 0 12px 18px;padding:0;">
+        <li>If the assembler had an entry in the previous hour, the dashboard may ask if they are still working on the same job and part number.</li>
+        <li>Always verify with the paper log or the assembler before clicking <b>Yes</b>.</li>
+        <li>Click <b>Yes</b> only if the job, part number, and order quantity are still correct.</li>
+        <li>Click <b>No</b> if the assembler changed jobs or changed part numbers.</li>
       </ul>
+
+      <b>Step 5 — If an engineering standard is missing</b>
+      <ul style="margin:6px 0 12px 18px;padding:0;">
+        <li>If the engineering standard is not in the database, the dashboard will show a popup with EPICOR instructions.</li>
+        <li>Go to <b>Method Tracker (BOM)</b> in EPICOR, paste the part number, press <b>Tab</b>, and find the correct <b>Assembly</b> operation.</li>
+        <li>Copy the <b>Production Per Scheduling Block / Prod Std</b> number into the popup.</li>
+        <li>If there are two Assembly operations, use the one with the <b>lower Prod Std number</b>.</li>
+        <li>Save the engineering standard, then save the hourly entry again.</li>
+      </ul>
+
+      <div style="padding:10px 12px;border:1px solid var(--border);background:var(--panel-soft);border-radius:14px;margin-top:10px;">
+        <b>Helpful reminders:</b>
+        <ul style="margin:6px 0 0 18px;padding:0;">
+          <li>This screen is for <b>assemblers only</b>.</li>
+          <li>Lunch breaks are not entered as hour blocks.</li>
+          <li>For break hour blocks, the dashboard automatically accounts for the shorter working time.</li>
+          <li>If something looks wrong, double-check the paper log, the Excel schedule, and the selected hour block before saving.</li>
+        </ul>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ENTER MIRROR STANDARD MODAL -->
+<!-- ENTER ENGINEERING STANDARD MODAL -->
 <div id="enterStandardModal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);z-index:9999;">
-  <div style="width:min(760px,100%);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.18);">
+  <div style="width:min(820px,100%);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.18);">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div class="card-title" style="margin:0;">Enter mirror standard</div>
+      <div class="card-title" style="margin:0;">Engineering standard missing</div>
       <button class="btn" id="enterStandardCloseBtn" type="button">Close</button>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-top:6px;">This part number is missing in <code>mirror_standards</code>. Add it below, then click Save entry again.</div>
+
+    <div style="margin-top:10px;padding:12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:14px;font-size:13px;line-height:1.45;color:#111;">
+      <div style="font-weight:800;color:#9a3412;margin-bottom:6px;">The engineering standard for part <span data-missing-standard-part>####</span> is not in the database.</div>
+      <div>Please go to <b>Method Tracker (BOM)</b> in <b>EPICOR</b> and paste part <b><span data-missing-standard-part>####</span></b> into the part number cell in Method Tracker.</div>
+      <div style="margin-top:6px;">Once you enter it, press the <b>Tab</b> button to retrieve the part <b><span data-missing-standard-part>####</span></b> information.</div>
+      <div style="margin-top:6px;">Then click through the operations until you find the <b>Assembly</b> operation. Once you find the assembly operation, look for the <b>Production Per Scheduling Block</b> title, copy the <b>Prod Std</b> number, and paste it into the Worker Hourly Logger below.</div>
+      <div style="margin-top:6px;"><b>Important:</b> There are usually two assembly operations. The correct one to use is the one with the <b>lower Prod Std number</b>.</div>
+    </div>
+
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 12px;margin-top:12px;">
-      <div class="field"><label for="ms_part_number">part_number</label><input type="text" id="ms_part_number" placeholder="e.g. 0600-2436"></div>
-      <div class="field"><label for="ms_mirror_family">mirror_family</label><input type="text" id="ms_mirror_family" placeholder="e.g. 0600"></div>
-      <div class="field"><label for="ms_size_code">size_code</label><input type="text" id="ms_size_code" value="ALL" readonly></div>
+      <div class="field"><label for="ms_part_number">Part #</label><input type="text" id="ms_part_number" placeholder="e.g. 0600-2436"></div>
+      <div class="field"><label for="ms_mirror_family">Mirror family</label><input type="text" id="ms_mirror_family" placeholder="e.g. 0600"></div>
+      <div class="field"><label for="ms_size_code">Size code</label><input type="text" id="ms_size_code" value="ALL" readonly></div>
       <div class="field">
-        <label for="ms_std_per_hour_100">std_per_hour_100 <span style="color:var(--danger);font-weight:700;">*required</span></label>
-        <input type="number" id="ms_std_per_hour_100" min="0.01" step="0.01" placeholder="e.g. 12.5 — cannot be blank or zero">
+        <label for="ms_std_per_hour_100">Prod Std / Engineering standard <span style="color:var(--danger);font-weight:700;">*required</span></label>
+        <input type="number" id="ms_std_per_hour_100" min="0.01" step="0.01" placeholder="Paste lower Assembly Prod Std here">
       </div>
-      <div class="field"><label for="ms_active">active</label><select id="ms_active"><option value="true" selected>TRUE</option><option value="false">FALSE</option></select></div>
-      <div class="field" style="grid-column:1/-1;"><label for="ms_notes">notes (optional)</label><input type="text" id="ms_notes" placeholder="Anything helpful (optional)"></div>
+      <div class="field"><label for="ms_active">Active</label><select id="ms_active"><option value="true" selected>TRUE</option><option value="false">FALSE</option></select></div>
+      <div class="field" style="grid-column:1/-1;"><label for="ms_notes">Notes (optional)</label><input type="text" id="ms_notes" placeholder="Optional note, e.g. Pulled from EPICOR Method Tracker assembly operation"></div>
     </div>
     <div class="btn-row" style="margin-top:12px;">
-      <button class="btn btn-primary" id="saveStandardBtn" type="button">Save standard</button>
+      <button class="btn btn-primary" id="saveStandardBtn" type="button">Save engineering standard</button>
       <button class="btn" id="cancelStandardBtn" type="button">Cancel</button>
     </div>
     <div id="msStatusLine" class="status-line" style="margin-top:8px;"></div>
