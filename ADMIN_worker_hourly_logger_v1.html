@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>ASI — Assembler Hourly Logger (v1.5)</title>
+  <title>ASI — Assembler Hourly Logger (v1.7)</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
     :root{
@@ -70,7 +70,7 @@
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-    <div class="tag">v1.5 • assembler only + job autofill + standard prompt</div>
+    <div class="tag">v1.7 • assembler only + weekly report</div>
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
       <input type="checkbox" id="demoModeToggle"/>Demo mode
     </label>
@@ -201,10 +201,60 @@
       </table>
     </div>
   </section>
+
+  <section class="card">
+    <div class="card-title">
+      Weekly assembly report
+      <span class="tag" id="weeklyReportTag" style="margin-left:6px;">Monday–Saturday</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">
+      Select any date in the week, then click <b>Generate weekly report</b>. This pulls assembler totals directly from the Worker Hourly Logger using the same adjusted-hour logic as the daily totals above.
+    </div>
+    <div class="btn-row" style="margin-bottom:10px;">
+      <button class="btn btn-primary" id="generateWeeklyReportBtn" type="button">Generate weekly report</button>
+      <button class="btn" id="copyWeeklyExcelRowsBtn" type="button">Copy Excel rows</button>
+      <button class="btn" id="copyWeeklyEmailBtn" type="button">Copy email</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th style="text-align:right;">1st Shift Assembled (pcs)</th>
+            <th style="text-align:right;">Hours 1st</th>
+            <th style="text-align:right;">2nd Shift Assembled (pcs)</th>
+            <th style="text-align:right;">Hours 2nd</th>
+            <th style="text-align:right;">Daily Total Assembled</th>
+            <th style="text-align:right;">Daily Total Hours</th>
+          </tr>
+        </thead>
+        <tbody id="weeklyReportBody">
+          <tr><td colspan="7" style="text-align:center;padding:8px;">No weekly report generated yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;">
+      <label for="weeklyEmailSubject" style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">
+        Email subject line
+      </label>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">
+        <input
+          id="weeklyEmailSubject"
+          type="text"
+          readonly
+          style="width:100%;border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:13px;font-family:Arial,sans-serif;"
+          placeholder="Generate weekly report to create subject line"
+        />
+        <button class="btn" id="copyWeeklySubjectBtn" type="button">Copy subject</button>
+      </div>
+    </div>
+    <textarea id="weeklyEmailText" style="width:100%;min-height:220px;margin-top:12px;border:1px solid var(--border);border-radius:12px;padding:10px;font-family:Arial,sans-serif;font-size:13px;line-height:1.4;" readonly placeholder="Generated email will appear here..."></textarea>
+    <div id="weeklyReportStatus" class="status-line"></div>
+  </section>
 </main>
 
 <div class="footer">
-  Writes to Supabase table <code>worker_hourly_log</code> • v1.4 — assembler only + Job Ref autofill.
+  Writes to Supabase table <code>worker_hourly_log</code> • v1.7 — assembler only + weekly report.
 </div>
 
 <script>
@@ -565,24 +615,476 @@ function renderDailyTotals(rows){
   nightEl.textContent=`Night shift: ${night.totalPieces.toLocaleString()} pcs • ${night.adjustedHours.toFixed(2)} adj hrs • ${night.pph.toFixed(2)} pcs/adj-hr`;
 }
 
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WEEKLY ASSEMBLY REPORT — v1.7
+// Pulls Monday–Saturday assembler totals from worker_hourly_log and reuses the
+// same adjusted-hour calculation used by the daily totals.
+// Includes formatted Outlook email table, packing table template, and subject.
+// ─────────────────────────────────────────────────────────────────────────────
+let WEEKLY_REPORT_CACHE = [];
+let WEEKLY_EMAIL_HTML = "";
+
+function setWeeklyReportStatus(message, ok = true) {
+  const el = document.getElementById("weeklyReportStatus");
+  if (!el) return;
+
+  el.textContent = message || "";
+  el.classList.remove("status-ok", "status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+
+function formatDateMDY(isoDate) {
+  const [y, m, d] = String(isoDate || "").split("-").map(Number);
+  if (!y || !m || !d) return isoDate || "";
+  return `${m}/${d}/${y}`;
+}
+
+function formatDateWithDayAbbrev(dateLabel) {
+  const [m, d, y] = String(dateLabel || "").split("/").map(Number);
+  if (!m || !d || !y) return dateLabel || "";
+
+  const date = new Date(y, m - 1, d);
+  const dayAbbrev = date.toLocaleDateString("en-US", { weekday: "short" });
+  const mm = String(m).padStart(2, "0");
+  const dd = String(d).padStart(2, "0");
+
+  return `${dayAbbrev} - ${mm}/${dd}/${y}`;
+}
+
+function formatDateMMDDYYYY(dateLabel) {
+  const [m, d, y] = String(dateLabel || "").split("/").map(Number);
+  if (!m || !d || !y) return dateLabel || "";
+
+  const mm = String(m).padStart(2, "0");
+  const dd = String(d).padStart(2, "0");
+
+  return `${mm}/${dd}/${y}`;
+}
+
+function getMondayFromSelectedDate(dateStr) {
+  const d = new Date((dateStr || todayIso()) + "T00:00:00");
+  const day = d.getDay(); // Sunday = 0, Monday = 1
+  const diff = day === 0 ? -6 : 1 - day;
+
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function isoFromDateObj(d) {
+  const copy = new Date(d);
+  copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
+  return copy.toISOString().slice(0, 10);
+}
+
+function getWeekDatesMondayToSaturday(selectedDateStr) {
+  const monday = getMondayFromSelectedDate(selectedDateStr);
+  const dates = [];
+
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    dates.push(isoFromDateObj(d));
+  }
+
+  return dates;
+}
+
+async function fetchAssemblerRowsForDate(date) {
+  if (demoMode) {
+    return loadDemoEntries().filter(
+      r => r.log_date === date && (r.role || "").trim() === "assembler"
+    );
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+
+  if (!session?.user) {
+    throw new Error("Sign in to generate the weekly report.");
+  }
+
+  const { data, error } = await withTimeoutRetry(() =>
+    sb.from("worker_hourly_log")
+      .select("id,log_date,hour_block,role,worker_name,qty")
+      .eq("log_date", date)
+      .eq("role", "assembler")
+      .limit(1000),
+    { ms: 25000, label: "weekly assembly report load", retries: 1, backoffMs: 900 }
+  );
+
+  if (error) throw error;
+  return data || [];
+}
+
+function buildWeeklyExcelRows(reportRows) {
+  return (reportRows || []).map(r => [
+    r.dateLabel,
+    r.dayPieces,
+    r.dayHours.toFixed(2),
+    r.nightPieces,
+    r.nightHours.toFixed(2),
+    r.totalPieces,
+    r.totalHours.toFixed(2)
+  ].join("\t")).join("\n");
+}
+
+function buildWeeklyEmailSubject(reportRows) {
+  const start = formatDateMMDDYYYY(reportRows[0]?.dateLabel || "");
+  const end = formatDateMMDDYYYY(reportRows[reportRows.length - 1]?.dateLabel || "");
+
+  return `Mirror Department Production Summary — Week of ${start}–${end}`;
+}
+
+function buildWeeklyEmailText(reportRows) {
+  const start = reportRows[0]?.dateLabel || "";
+  const end = reportRows[reportRows.length - 1]?.dateLabel || "";
+
+  const totalDayPcs = reportRows.reduce((a, r) => a + r.dayPieces, 0);
+  const totalDayHrs = reportRows.reduce((a, r) => a + r.dayHours, 0);
+  const totalNightPcs = reportRows.reduce((a, r) => a + r.nightPieces, 0);
+  const totalNightHrs = reportRows.reduce((a, r) => a + r.nightHours, 0);
+
+  const totalPcs = totalDayPcs + totalNightPcs;
+  const totalHrs = totalDayHrs + totalNightHrs;
+  const avgPph = totalHrs > 0 ? totalPcs / totalHrs : 0;
+
+  const dailyLines = reportRows.map(r => {
+    return `${formatDateWithDayAbbrev(r.dateLabel)} | 1st Shift: ${r.dayPieces.toLocaleString()} pcs / ${r.dayHours.toFixed(2)} hrs | 2nd Shift: ${r.nightPieces.toLocaleString()} pcs / ${r.nightHours.toFixed(2)} hrs | Daily Total: ${r.totalPieces.toLocaleString()} pcs / ${r.totalHours.toFixed(2)} hrs`;
+  }).join("\n");
+
+  return `Good morning,
+
+Below is the Mirror Department production summary from the Worker Hourly Logger for the week of ${start}–${end}.
+
+WEEKLY ASSEMBLY SUMMARY
+
+Total Assembled: ${totalPcs.toLocaleString()} pcs
+Total Labor Hours: ${totalHrs.toFixed(2)} hrs
+Avg Output Rate: ${avgPph.toFixed(2)} pcs/adj-hr
+
+1st Shift Total: ${totalDayPcs.toLocaleString()} pcs / ${totalDayHrs.toFixed(2)} hrs
+2nd Shift Total: ${totalNightPcs.toLocaleString()} pcs / ${totalNightHrs.toFixed(2)} hrs
+
+
+DAILY BREAKDOWN
+
+${dailyLines}`;
+}
+
+function buildWeeklyEmailHtml(reportRows) {
+  const start = reportRows[0]?.dateLabel || "";
+  const end = reportRows[reportRows.length - 1]?.dateLabel || "";
+
+  const totalDayPcs = reportRows.reduce((a, r) => a + r.dayPieces, 0);
+  const totalDayHrs = reportRows.reduce((a, r) => a + r.dayHours, 0);
+  const totalNightPcs = reportRows.reduce((a, r) => a + r.nightPieces, 0);
+  const totalNightHrs = reportRows.reduce((a, r) => a + r.nightHours, 0);
+
+  const totalPcs = totalDayPcs + totalNightPcs;
+  const totalHrs = totalDayHrs + totalNightHrs;
+  const avgPph = totalHrs > 0 ? totalPcs / totalHrs : 0;
+
+  const tableWidth = "620px";
+  const dateColWidth = "120px";
+  const numColWidth = "83px";
+
+  const cellStyle = "border:1px solid #cfcfcf;padding:4px 6px;text-align:center;vertical-align:middle;height:24px;";
+  const dateCellStyle = `border:1px solid #cfcfcf;padding:4px 6px;text-align:center;vertical-align:middle;height:24px;white-space:nowrap;width:${dateColWidth};`;
+  const blankCellStyle = "border:1px solid #cfcfcf;padding:4px 6px;text-align:center;vertical-align:middle;height:24px;";
+  const headerStyle = "border:1px solid #cfcfcf;background:#f2f2f2;padding:5px 6px;text-align:center;font-weight:700;vertical-align:middle;height:28px;";
+  const totalCellStyle = "border:1px solid #cfcfcf;padding:4px 6px;text-align:center;font-weight:700;vertical-align:middle;height:24px;";
+
+  const assemblyRows = reportRows.map(r => `
+    <tr>
+      <td style="${dateCellStyle}">${formatDateWithDayAbbrev(r.dateLabel)}</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.dayPieces.toLocaleString()}</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.dayHours.toFixed(2)}</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.nightPieces.toLocaleString()}</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.nightHours.toFixed(2)}</td>
+      <td style="${totalCellStyle}width:${numColWidth};">${r.totalPieces.toLocaleString()}</td>
+      <td style="${totalCellStyle}width:${numColWidth};">${r.totalHours.toFixed(2)}</td>
+    </tr>
+  `).join("");
+
+  const packingRows = reportRows.map(r => `
+    <tr>
+      <td style="${dateCellStyle}">${formatDateWithDayAbbrev(r.dateLabel)}</td>
+      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
+      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
+      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
+      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
+      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
+      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
+    </tr>
+  `).join("");
+
+  const tableHeader = `
+    <thead>
+      <tr>
+        <th style="${headerStyle}width:${dateColWidth};">Date</th>
+        <th style="${headerStyle}width:${numColWidth};">1st Shift<br>Pcs</th>
+        <th style="${headerStyle}width:${numColWidth};">1st Shift<br>Hrs</th>
+        <th style="${headerStyle}width:${numColWidth};">2nd Shift<br>Pcs</th>
+        <th style="${headerStyle}width:${numColWidth};">2nd Shift<br>Hrs</th>
+        <th style="${headerStyle}width:${numColWidth};">Daily Total<br>Pcs</th>
+        <th style="${headerStyle}width:${numColWidth};">Daily Total<br>Hrs</th>
+      </tr>
+    </thead>
+  `;
+
+  return `
+  <div style="font-family:Arial, Helvetica, sans-serif;font-size:13px;color:#111;line-height:1.25;">
+    <p style="margin:0 0 8px 0;">Good morning,</p>
+
+    <p style="margin:0 0 10px 0;">
+      Below is the Mirror Department production summary from the Worker Hourly Logger for the week of 
+      <b>${start}–${end}</b>.
+    </p>
+
+    <p style="font-weight:700;margin:0 0 5px 0;letter-spacing:.2px;">WEEKLY ASSEMBLY SUMMARY</p>
+
+    <table style="border-collapse:collapse;font-family:Arial, Helvetica, sans-serif;font-size:13px;margin:0 0 12px 0;">
+      <tbody>
+        <tr>
+          <td style="padding:1px 18px 1px 0;font-weight:700;">Total Assembled:</td>
+          <td style="padding:1px 0;text-align:left;">${totalPcs.toLocaleString()} pcs</td>
+        </tr>
+        <tr>
+          <td style="padding:1px 18px 1px 0;font-weight:700;">Total Labor Hours:</td>
+          <td style="padding:1px 0;text-align:left;">${totalHrs.toFixed(2)} hrs</td>
+        </tr>
+        <tr>
+          <td style="padding:1px 18px 6px 0;font-weight:700;">Avg Output Rate:</td>
+          <td style="padding:1px 0 6px 0;text-align:left;">${avgPph.toFixed(2)} pcs/adj-hr</td>
+        </tr>
+        <tr>
+          <td style="padding:1px 18px 1px 0;font-weight:700;">1st Shift Total:</td>
+          <td style="padding:1px 0;text-align:left;">${totalDayPcs.toLocaleString()} pcs / ${totalDayHrs.toFixed(2)} hrs</td>
+        </tr>
+        <tr>
+          <td style="padding:1px 18px 1px 0;font-weight:700;">2nd Shift Total:</td>
+          <td style="padding:1px 0;text-align:left;">${totalNightPcs.toLocaleString()} pcs / ${totalNightHrs.toFixed(2)} hrs</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-weight:700;margin:0 0 5px 0;letter-spacing:.2px;">DAILY BREAKDOWN</p>
+
+    <table style="border-collapse:collapse;border-spacing:0;margin:0;">
+      <tr>
+        <td style="vertical-align:top;padding:0 12px 0 0;width:${tableWidth};">
+          <p style="font-weight:700;margin:0 0 4px 0;text-align:center;">ASSEMBLY</p>
+          <table style="border-collapse:collapse;table-layout:fixed;width:${tableWidth};font-family:Arial, Helvetica, sans-serif;font-size:12px;margin:0;">
+            ${tableHeader}
+            <tbody>
+              ${assemblyRows}
+            </tbody>
+          </table>
+        </td>
+
+        <td style="vertical-align:top;padding:0;width:${tableWidth};">
+          <p style="font-weight:700;margin:0 0 4px 0;text-align:center;">PACKING</p>
+          <table style="border-collapse:collapse;table-layout:fixed;width:${tableWidth};font-family:Arial, Helvetica, sans-serif;font-size:12px;margin:0;">
+            ${tableHeader}
+            <tbody>
+              ${packingRows}
+            </tbody>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+async function generateWeeklyAssemblyReport() {
+  try {
+    setWeeklyReportStatus("Generating weekly report...", true);
+
+    const selectedDate = document.getElementById("logDate")?.value || todayIso();
+    const weekDates = getWeekDatesMondayToSaturday(selectedDate);
+    const reportRows = [];
+
+    for (const date of weekDates) {
+      const rows = await fetchAssemblerRowsForDate(date);
+      const day = calculateShiftTotals(rows, DAY_SHIFT_BLOCKS);
+      const night = calculateShiftTotals(rows, NIGHT_SHIFT_BLOCKS);
+
+      reportRows.push({
+        isoDate: date,
+        dateLabel: formatDateMDY(date),
+        dayPieces: day.totalPieces,
+        dayHours: day.adjustedHours,
+        nightPieces: night.totalPieces,
+        nightHours: night.adjustedHours,
+        totalPieces: day.totalPieces + night.totalPieces,
+        totalHours: day.adjustedHours + night.adjustedHours
+      });
+    }
+
+    WEEKLY_REPORT_CACHE = reportRows;
+
+    const body = document.getElementById("weeklyReportBody");
+    const tag = document.getElementById("weeklyReportTag");
+    const emailBox = document.getElementById("weeklyEmailText");
+    const subjectBox = document.getElementById("weeklyEmailSubject");
+
+    if (tag) {
+      tag.textContent = `${reportRows[0].dateLabel} – ${reportRows[reportRows.length - 1].dateLabel}`;
+    }
+
+    if (body) {
+      body.innerHTML = reportRows.map(r => `
+        <tr>
+          <td>${escapeHtml(formatDateWithDayAbbrev(r.dateLabel))}</td>
+          <td style="text-align:right;">${r.dayPieces.toLocaleString()}</td>
+          <td style="text-align:right;">${r.dayHours.toFixed(2)}</td>
+          <td style="text-align:right;">${r.nightPieces.toLocaleString()}</td>
+          <td style="text-align:right;">${r.nightHours.toFixed(2)}</td>
+          <td style="text-align:right;">${r.totalPieces.toLocaleString()}</td>
+          <td style="text-align:right;">${r.totalHours.toFixed(2)}</td>
+        </tr>
+      `).join("");
+    }
+
+    if (emailBox) {
+      emailBox.value = buildWeeklyEmailText(reportRows);
+    }
+
+    if (subjectBox) {
+      subjectBox.value = buildWeeklyEmailSubject(reportRows);
+    }
+
+    WEEKLY_EMAIL_HTML = buildWeeklyEmailHtml(reportRows);
+
+    setWeeklyReportStatus("Weekly report generated. You can copy the subject, Excel rows, or formatted email.", true);
+  } catch (err) {
+    console.error("Weekly report error:", err);
+    setWeeklyReportStatus(`Error generating weekly report: ${err.message || err}`, false);
+  }
+}
+
+async function copyTextToClipboard(text) {
+  if (!String(text || "").trim()) return false;
+
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+
+  let ok = false;
+
+  try {
+    ok = document.execCommand("copy");
+  } catch (_e) {
+    ok = false;
+  }
+
+  document.body.removeChild(ta);
+  return ok;
+}
+
+async function copyWeeklyEmailSubject() {
+  const subject = document.getElementById("weeklyEmailSubject")?.value || "";
+
+  if (!subject.trim()) {
+    setWeeklyReportStatus("Generate the weekly report first.", false);
+    return;
+  }
+
+  const ok = await copyTextToClipboard(subject);
+
+  setWeeklyReportStatus(
+    ok ? "Email subject copied." : "Copy failed. Copy the subject manually.",
+    ok
+  );
+}
+
+async function copyWeeklyEmail() {
+  const text = document.getElementById("weeklyEmailText")?.value || "";
+
+  if (!WEEKLY_REPORT_CACHE.length) {
+    setWeeklyReportStatus("Generate the weekly report first.", false);
+    return;
+  }
+
+  const html = buildWeeklyEmailHtml(WEEKLY_REPORT_CACHE);
+
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([text], { type: "text/plain" })
+        })
+      ]);
+
+      setWeeklyReportStatus("Formatted email table copied. Paste directly into Outlook.", true);
+    } else {
+      await copyTextToClipboard(text);
+      setWeeklyReportStatus("Plain text email copied. Your browser does not support rich HTML copy.", true);
+    }
+  } catch (err) {
+    console.error("Copy email error:", err);
+    await copyTextToClipboard(text);
+    setWeeklyReportStatus("Plain text email copied. Rich table copy was blocked by the browser.", true);
+  }
+}
+
+async function copyWeeklyExcelRows() {
+  if (!WEEKLY_REPORT_CACHE.length) {
+    setWeeklyReportStatus("Generate the weekly report first.", false);
+    return;
+  }
+
+  const text = buildWeeklyExcelRows(WEEKLY_REPORT_CACHE);
+  const ok = await copyTextToClipboard(text);
+
+  setWeeklyReportStatus(
+    ok ? "Excel rows copied. Paste into the first date row of your weekly report." : "Copy failed. Try copying from the table manually.",
+    ok
+  );
+}
+
 function autoSelectHourBlock(){
-  const select=$("#hourBlock"); if(!select) return;
-  const now=new Date(); const total=now.getHours()*60+now.getMinutes();
-  const blocks=[
-    {label:"7am-8am",start:7*60,end:8*60},{label:"8am-9am",start:8*60,end:9*60},
-    {label:"9am-10am (15m break)",start:9*60,end:10*60},{label:"10am-11am",start:10*60,end:11*60},
-    {label:"11am-12pm",start:11*60,end:12*60},{label:"12:30pm-1:30pm",start:12*60+30,end:13*60+30},
-    {label:"1:30pm-2:30pm (10m break)",start:13*60+30,end:14*60+30},{label:"2:30pm-3:30pm",start:14*60+30,end:15*60+30},
-    {label:"4:00pm-5:00pm",start:16*60,end:17*60},{label:"5:00pm-6:00pm",start:17*60,end:18*60},
-    {label:"6:00pm-6:45pm (15m break)",start:18*60,end:18*60+45},{label:"7:00pm-8:00pm",start:19*60,end:20*60},
-    {label:"8:00pm-9:00pm",start:20*60,end:21*60},
-    {label:"9:30pm-10:30pm",start:21*60+30,end:22*60+30},
-    {label:"10:30pm-11:30pm",start:22*60+30,end:23*60+30},
-    {label:"11:30pm-12:30am (10m break)",start:23*60+30,end:24*60+30}
+  const select = document.getElementById("hourBlock");
+  if (!select) return;
+
+  const now = new Date();
+  const total = now.getHours() * 60 + now.getMinutes();
+
+  const blocks = [
+    { label: "7am-8am", start: 7 * 60, end: 8 * 60 },
+    { label: "8am-9am", start: 8 * 60, end: 9 * 60 },
+    { label: "9am-10am (15m break)", start: 9 * 60, end: 10 * 60 },
+    { label: "10am-11am", start: 10 * 60, end: 11 * 60 },
+    { label: "11am-12pm", start: 11 * 60, end: 12 * 60 },
+    { label: "12:30pm-1:30pm", start: 12 * 60 + 30, end: 13 * 60 + 30 },
+    { label: "1:30pm-2:30pm (10m break)", start: 13 * 60 + 30, end: 14 * 60 + 30 },
+    { label: "2:30pm-3:30pm", start: 14 * 60 + 30, end: 15 * 60 + 30 },
+    { label: "4:00pm-5:00pm", start: 16 * 60, end: 17 * 60 },
+    { label: "5:00pm-6:00pm", start: 17 * 60, end: 18 * 60 },
+    { label: "6:00pm-6:45pm (15m break)", start: 18 * 60, end: 18 * 60 + 45 },
+    { label: "7:00pm-8:00pm", start: 19 * 60, end: 20 * 60 },
+    { label: "8:00pm-9:00pm", start: 20 * 60, end: 21 * 60 },
+    { label: "9:30pm-10:30pm", start: 21 * 60 + 30, end: 22 * 60 + 30 },
+    { label: "10:30pm-11:30pm", start: 22 * 60 + 30, end: 23 * 60 + 30 },
+    { label: "11:30pm-12:30am (10m break)", start: 23 * 60 + 30, end: 24 * 60 + 30 }
   ];
-  let adj=total; if(total<30) adj=total+24*60;
-  const match=blocks.find(b=>adj>=b.start&&adj<b.end);
-  if(match) select.value=match.label;
+
+  let adjustedTotal = total;
+  if (total < 30) adjustedTotal = total + 24 * 60;
+
+  const match = blocks.find(b => adjustedTotal >= b.start && adjustedTotal < b.end);
+  if (match) select.value = match.label;
 }
 
 const SUPABASE_URL="https://coxxavwtkwbqotunldqv.supabase.co";
@@ -1305,6 +1807,16 @@ document.addEventListener("DOMContentLoaded",async()=>{
   $("#todayFilterBtn").addEventListener("click",async()=>{ $("#logDate").value=todayIso(); await loadTodayEntries(); refreshPartSuggestions(); });
   const ptbDay=document.getElementById("printTemplateDayBtn"); if(ptbDay) ptbDay.addEventListener("click",()=>openPrintTemplate("day"));
   const ptbNight=document.getElementById("printTemplateNightBtn"); if(ptbNight) ptbNight.addEventListener("click",()=>openPrintTemplate("night"));
+
+  const weeklyBtn=document.getElementById("generateWeeklyReportBtn");
+  if(weeklyBtn) weeklyBtn.addEventListener("click",generateWeeklyAssemblyReport);
+  const copyWeeklyExcelRowsBtn=document.getElementById("copyWeeklyExcelRowsBtn");
+  if(copyWeeklyExcelRowsBtn) copyWeeklyExcelRowsBtn.addEventListener("click",copyWeeklyExcelRows);
+  const copyWeeklyEmailBtn=document.getElementById("copyWeeklyEmailBtn");
+  if(copyWeeklyEmailBtn) copyWeeklyEmailBtn.addEventListener("click",copyWeeklyEmail);
+  const copySubjectBtn=document.getElementById("copyWeeklySubjectBtn");
+  if(copySubjectBtn) copySubjectBtn.addEventListener("click",copyWeeklyEmailSubject);
+
   $("#logDate").addEventListener("change",async()=>{ await loadTodayEntries(); refreshPartSuggestions(); });
   $("#mirrorType").addEventListener("change",()=>refreshPartSuggestions());
   $("#partNumber").addEventListener("input",(e)=>autoSetMirrorTypeFromPart(e.target.value));
