@@ -1,0 +1,2819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Packing Hourly Logger (Local v1)</title>
+
+  <!-- Chart.js (Daily Summary Graph) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --accent:#E41E26;
+      --burnt:#CC5500;
+      --ok:#2ecc71;
+      --warn:#ffd84d;
+      --danger:#ff6b6b;
+      --bg:#f3f4f6;
+      --panel:#ffffff;
+      --panel-soft:#f9fafb;
+      --text:#111111;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --button:#f3f6fa;
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{
+      margin:0; padding:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:"Times New Roman", Times, serif;
+    }
+
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 16px;
+      border-bottom:3px solid var(--accent);
+      background:var(--panel);
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .brand{ display:flex; align-items:center; gap:10px; }
+    .asi-logo{ height:34px; width:auto; }
+    .brand-text{ display:flex; flex-direction:column; line-height:1.1; }
+    .brand-text strong{ font-size:20px; font-weight:800; color:var(--burnt); }
+    .brand-text span{ font-size:13px; color:var(--muted); }
+
+    main{
+      max-width:1100px;
+      margin:16px auto 32px auto;
+      padding:0 12px;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+
+    .card{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px 16px;
+      box-shadow:0 1px 3px rgba(15,23,42,0.08);
+    }
+
+    .card-title{
+      font-size:15px;
+      font-weight:700;
+      color:var(--burnt);
+      margin-bottom:10px;
+    }
+
+    .form-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+      gap:10px 12px;
+      margin-bottom:10px;
+      align-items:flex-end;
+    }
+
+    .worker-station-row{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px;
+      align-items:center;
+      width:100%;
+    }
+
+    .worker-station-row select{
+      min-width:0;
+      width:100%;
+    }
+
+    #manageWorkersBtn{
+      height: 36px;
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+
+    .field{ display:flex; flex-direction:column; gap:4px; font-size:12px; }
+    .field label{ color:var(--muted); }
+
+    input[type="date"],
+    input[type="number"],
+    input[type="text"],
+    select{
+      background:#ffffff;
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:6px 10px;
+      font-size:14px;
+      outline:none;
+    }
+    input:focus, select:focus{
+      border-color:#b9c6d8;
+      box-shadow:0 0 0 2px rgba(204,85,0,.15);
+    }
+
+    .btn-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:4px;
+    }
+
+    .btn{
+      background:var(--button);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:7px 12px;
+      font-size:14px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      user-select:none;
+    }
+    .btn:hover{ background:#e9edf3; border-color:#b9c6d8; }
+
+    .btn-primary{
+      background:var(--burnt);
+      border-color:var(--burnt);
+      color:#ffffff;
+    }
+    .btn-primary:hover{ background:#a84300; border-color:#a84300; }
+
+    .btn-mini{ padding:5px 10px; font-size:12px; border-radius:10px; }
+    .btn-danger{
+      background:#fff;
+      border-color:#fecaca;
+      color:#b91c1c;
+    }
+    .btn-danger:hover{ background:#fff1f2; border-color:#fca5a5; }
+
+    .status-line{
+      font-size:12px;
+      margin-top:6px;
+      min-height:16px;
+    }
+    .status-ok{ color:var(--ok); }
+    .status-err{ color:var(--danger); }
+    .status-warn{ color:#b45309; }
+
+    .quick-qty-row{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:12px;
+      color:var(--muted);
+      margin-top:4px;
+    }
+    .quick-qty-row button{
+      padding:3px 8px;
+      font-size:11px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      cursor:pointer;
+    }
+    .quick-qty-row button:hover{ background:#e5e7eb; }
+
+    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    th, td{
+      padding:6px 8px;
+      text-align:left;
+      border-bottom:1px solid var(--border);
+      white-space:nowrap;
+    }
+    th{
+      background:var(--panel-soft);
+      font-size:12px;
+      font-weight:600;
+      color:var(--muted);
+    }
+    .table-wrap{ overflow-x:auto; }
+
+    .tag{
+      display:inline-block;
+      padding:2px 6px;
+      border-radius:999px;
+      font-size:11px;
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      color:var(--muted);
+    }
+
+    .footer{
+      text-align:center;
+      font-size:11px;
+      color:var(--muted);
+      padding:12px;
+    }
+
+    tr.row-break td{ background:#fff7ed; }
+    .break-badge{
+      display:inline-block;
+      margin-left:6px;
+      padding:1px 6px;
+      border-radius:999px;
+      border:1px solid #fed7aa;
+      background:#fffbeb;
+      font-size:10px;
+      color:#9a3412;
+    }
+
+    .input-invalid{
+      border-color:#dc2626 !important;
+      box-shadow:0 0 0 1px rgba(220,38,38,0.25);
+    }
+
+    /* Daily graph sizing */
+    .chart-wrap{
+      position:relative;
+      width:100%;
+      height:340px;
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      border-radius:12px;
+      padding:10px;
+    }
+    .chart-wrap canvas{ width:100% !important; height:100% !important; }
+
+    /* metric filter toggle bar */
+    .metric-bar{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .metric-btn{
+      border-radius:999px;
+      padding:6px 10px;
+      font-size:12px;
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .metric-btn:hover{
+      background:#e9edf3;
+      border-color:#b9c6d8;
+    }
+    .metric-btn.active{
+      background: var(--burnt);
+      border-color: var(--burnt);
+      color:#fff;
+    }
+    .metric-dot{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      display:inline-block;
+      background: currentColor;
+      opacity: .9;
+    }
+
+    .inline-controls{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .inline-controls .field{
+      flex-direction:row;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+    }
+    .inline-controls .field label{
+      margin:0;
+      white-space:nowrap;
+    }
+    .inline-controls select{
+      padding:5px 10px;
+      font-size:13px;
+    }
+
+    /* Weekly counter */
+    .week-counter-grid{
+      display:grid;
+      grid-template-columns: 1.2fr 2fr;
+      gap:12px;
+      align-items:stretch;
+    }
+    .week-total-box{
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      border-radius:12px;
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      min-height:120px;
+    }
+    .week-total-label{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+    .week-total-value{
+      font-size:34px;
+      line-height:1;
+      font-weight:800;
+      color:var(--burnt);
+      letter-spacing:.2px;
+    }
+    .week-total-sub{
+      margin-top:8px;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .week-breakdown{
+      display:grid;
+      grid-template-columns:repeat(6, minmax(90px, 1fr));
+      gap:8px;
+    }
+    .week-day-card{
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      border-radius:12px;
+      padding:10px 8px;
+      text-align:center;
+    }
+    .week-day-name{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:6px;
+      font-weight:700;
+    }
+    .week-day-value{
+      font-size:18px;
+      font-weight:800;
+      color:var(--text);
+      line-height:1.1;
+    }
+    .week-day-date{
+      margin-top:6px;
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    /* Weekly goal planner */
+    .goal-kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(180px, 1fr));
+      gap:10px;
+      margin-top:12px;
+    }
+    .goal-kpi{
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      border-radius:12px;
+      padding:12px;
+    }
+    .goal-kpi-label{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+    .goal-kpi-value{
+      font-size:24px;
+      font-weight:800;
+      line-height:1.1;
+      color:var(--text);
+    }
+    .goal-kpi-sub{
+      margin-top:6px;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .goal-kpi.good .goal-kpi-value{ color:var(--ok); }
+    .goal-kpi.bad .goal-kpi-value{ color:var(--danger); }
+    .goal-kpi.warn .goal-kpi-value{ color:#b45309; }
+
+    .planner-grid{
+      display:grid;
+      grid-template-columns:1.2fr 1fr;
+      gap:12px;
+      margin-top:12px;
+    }
+
+    .planner-box{
+      border:1px solid var(--border);
+      background:var(--panel-soft);
+      border-radius:12px;
+      padding:12px;
+    }
+    .planner-title{
+      font-size:13px;
+      font-weight:700;
+      color:var(--burnt);
+      margin-bottom:8px;
+    }
+    .planner-list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .planner-item{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius:10px;
+      padding:8px 10px;
+      font-size:12px;
+    }
+    .planner-item-left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .planner-item-day{
+      font-weight:700;
+      color:var(--text);
+    }
+    .planner-item-sub{
+      color:var(--muted);
+      white-space:normal;
+      line-height:1.35;
+    }
+    .planner-item-right{
+      font-weight:800;
+      color:var(--burnt);
+      white-space:nowrap;
+    }
+    .planner-note{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.45;
+    }
+
+    @media (max-width:1000px){
+      .goal-kpi-grid{
+        grid-template-columns:repeat(2, minmax(180px, 1fr));
+      }
+      .planner-grid{
+        grid-template-columns:1fr;
+      }
+    }
+
+    @media (max-width:900px){
+      .week-counter-grid{
+        grid-template-columns:1fr;
+      }
+      .week-breakdown{
+        grid-template-columns:repeat(3, minmax(90px, 1fr));
+      }
+    }
+
+    @media (max-width:700px){
+      header{ flex-direction:column; align-items:flex-start; }
+      .chart-wrap{ height:300px; }
+      .metric-bar{ justify-content:flex-start; }
+      .inline-controls{ justify-content:flex-start; }
+      .week-breakdown{
+        grid-template-columns:repeat(2, minmax(90px, 1fr));
+      }
+      .goal-kpi-grid{
+        grid-template-columns:1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img class="asi-logo" src="asi_logo.png" alt="ASI Logo">
+    <div class="brand-text">
+      <strong>Packing Hourly Logger</strong>
+      <span>Local-only • No Supabase</span>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+    <div class="tag">Local v1</div>
+    <div class="tag" id="freshnessTag">Last updated: —</div>
+    <button class="btn" id="howItWorksBtn" type="button">How it works</button>
+    <button class="btn" id="exportCsvBtn" type="button">Export CSV</button>
+    <button class="btn btn-danger" id="wipeAllBtn" type="button">Wipe all (local)</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ENTRY FORM -->
+  <section class="card">
+    <div class="card-title">Log packing output</div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="logDate">Date</label>
+        <input type="date" id="logDate">
+      </div>
+
+      <div class="field">
+        <label for="hourBlock">Hour block</label>
+        <select id="hourBlock">
+          <option value="">Select...</option>
+          <optgroup label="— Day Shift —">
+            <option>7am-8am</option>
+            <option>8am-9am</option>
+            <option>9am-10am (15m break)</option>
+            <option>10am-11am</option>
+            <option>11am-12pm</option>
+            <option>12:30pm-1:30pm</option>
+            <option>1:30pm-2:30pm (10m break)</option>
+            <option>2:30pm-3:30pm</option>
+          </optgroup>
+          <optgroup label="— Night Shift —">
+            <option>4:00pm-5:00pm</option>
+            <option>5:00pm-6:00pm</option>
+            <option>6:00pm-6:45pm (15m break)</option>
+            <option>7:00pm-8:00pm</option>
+            <option>8:00pm-9:00pm</option>
+            <option>9:30pm-10:30pm</option>
+            <option>10:30pm-11:30pm</option>
+            <option>11:30pm-12:30am (10m break)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="role">Role</label>
+        <select id="role">
+          <option value="packer" selected>Packer</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="workerName">Packer / Station</label>
+        <div class="worker-station-row">
+          <select id="workerName">
+            <option value="">Select...</option>
+          </select>
+          <button class="btn btn-mini" id="manageWorkersBtn" type="button">Manage</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="partNumber">Part #</label>
+        <input type="text" id="partNumber" placeholder="e.g. 0600-2436" list="partSuggestions">
+        <datalist id="partSuggestions"></datalist>
+      </div>
+
+      <div class="field">
+        <label for="packType">Pack type</label>
+        <select id="packType">
+          <option value="">Select...</option>
+          <option value="stock">Stock</option>
+          <option value="special">Special</option>
+          <option value="rework">Rework</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="qty">Quantity packed this hour</label>
+        <input type="number" id="qty" min="0" inputmode="numeric">
+        <div class="quick-qty-row">
+          <span>Quick add:</span>
+          <button type="button" data-qty="1">+1</button>
+          <button type="button" data-qty="5">+5</button>
+          <button type="button" data-qty="10">+10</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="jobRef">Job Ref</label>
+        <input type="text" id="jobRef" placeholder="Optional">
+      </div>
+
+      <div class="field">
+        <label for="orderQty">Order Qty (total)</label>
+        <input type="number" id="orderQty" min="1" step="1" inputmode="numeric" placeholder="Optional">
+      </div>
+
+      <div class="field">
+        <label for="notes">Notes</label>
+        <input type="text" id="notes" placeholder="Optional">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="submitBtn" type="button">Save entry</button>
+      <button class="btn" id="saveAndStayBtn" type="button">Save &amp; stay on worker / hour</button>
+      <button class="btn" id="todayFilterBtn" type="button">Show today's entries</button>
+      <button class="btn" id="printTemplateBtn" type="button">Print blank log</button>
+    </div>
+
+    <div id="statusLine" class="status-line"></div>
+    <div id="rtValidationBox" class="status-line" style="margin-top:8px;"></div>
+  </section>
+
+  <!-- WEEKLY COUNTER + GOAL PLANNER -->
+  <section class="card" id="weeklyCounterCard">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <div class="card-title" style="margin:0;">Weekly packed counter + target planner (Mon–Sat)</div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div class="tag" id="weeklyCounterRangeTag">Week: —</div>
+        <div class="tag" id="weeklyCounterFilterTag">Pack type: All</div>
+        <div class="tag" id="weeklyTargetTag">Weekly target: 2,500</div>
+      </div>
+    </div>
+
+    <div class="week-counter-grid" style="margin-top:10px;">
+      <div class="week-total-box">
+        <div class="week-total-label">Total mirrors packed this week</div>
+        <div class="week-total-value" id="weeklyCounterTotal">—</div>
+        <div class="week-total-sub" id="weeklyCounterSub">Selected date week • Mon–Sat</div>
+      </div>
+
+      <div class="week-breakdown" id="weeklyBreakdownGrid"></div>
+    </div>
+
+    <div id="weeklyCounterSummaryLine" class="status-line" style="margin-top:10px; color:var(--muted);"></div>
+
+    <div class="goal-kpi-grid" id="weeklyGoalKpiGrid" style="margin-top:12px;">
+      <div class="goal-kpi">
+        <div class="goal-kpi-label">Target left</div>
+        <div class="goal-kpi-value" id="weeklyTargetLeftValue">—</div>
+        <div class="goal-kpi-sub" id="weeklyTargetLeftSub">How many mirrors remain to hit 2,500</div>
+      </div>
+
+      <div class="goal-kpi">
+        <div class="goal-kpi-label">Pace vs target</div>
+        <div class="goal-kpi-value" id="weeklyPaceDeltaValue">—</div>
+        <div class="goal-kpi-sub" id="weeklyPaceDeltaSub">Ahead / behind cumulative pace</div>
+      </div>
+
+      <div class="goal-kpi">
+        <div class="goal-kpi-label">Needed per remaining day</div>
+        <div class="goal-kpi-value" id="weeklyNeededPerDayValue">—</div>
+        <div class="goal-kpi-sub" id="weeklyNeededPerDaySub">Average needed from remaining days</div>
+      </div>
+
+      <div class="goal-kpi">
+        <div class="goal-kpi-label">Projected finish</div>
+        <div class="goal-kpi-value" id="weeklyProjectedFinishValue">—</div>
+        <div class="goal-kpi-sub" id="weeklyProjectedFinishSub">Based on current week pace</div>
+      </div>
+    </div>
+
+    <div class="planner-grid">
+      <div class="planner-box">
+        <div class="planner-title">Remaining-day make-up plan</div>
+        <div id="weeklyMakeupPlanList" class="planner-list"></div>
+      </div>
+
+      <div class="planner-box">
+        <div class="planner-title">Weekly simulation details</div>
+        <div id="weeklySimulationNotes" class="planner-note"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SIMULATE TOTALS -->
+  <section class="card" id="simCard">
+    <div class="card-title">Simulate totals to 3:30pm / 12:30am (Lane 1 / Lane 2)</div>
+
+    <div class="form-grid" style="margin-bottom:8px;">
+      <div class="field">
+        <label for="simLane1Rate">Lane 1 rate (pcs per FULL hour)</label>
+        <input type="number" id="simLane1Rate" min="0" step="1" inputmode="numeric" placeholder="e.g. 180">
+      </div>
+
+      <div class="field">
+        <label for="simLane2Rate">Lane 2 rate (pcs per FULL hour)</label>
+        <input type="number" id="simLane2Rate" min="0" step="1" inputmode="numeric" placeholder="e.g. 165">
+      </div>
+
+      <div class="field">
+        <label for="simStartBlock">Start from hour block</label>
+        <select id="simStartBlock">
+          <option value="">Auto (current time)</option>
+          <optgroup label="— Day Shift —">
+            <option>7am-8am</option>
+            <option>8am-9am</option>
+            <option>9am-10am (15m break)</option>
+            <option>10am-11am</option>
+            <option>11am-12pm</option>
+            <option>12:30pm-1:30pm</option>
+            <option>1:30pm-2:30pm (10m break)</option>
+            <option>2:30pm-3:30pm</option>
+          </optgroup>
+          <optgroup label="— Night Shift —">
+            <option>4:00pm-5:00pm</option>
+            <option>5:00pm-6:00pm</option>
+            <option>6:00pm-6:45pm (15m break)</option>
+            <option>7:00pm-8:00pm</option>
+            <option>8:00pm-9:00pm</option>
+            <option>9:30pm-10:30pm</option>
+            <option>10:30pm-11:30pm</option>
+            <option>11:30pm-12:30am (10m break)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="simMode">Include already-logged actuals?</label>
+        <select id="simMode">
+          <option value="withActuals" selected>Yes — actuals so far + projected</option>
+          <option value="projectionOnly">No — projection only</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn" id="simulateAutoRateBtn" type="button">Use current rates (from log)</button>
+        <button class="btn btn-primary" id="simulateBtn" type="button">Simulate totals</button>
+        <button class="btn" id="simulateClearBtn" type="button">Clear</button>
+    </div>
+
+    <div id="simResults" class="status-line" style="margin-top:10px;"></div>
+  </section>
+
+  <!-- DAILY SUMMARY GRAPH -->
+  <section class="card" id="dailyGraphCard">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <div class="card-title" style="margin:0;">Daily summary graph</div>
+
+      <div class="metric-bar" aria-label="Graph metric filters">
+        <button class="metric-btn active" type="button" data-metric-toggle="total">
+          <span class="metric-dot"></span> Total packed
+        </button>
+        <button class="metric-btn active" type="button" data-metric-toggle="avg">
+          <span class="metric-dot"></span> Avg pack/hr
+        </button>
+        <button class="metric-btn active" type="button" data-metric-toggle="hours">
+          <span class="metric-dot"></span> Total hours
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;">
+      <div class="tag" id="dailyGraphTag">All dates</div>
+      <div class="tag" id="packTypeFilterTag">Pack type: All</div>
+    </div>
+
+    <div class="form-grid" style="margin-top:10px; margin-bottom:10px;">
+      <div class="field">
+        <label for="trendDays">Days to show</label>
+        <select id="trendDays">
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="60">Last 60 days</option>
+          <option value="9999">All</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="trendOrder">Sort</label>
+        <select id="trendOrder">
+          <option value="asc" selected>Oldest → Newest</option>
+          <option value="desc">Newest → Oldest</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="packTypeFilter">Pack type filter</label>
+        <select id="packTypeFilter">
+          <option value="all" selected>All</option>
+          <option value="stock">Stock only</option>
+          <option value="special">Special only</option>
+          <option value="rework">Rework only</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>What it shows</label>
+        <div class="tag" style="display:inline-block;">Total packed (bar) • Avg pack/hr (line) • Hours (line)</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <canvas id="dailySummaryChart"></canvas>
+    </div>
+
+    <div id="dailyGraphSummaryLine" class="status-line" style="margin-top:10px; color:var(--muted);"></div>
+  </section>
+
+  <!-- TODAY ENTRIES -->
+  <section class="card">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <div class="card-title" style="margin:0;">
+        Today's packing entries
+        <span id="todayTag" class="tag" style="margin-left:6px;"></span>
+      </div>
+
+      <div class="inline-controls" aria-label="Today filters">
+        <div class="field">
+          <label for="packTypeFilterMirror">Pack type</label>
+          <select id="packTypeFilterMirror">
+            <option value="all" selected>All</option>
+            <option value="stock">Stock</option>
+            <option value="special">Special</option>
+            <option value="rework">Rework</option>
+          </select>
+        </div>
+        <div class="tag" style="display:inline-block;">Tip: filter affects totals + graph</div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px 0;">
+      <div id="dailyTotalsLine" class="tag">Totals: —</div>
+      <div id="dayShiftTotalsLine" class="tag">Day shift: —</div>
+      <div id="nightShiftTotalsLine" class="tag">Night shift: —</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Packer / Station</th>
+            <th>Part #</th>
+            <th>Pack type</th>
+            <th>Job Ref</th>
+            <th style="text-align:right;">Order Qty</th>
+            <th style="text-align:right;">Qty</th>
+            <th>Notes</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="entriesBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<div class="footer">
+  Local-only storage (browser) • No Supabase required.
+</div>
+
+<script>
+/* -------------------- HELPERS -------------------- */
+function $(s){ return document.querySelector(s); }
+
+const WEEKLY_TARGET = 2500;
+const WORKWEEK_DAYS = 6;
+const DAILY_TARGET = WEEKLY_TARGET / WORKWEEK_DAYS;
+
+function todayIso(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+}
+function nowStamp(){ return new Date().toLocaleString(); }
+
+function escapeHtml(str){
+  return String(str || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function setFreshness(text){
+  const el = document.getElementById("freshnessTag");
+  if(el) el.textContent = text;
+}
+
+function debounce(fn, wait=300){
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
+function isoToDate(iso){
+  return new Date(iso + "T00:00:00");
+}
+function toIsoLocal(dateObj){
+  const d = new Date(dateObj);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+}
+function shortMd(iso){
+  const d = isoToDate(iso);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+function fmtInt(n){
+  return Number(n || 0).toLocaleString();
+}
+function fmt1(n){
+  return Number(n || 0).toFixed(1);
+}
+function setKpiState(el, state){
+  if(!el) return;
+  el.classList.remove("good","bad","warn");
+  if(state) el.classList.add(state);
+}
+
+/* -------------------- LOCAL STORAGE -------------------- */
+const STORE_KEY = "PACKING_LOG_ENTRIES_v1";
+const WORKERS_KEY = "PACKING_LOG_WORKERS_v1";
+
+function loadEntries(){
+  try{ return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
+  catch(_e){ return []; }
+}
+function saveEntries(rows){
+  localStorage.setItem(STORE_KEY, JSON.stringify(rows || []));
+}
+function defaultWorkers(){
+  return ["Packing Lane 1","Packing Lane 2"];
+}
+function loadWorkers(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(WORKERS_KEY) || "null");
+    if(Array.isArray(raw) && raw.length) return raw;
+  }catch(_e){}
+  const seed = defaultWorkers();
+  localStorage.setItem(WORKERS_KEY, JSON.stringify(seed));
+  return seed;
+}
+function saveWorkers(list){
+  const clean = Array.from(new Set((list || [])
+    .map(x => String(x||"").trim())
+    .filter(Boolean)))
+    .sort((a,b)=>a.localeCompare(b));
+  localStorage.setItem(WORKERS_KEY, JSON.stringify(clean));
+  return clean;
+}
+
+/* -------------------- STATUS -------------------- */
+function setStatus(message, ok=true){
+  const el = $("#statusLine");
+  if(!el) return;
+  el.textContent = message || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+
+/* -------------------- PACK TYPE FILTER -------------------- */
+function normalizePackType(v){
+  const s = String(v || "").trim().toLowerCase();
+  return s;
+}
+function getPackTypeFilter(){
+  const el = document.getElementById("packTypeFilter");
+  const v = el ? String(el.value || "all") : "all";
+  return (v === "stock" || v === "special" || v === "rework") ? v : "all";
+}
+function packTypeLabel(filter){
+  if(filter === "stock") return "Stock";
+  if(filter === "special") return "Special";
+  if(filter === "rework") return "Rework";
+  return "All";
+}
+function rowMatchesPackTypeFilter(row, filter){
+  const f = filter || "all";
+  if(f === "all") return true;
+  return normalizePackType(row?.pack_type) === f;
+}
+function applyPackTypeTag(){
+  const tag = document.getElementById("packTypeFilterTag");
+  if(tag) tag.textContent = `Pack type: ${packTypeLabel(getPackTypeFilter())}`;
+
+  const weekTag = document.getElementById("weeklyCounterFilterTag");
+  if(weekTag) weekTag.textContent = `Pack type: ${packTypeLabel(getPackTypeFilter())}`;
+
+  const targetTag = document.getElementById("weeklyTargetTag");
+  if(targetTag) targetTag.textContent = `Weekly target: ${fmtInt(WEEKLY_TARGET)}`;
+}
+function syncFilterMirrors(fromElId){
+  const main = document.getElementById("packTypeFilter");
+  const mirror = document.getElementById("packTypeFilterMirror");
+  if(!main || !mirror) return;
+
+  const v = (fromElId === "packTypeFilterMirror") ? mirror.value : main.value;
+  main.value = v;
+  mirror.value = v;
+  applyPackTypeTag();
+}
+
+/* -------------------- HOUR ORDER + BREAKS -------------------- */
+const HOUR_BLOCK_ORDER = {
+  // Day shift
+  "7am-8am": 1,
+  "8am-9am": 2,
+  "9am-10am (15m break)": 3,
+  "10am-11am": 4,
+  "11am-12pm": 5,
+  "12:30pm-1:30pm": 6,
+  "1:30pm-2:30pm (10m break)": 7,
+  "2:30pm-3:30pm": 8,
+  // Night shift
+  "4:00pm-5:00pm": 9,
+  "5:00pm-6:00pm": 10,
+  "6:00pm-6:45pm (15m break)": 11,
+  "7:00pm-8:00pm": 12,
+  "8:00pm-9:00pm": 13,
+  "9:30pm-10:30pm": 14,
+  "10:30pm-11:30pm": 15,
+  "11:30pm-12:30am (10m break)": 16
+};
+function getHourBlockSortValue(block){ return HOUR_BLOCK_ORDER[block] || 999; }
+
+const HOUR_BLOCK_MULTIPLIER = {
+  // Day shift breaks
+  "9am-10am (15m break)": 45/60,
+  "1:30pm-2:30pm (10m break)": 50/60,
+  // Night shift breaks
+  "6:00pm-6:45pm (15m break)": 45/60,
+  "11:30pm-12:30am (10m break)": 50/60
+};
+function hourMultiplier(block){
+  const b = (block || "").trim();
+  return HOUR_BLOCK_MULTIPLIER[b] ?? 1;
+}
+
+function sumQty(rows){
+  return (rows || []).reduce((a,r)=> a + Number(r.qty || 0), 0);
+}
+
+/* -------------------- WEEKLY COUNTER + GOAL PLANNER (MON-SAT) -------------------- */
+function getWeekRangeMonSat(anchorIso){
+  const base = isoToDate(anchorIso || todayIso());
+  const day = base.getDay();
+
+  const monday = new Date(base);
+  const diffToMonday = day === 0 ? -6 : (1 - day);
+  monday.setDate(base.getDate() + diffToMonday);
+
+  const saturday = new Date(monday);
+  saturday.setDate(monday.getDate() + 5);
+
+  return {
+    mondayIso: toIsoLocal(monday),
+    saturdayIso: toIsoLocal(saturday)
+  };
+}
+
+function getWeekDaysMonSat(anchorIso){
+  const range = getWeekRangeMonSat(anchorIso);
+  const start = isoToDate(range.mondayIso);
+  const labels = ["Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  return labels.map((name, idx) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + idx);
+    return {
+      name,
+      iso: toIsoLocal(d),
+      order: idx + 1
+    };
+  });
+}
+
+function buildWeeklyGoalStats(selectedDate, filter){
+  const all = loadEntries().filter(r => rowMatchesPackTypeFilter(r, filter));
+  const range = getWeekRangeMonSat(selectedDate);
+  const weekDays = getWeekDaysMonSat(selectedDate);
+
+  const weekRows = all.filter(r => {
+    const d = String(r.log_date || "").trim();
+    return d >= range.mondayIso && d <= range.saturdayIso;
+  });
+
+  const byDay = new Map();
+  weekDays.forEach(day => byDay.set(day.iso, []));
+  weekRows.forEach(r => {
+    const d = String(r.log_date || "").trim();
+    if(byDay.has(d)) byDay.get(d).push(r);
+  });
+
+  const daily = weekDays.map(day => {
+    const rows = byDay.get(day.iso) || [];
+    const total = rows.reduce((a,r)=> a + Number(r.qty || 0), 0);
+    return { ...day, total };
+  });
+
+  const totalWeek = daily.reduce((a,d)=> a + d.total, 0);
+
+  const selectedWithinWeek = weekDays.find(d => d.iso === selectedDate) || weekDays[0];
+  const selectedOrder = selectedWithinWeek.order;
+
+  const elapsedDays = daily.filter(d => d.order <= selectedOrder);
+  const remainingDays = daily.filter(d => d.order > selectedOrder);
+
+  const totalToDate = elapsedDays.reduce((a,d)=> a + d.total, 0);
+  const expectedToDate = DAILY_TARGET * elapsedDays.length;
+  const paceDelta = totalToDate - expectedToDate;
+
+  const targetLeft = Math.max(0, WEEKLY_TARGET - totalToDate);
+  const remainingDayCount = remainingDays.length;
+
+  const neededPerRemainingDay = remainingDayCount > 0 ? (targetLeft / remainingDayCount) : 0;
+  const avgSoFar = elapsedDays.length > 0 ? (totalToDate / elapsedDays.length) : 0;
+
+  const projectedFinish = totalToDate + (avgSoFar * remainingDayCount);
+  const projectedDelta = projectedFinish - WEEKLY_TARGET;
+
+  const makeUpPlan = remainingDays.map((day, idx) => {
+    const daysLeftIncludingThis = remainingDayCount - idx;
+    const recommended = daysLeftIncludingThis > 0
+      ? Math.ceil(Math.max(0, WEEKLY_TARGET - totalToDate - remainingDays.slice(0, idx).reduce((a)=>a,0)) / daysLeftIncludingThis)
+      : 0;
+
+    const neededEvenSplit = Math.ceil(targetLeft / Math.max(remainingDayCount, 1));
+    const baselineGap = neededEvenSplit - Math.ceil(DAILY_TARGET);
+
+    return {
+      ...day,
+      recommended: neededEvenSplit,
+      extraVsDaily: baselineGap
+    };
+  });
+
+  return {
+    range,
+    weekDays,
+    daily,
+    totalWeek,
+    totalToDate,
+    expectedToDate,
+    paceDelta,
+    targetLeft,
+    remainingDayCount,
+    neededPerRemainingDay,
+    avgSoFar,
+    projectedFinish,
+    projectedDelta,
+    makeUpPlan,
+    selectedOrder
+  };
+}
+
+function updateWeeklyCounter(){
+  const selectedDate = ($("#logDate")?.value || todayIso());
+  const filter = getPackTypeFilter();
+  const stats = buildWeeklyGoalStats(selectedDate, filter);
+
+  const { range, daily, totalWeek, totalToDate, paceDelta, targetLeft, remainingDayCount, neededPerRemainingDay, avgSoFar, projectedFinish, projectedDelta, makeUpPlan, selectedOrder } = stats;
+
+  const rangeTag = document.getElementById("weeklyCounterRangeTag");
+  if(rangeTag){
+    rangeTag.textContent = `Week: ${range.mondayIso} → ${range.saturdayIso}`;
+  }
+
+  const totalEl = document.getElementById("weeklyCounterTotal");
+  if(totalEl){
+    totalEl.textContent = fmtInt(totalWeek);
+  }
+
+  const subEl = document.getElementById("weeklyCounterSub");
+  if(subEl){
+    subEl.textContent = `Selected date anchor: ${selectedDate} • Mon–Sat • Filter: ${packTypeLabel(filter)}`;
+  }
+
+  const grid = document.getElementById("weeklyBreakdownGrid");
+  if(grid){
+    grid.innerHTML = daily.map(day => {
+      const paceToThatDay = DAILY_TARGET * day.order;
+      const deltaToThatDay = day.total - DAILY_TARGET;
+      const dayBorder =
+        day.iso === selectedDate
+          ? 'border-color: var(--burnt); box-shadow: inset 0 0 0 1px rgba(204,85,0,.18);'
+          : '';
+
+      return `
+        <div class="week-day-card" style="${dayBorder}">
+          <div class="week-day-name">${escapeHtml(day.name)}</div>
+          <div class="week-day-value">${fmtInt(day.total)}</div>
+          <div class="week-day-date">${escapeHtml(shortMd(day.iso))}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  const summary = document.getElementById("weeklyCounterSummaryLine");
+  if(summary){
+    if(!daily.some(d => d.total > 0)){
+      summary.textContent = `No entries yet for this Mon–Sat week with filter "${packTypeLabel(filter)}". Weekly target is ${fmtInt(WEEKLY_TARGET)}.`;
+    } else {
+      summary.textContent =
+        `Week total: ${fmtInt(totalWeek)} pcs • ` +
+        `To selected day: ${fmtInt(totalToDate)} pcs • ` +
+        `Target: ${fmtInt(WEEKLY_TARGET)} pcs • ` +
+        `Week range: ${range.mondayIso} to ${range.saturdayIso}`;
+    }
+  }
+
+  /* KPI cards */
+  const leftCard = document.getElementById("weeklyTargetLeftValue")?.closest(".goal-kpi");
+  const paceCard = document.getElementById("weeklyPaceDeltaValue")?.closest(".goal-kpi");
+  const needCard = document.getElementById("weeklyNeededPerDayValue")?.closest(".goal-kpi");
+  const projCard = document.getElementById("weeklyProjectedFinishValue")?.closest(".goal-kpi");
+
+  const leftValue = document.getElementById("weeklyTargetLeftValue");
+  const leftSub = document.getElementById("weeklyTargetLeftSub");
+  if(leftValue) leftValue.textContent = fmtInt(targetLeft);
+  if(leftSub){
+    leftSub.textContent = targetLeft <= 0
+      ? `Target already reached or exceeded by ${fmtInt(Math.abs(Math.min(0, WEEKLY_TARGET - totalToDate)))}`
+      : `Need ${fmtInt(targetLeft)} more from ${remainingDayCount} remaining day(s)`;
+  }
+  setKpiState(leftCard, targetLeft <= 0 ? "good" : (remainingDayCount === 0 ? "bad" : "warn"));
+
+  const paceValue = document.getElementById("weeklyPaceDeltaValue");
+  const paceSub = document.getElementById("weeklyPaceDeltaSub");
+  if(paceValue) paceValue.textContent = `${paceDelta >= 0 ? "+" : ""}${fmtInt(Math.round(paceDelta))}`;
+  if(paceSub){
+    paceSub.textContent =
+      paceDelta >= 0
+        ? `Ahead of cumulative pace through day ${selectedOrder}`
+        : `Behind cumulative pace through day ${selectedOrder}`;
+  }
+  setKpiState(paceCard, paceDelta >= 0 ? "good" : "bad");
+
+  const needValue = document.getElementById("weeklyNeededPerDayValue");
+  const needSub = document.getElementById("weeklyNeededPerDaySub");
+  if(needValue) needValue.textContent = remainingDayCount > 0 ? fmt1(neededPerRemainingDay) : "0.0";
+  if(needSub){
+    if(targetLeft <= 0){
+      needSub.textContent = "Target hit — anything else this week is upside.";
+    } else if(remainingDayCount <= 0){
+      needSub.textContent = "No remaining days in selected week.";
+    } else {
+      needSub.textContent = `Need avg ${fmt1(neededPerRemainingDay)} pcs/day vs normal ${fmt1(DAILY_TARGET)} target/day`;
+    }
+  }
+  setKpiState(needCard, targetLeft <= 0 ? "good" : (neededPerRemainingDay <= DAILY_TARGET ? "good" : (neededPerRemainingDay <= DAILY_TARGET * 1.2 ? "warn" : "bad")));
+
+  const projValue = document.getElementById("weeklyProjectedFinishValue");
+  const projSub = document.getElementById("weeklyProjectedFinishSub");
+  if(projValue) projValue.textContent = fmtInt(Math.round(projectedFinish));
+  if(projSub){
+    projSub.textContent =
+      projectedDelta >= 0
+        ? `Projected to finish +${fmtInt(Math.round(projectedDelta))} above target at current pace`
+        : `Projected to finish ${fmtInt(Math.round(Math.abs(projectedDelta)))} below target at current pace`;
+  }
+  setKpiState(projCard, projectedDelta >= 0 ? "good" : "bad");
+
+  /* Make-up plan */
+  const planList = document.getElementById("weeklyMakeupPlanList");
+  if(planList){
+    if(targetLeft <= 0){
+      planList.innerHTML = `
+        <div class="planner-item">
+          <div class="planner-item-left">
+            <div class="planner-item-day">Target reached</div>
+            <div class="planner-item-sub">You have already hit the weekly target. Remaining output becomes upside and buffer.</div>
+          </div>
+          <div class="planner-item-right">+${fmtInt(Math.max(0, totalToDate - WEEKLY_TARGET))}</div>
+        </div>
+      `;
+    } else if(!makeUpPlan.length){
+      planList.innerHTML = `
+        <div class="planner-item">
+          <div class="planner-item-left">
+            <div class="planner-item-day">No remaining days</div>
+            <div class="planner-item-sub">The selected date is the last day of the Mon–Sat week. No more days left to recover this week.</div>
+          </div>
+          <div class="planner-item-right">${fmtInt(targetLeft)} left</div>
+        </div>
+      `;
+    } else {
+      planList.innerHTML = makeUpPlan.map(day => {
+        const extraText =
+          day.extraVsDaily > 0
+            ? `Need about ${fmtInt(day.extraVsDaily)} above the normal ${fmt1(DAILY_TARGET)} daily pace`
+            : `At or below normal daily pace is enough`;
+        return `
+          <div class="planner-item">
+            <div class="planner-item-left">
+              <div class="planner-item-day">${escapeHtml(day.name)} • ${escapeHtml(shortMd(day.iso))}</div>
+              <div class="planner-item-sub">${escapeHtml(extraText)}</div>
+            </div>
+            <div class="planner-item-right">${fmtInt(day.recommended)} target</div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  /* Simulation notes */
+  const simNotes = document.getElementById("weeklySimulationNotes");
+  if(simNotes){
+    const normalDaily = DAILY_TARGET;
+    const aboveNormalNeeded = Math.max(0, neededPerRemainingDay - normalDaily);
+    const bestDay = daily.reduce((best, d) => d.total > best.total ? d : best, { total:-Infinity, name:"—", iso:"" });
+    const worstDay = daily.reduce((worst, d) => d.total < worst.total ? d : worst, { total:Infinity, name:"—", iso:"" });
+
+    simNotes.innerHTML = `
+      <div><b>Baseline target:</b> ${fmtInt(WEEKLY_TARGET)} per week = ${fmt1(DAILY_TARGET)} per day across 6 days.</div>
+      <div style="margin-top:8px;"><b>Actual to selected day:</b> ${fmtInt(totalToDate)} pcs.</div>
+      <div style="margin-top:8px;"><b>Average so far:</b> ${fmt1(avgSoFar)} pcs/day.</div>
+      <div style="margin-top:8px;"><b>Current pace check:</b> ${
+        paceDelta >= 0
+          ? `ahead by ${fmtInt(Math.round(paceDelta))} vs cumulative target pace.`
+          : `behind by ${fmtInt(Math.round(Math.abs(paceDelta)))} vs cumulative target pace.`
+      }</div>
+      <div style="margin-top:8px;"><b>Projection:</b> if the rest of the week matches the current average pace, projected finish is <b>${fmtInt(Math.round(projectedFinish))}</b>, which is ${
+        projectedDelta >= 0
+          ? `<b>${fmtInt(Math.round(projectedDelta))}</b> above target.`
+          : `<b>${fmtInt(Math.round(Math.abs(projectedDelta)))}</b> below target.`
+      }</div>
+      <div style="margin-top:8px;"><b>Recovery math:</b> ${
+        targetLeft <= 0
+          ? `no recovery needed.`
+          : remainingDayCount > 0
+            ? `need about <b>${fmt1(neededPerRemainingDay)}</b> per remaining day, which is <b>${fmt1(aboveNormalNeeded)}</b> above the normal daily target.`
+            : `no days remain this week to recover the gap.`
+      }</div>
+      <div style="margin-top:8px;"><b>Week high / low:</b> best day so far is <b>${escapeHtml(bestDay.name)}</b> (${fmtInt(bestDay.total)}), lowest day is <b>${escapeHtml(worstDay.name)}</b> (${fmtInt(worstDay.total)}).</div>
+      <div style="margin-top:8px;"><b>Supervisor read:</b> ${
+        targetLeft <= 0
+          ? `weekly target is already secure; use remaining days to build buffer and exceed goal.`
+          : projectedDelta >= 0
+            ? `current pace is enough to hit target, but maintaining consistency matters.`
+            : `without a make-up push on the remaining days, the week is projected to miss target. Focus on closing the gap evenly instead of trying to recover it all on the last day.`
+      }</div>
+    `;
+  }
+}
+
+/* -------------------- TODAY TOTALS LINE -------------------- */
+function renderDailyTotals(rows){
+  const totalEl = document.getElementById("dailyTotalsLine");
+  const dayEl = document.getElementById("dayShiftTotalsLine");
+  const nightEl = document.getElementById("nightShiftTotalsLine");
+
+  function buildTotalsText(label, data){
+    const safeRows = Array.isArray(data) ? data : [];
+    if(!safeRows.length) return `${label}: —`;
+
+    const totalPieces = safeRows.reduce((a,r) => a + Number(r.qty || 0), 0);
+
+    const uniqueHourKeys = new Set();
+    let adjustedHours = 0;
+
+    safeRows.forEach(r => {
+      const w = (r.worker_name || "").trim();
+      const hb = (r.hour_block || "").trim();
+      if(!w || !hb) return;
+
+      const key = `${w}||${hb}`;
+      if(uniqueHourKeys.has(key)) return;
+
+      uniqueHourKeys.add(key);
+      adjustedHours += hourMultiplier(hb);
+    });
+
+    const pph = adjustedHours > 0 ? (totalPieces / adjustedHours) : 0;
+
+    return (
+      `${label}: ${totalPieces.toLocaleString()} pcs • ` +
+      `${adjustedHours.toFixed(2)} adj hrs • ` +
+      `${pph.toFixed(2)} pcs/adj-hr`
+    );
+  }
+
+  const data = Array.isArray(rows) ? rows : [];
+
+  const dayShiftRows = data.filter(r => {
+    const sortVal = getHourBlockSortValue(r.hour_block || "");
+    return sortVal >= 1 && sortVal <= 8;
+  });
+
+  const nightShiftRows = data.filter(r => {
+    const sortVal = getHourBlockSortValue(r.hour_block || "");
+    return sortVal >= 9 && sortVal <= 16;
+  });
+
+  if(totalEl) totalEl.textContent = buildTotalsText("Totals", data);
+  if(dayEl) dayEl.textContent = buildTotalsText("Day shift", dayShiftRows);
+  if(nightEl) nightEl.textContent = buildTotalsText("Night shift", nightShiftRows);
+}
+
+/* -------------------- DAILY SUMMARY (GROUP BY DATE) -------------------- */
+let DAILY_CHART = null;
+
+const DAILY_METRIC_VIS = {
+  total: true,
+  avg: true,
+  hours: true
+};
+
+function applyMetricVisibilityToChart(){
+  if(!DAILY_CHART || !DAILY_CHART.data || !Array.isArray(DAILY_CHART.data.datasets)) return;
+
+  const ds = DAILY_CHART.data.datasets;
+
+  if(ds[0]) ds[0].hidden = !DAILY_METRIC_VIS.total;
+  if(ds[1]) ds[1].hidden = !DAILY_METRIC_VIS.avg;
+  if(ds[2]) ds[2].hidden = !DAILY_METRIC_VIS.hours;
+
+  DAILY_CHART.update();
+}
+
+function refreshMetricButtonsUI(){
+  document.querySelectorAll("[data-metric-toggle]").forEach(btn => {
+    const k = btn.getAttribute("data-metric-toggle");
+    const on = !!DAILY_METRIC_VIS[k];
+    btn.classList.toggle("active", on);
+  });
+}
+
+function computeDailyStats(allRows){
+  const byDate = new Map();
+  (allRows || []).forEach(r => {
+    const d = (r.log_date || "").trim();
+    if(!d) return;
+    if(!byDate.has(d)) byDate.set(d, []);
+    byDate.get(d).push(r);
+  });
+
+  const stats = [];
+  for(const [date, rows] of byDate.entries()){
+    const totalPieces = rows.reduce((a,r)=> a + Number(r.qty || 0), 0);
+
+    const uniqueHourKeys = new Set();
+    let adjustedHours = 0;
+
+    rows.forEach(r => {
+      const w = (r.worker_name || "").trim();
+      const hb = (r.hour_block || "").trim();
+      if(!w || !hb) return;
+      const key = `${w}||${hb}`;
+      if(uniqueHourKeys.has(key)) return;
+      uniqueHourKeys.add(key);
+      adjustedHours += hourMultiplier(hb);
+    });
+
+    const avgPerHr = adjustedHours > 0 ? (totalPieces / adjustedHours) : 0;
+
+    stats.push({
+      date,
+      totalPieces,
+      adjustedHours,
+      avgPerHr
+    });
+  }
+
+  stats.sort((a,b)=> a.date.localeCompare(b.date));
+  return stats;
+}
+
+function filterStatsByDays(stats, days){
+  const n = Number(days || 30);
+  if(!Number.isFinite(n) || n >= 9999) return stats.slice();
+
+  if(!stats.length) return [];
+  const latest = stats[stats.length - 1].date;
+  const latestDate = new Date(latest + "T00:00:00");
+  const start = new Date(latestDate);
+  start.setDate(start.getDate() - (n - 1));
+
+  return stats.filter(s => {
+    const d = new Date(s.date + "T00:00:00");
+    return d >= start && d <= latestDate;
+  });
+}
+
+function updateDailySummaryChart(){
+  const filter = getPackTypeFilter();
+  applyPackTypeTag();
+
+  const all = loadEntries().filter(r => rowMatchesPackTypeFilter(r, filter));
+
+  let stats = computeDailyStats(all);
+
+  const days = document.getElementById("trendDays")?.value || "30";
+  const order = document.getElementById("trendOrder")?.value || "asc";
+
+  stats = filterStatsByDays(stats, days);
+  if(order === "desc") stats = stats.slice().sort((a,b)=> b.date.localeCompare(a.date));
+
+  const labels = stats.map(s => s.date);
+  const totals = stats.map(s => s.totalPieces);
+  const avgs   = stats.map(s => Number(s.avgPerHr.toFixed(2)));
+  const hours  = stats.map(s => Number(s.adjustedHours.toFixed(2)));
+
+  const tag = document.getElementById("dailyGraphTag");
+  if(tag){
+    if(!stats.length){
+      tag.textContent = "No data yet";
+    } else {
+      const range = `${stats[0].date} → ${stats[stats.length - 1].date}`;
+      tag.textContent = (Number(days) >= 9999) ? `All dates • ${range}` : `Last ${days} days • ${range}`;
+    }
+  }
+
+  const summaryLine = document.getElementById("dailyGraphSummaryLine");
+  if(summaryLine){
+    if(!stats.length){
+      summaryLine.textContent = `No entries yet for filter "${packTypeLabel(filter)}". Start logging to see daily totals, avg pack/hr, and hours.`;
+    } else {
+      const totalAll = totals.reduce((a,b)=>a+b,0);
+      const hoursAll = hours.reduce((a,b)=>a+b,0);
+      const avgAll = hoursAll > 0 ? (totalAll / hoursAll) : 0;
+      summaryLine.textContent =
+        `Range total: ${totalAll.toLocaleString()} pcs • ` +
+        `${hoursAll.toFixed(2)} adj hrs • ` +
+        `${avgAll.toFixed(2)} pcs/adj-hr` +
+        ` • Filter: ${packTypeLabel(filter)}`;
+    }
+  }
+
+  const canvas = document.getElementById("dailySummaryChart");
+  if(!canvas) return;
+
+  if(typeof Chart === "undefined"){
+    if(summaryLine) summaryLine.textContent = "Chart.js not available (offline). Graph requires internet the first time to load the library.";
+    return;
+  }
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        type: "bar",
+        label: "Total packed (pcs)",
+        data: totals,
+        yAxisID: "yTotal",
+        hidden: !DAILY_METRIC_VIS.total
+      },
+      {
+        type: "line",
+        label: "Avg pack/hr",
+        data: avgs,
+        yAxisID: "yRate",
+        tension: 0.25,
+        pointRadius: 2,
+        hidden: !DAILY_METRIC_VIS.avg
+      },
+      {
+        type: "line",
+        label: "Hours (adj)",
+        data: hours,
+        yAxisID: "yHours",
+        tension: 0.25,
+        pointRadius: 2,
+        hidden: !DAILY_METRIC_VIS.hours
+      }
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { display: true },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const v = ctx.parsed.y;
+            if(ctx.dataset.label.includes("Total")) return `${ctx.dataset.label}: ${Number(v || 0).toLocaleString()}`;
+            if(ctx.dataset.label.includes("Hours")) return `${ctx.dataset.label}: ${Number(v || 0).toFixed(2)}`;
+            return `${ctx.dataset.label}: ${Number(v || 0).toFixed(2)}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { maxRotation: 0, autoSkip: true }
+      },
+      yTotal: {
+        position: "left",
+        title: { display: true, text: "Total packed (pcs)" },
+        beginAtZero: true
+      },
+      yRate: {
+        position: "right",
+        title: { display: true, text: "Avg pack/hr" },
+        beginAtZero: true,
+        grid: { drawOnChartArea: false }
+      },
+      yHours: {
+        position: "right",
+        title: { display: true, text: "Hours (adj)" },
+        beginAtZero: true,
+        grid: { drawOnChartArea: false },
+        ticks: { display: false }
+      }
+    }
+  };
+
+  if(DAILY_CHART){
+    DAILY_CHART.data = data;
+    DAILY_CHART.options = options;
+    DAILY_CHART.update();
+  } else {
+    DAILY_CHART = new Chart(canvas, { data, options });
+  }
+
+  refreshMetricButtonsUI();
+}
+
+/* -------------------- PART SUGGESTIONS (LOCAL, BY DATE) -------------------- */
+function refreshPartSuggestions(){
+  const date = $("#logDate")?.value || todayIso();
+  const filter = getPackTypeFilter();
+
+  const all = loadEntries();
+  const parts = (all || [])
+    .filter(r => r.log_date === date)
+    .filter(r => rowMatchesPackTypeFilter(r, filter))
+    .map(r => (r.part_number || "").trim())
+    .filter(Boolean);
+
+  const uniq = Array.from(new Set(parts)).sort();
+  const dl = document.getElementById("partSuggestions");
+  if(!dl) return;
+  dl.innerHTML = uniq.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
+}
+
+/* -------------------- WORKER DROPDOWN + MANAGER -------------------- */
+let WORKER_DIR_CACHE = [];
+
+function loadWorkerDirectory(){
+  const selectEl = document.getElementById("workerName");
+  if(!selectEl) return;
+
+  const prev = (selectEl.value || "").trim();
+  selectEl.innerHTML = '<option value="">Select...</option>';
+
+  const list = loadWorkers();
+  WORKER_DIR_CACHE = list.map((name, idx) => ({ id: `local-${idx}`, worker_name: name }));
+
+  list.forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name; opt.textContent = name;
+    selectEl.appendChild(opt);
+  });
+
+  if(prev && list.includes(prev)) selectEl.value = prev;
+  renderWorkerDirManager();
+}
+
+function normalizeName(s){ return String(s || "").trim().replace(/\s+/g, " "); }
+
+function isDuplicateName(name, excludeId=null){
+  const n = normalizeName(name).toLowerCase();
+  return (WORKER_DIR_CACHE || []).some(r => {
+    const same = normalizeName(r.worker_name).toLowerCase() === n;
+    return excludeId ? (same && String(r.id) !== String(excludeId)) : same;
+  });
+}
+
+function setWorkerDirStatus(message, ok=true){
+  const el = document.getElementById("workerDirStatus");
+  if(!el) return;
+  el.textContent = message || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+
+function renderWorkerDirManager(){
+  const body = document.getElementById("workerDirBody");
+  if(!body) return;
+
+  const rows = Array.isArray(WORKER_DIR_CACHE) ? WORKER_DIR_CACHE : [];
+  if(!rows.length){
+    body.innerHTML = `<tr><td colspan="2" style="text-align:center; padding:10px; color:var(--muted);">No names yet.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const id = r.id;
+    const name = r.worker_name || "";
+    return `
+      <tr>
+        <td>
+          <input type="text" value="${escapeHtml(name)}" data-wd-input="${escapeHtml(id)}"
+                 style="width:100%; background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-size:14px;" />
+        </td>
+        <td>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-mini" type="button" data-wd-action="save" data-wd-id="${escapeHtml(id)}">Save</button>
+            <button class="btn btn-mini btn-danger" type="button" data-wd-action="delete" data-wd-id="${escapeHtml(id)}">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function addWorkerName(nameRaw){
+  const name = normalizeName(nameRaw);
+  if(!name){
+    setWorkerDirStatus("Enter a name.", false);
+    return;
+  }
+  if(isDuplicateName(name)){
+    setWorkerDirStatus("That name already exists.", false);
+    return;
+  }
+  const list = loadWorkers();
+  list.push(name);
+  saveWorkers(list);
+  setWorkerDirStatus("Added.", true);
+  loadWorkerDirectory();
+}
+
+async function updateWorkerName(id, nextNameRaw){
+  const nextName = normalizeName(nextNameRaw);
+  if(!nextName){
+    setWorkerDirStatus("Name cannot be blank.", false);
+    return;
+  }
+  if(isDuplicateName(nextName, id)){
+    setWorkerDirStatus("That name already exists.", false);
+    return;
+  }
+
+  const idx = WORKER_DIR_CACHE.findIndex(x => String(x.id) === String(id));
+  if(idx < 0) return;
+
+  const list = loadWorkers();
+  list[idx] = nextName;
+  saveWorkers(list);
+  setWorkerDirStatus("Saved.", true);
+  loadWorkerDirectory();
+}
+
+async function deleteWorkerName(id){
+  const idx = WORKER_DIR_CACHE.findIndex(x => String(x.id) === String(id));
+  if(idx < 0) return;
+
+  const list = loadWorkers();
+  list.splice(idx, 1);
+  saveWorkers(list);
+  setWorkerDirStatus("Deleted.", true);
+  loadWorkerDirectory();
+}
+
+/* -------------------- ENTRIES LOAD/RENDER -------------------- */
+let TODAY_ROWS_ALL_CACHE = [];
+let TODAY_ROWS_DISPLAY_CACHE = [];
+
+function renderTableRows(data, date){
+  const tbody = $("#entriesBody");
+  const tag   = $("#todayTag");
+  const filter = getPackTypeFilter();
+
+  if(!data.length){
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:8px;">No entries for this date (with current filter).</td></tr>';
+    if(tag) tag.textContent = `${date} • 0 entries`;
+    renderDailyTotals([]);
+    setFreshness(`Last updated: ${nowStamp()}`);
+    updateWeeklyCounter();
+    updateDailySummaryChart();
+    return;
+  }
+
+  data.sort((a,b) => {
+    const oa = getHourBlockSortValue(a.hour_block || "");
+    const ob = getHourBlockSortValue(b.hour_block || "");
+    if(oa !== ob) return oa - ob;
+    return (a.worker_name || "").localeCompare((b.worker_name || ""));
+  });
+
+  let html = "";
+  data.forEach(row => {
+    const blockRaw   = row.hour_block || "";
+    const breakMatch = blockRaw.match(/\(([^)]+)\)/);
+    const hasBreak   = !!breakMatch;
+    const baseLabel  = blockRaw.replace(/\s*\(.*\)/, "").trim();
+    const breakText  = breakMatch ? breakMatch[1] : "";
+
+    html += `
+      <tr class="${hasBreak ? "row-break" : ""}">
+        <td>
+          ${escapeHtml(baseLabel || blockRaw)}
+          ${hasBreak ? '<span class="break-badge">' + escapeHtml(breakText) + '</span>' : ""}
+        </td>
+        <td>${escapeHtml(row.worker_name)}</td>
+        <td>${escapeHtml(row.part_number)}</td>
+        <td>${escapeHtml(row.pack_type || "")}</td>
+        <td>${escapeHtml(row.job_ref || "")}</td>
+        <td style="text-align:right;">${row.order_qty == null ? "" : Number(row.order_qty).toLocaleString()}</td>
+        <td style="text-align:right;">${Number(row.qty || 0).toLocaleString()}</td>
+        <td>${escapeHtml(row.notes || "")}</td>
+        <td>
+          <button class="btn btn-mini" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">Edit</button>
+          <button class="btn btn-mini btn-danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">Delete</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+  if(tag) tag.textContent = `${date} • ${data.length} entries • ${packTypeLabel(filter)}`;
+  renderDailyTotals(data);
+  setFreshness(`Last updated: ${nowStamp()}`);
+  updateWeeklyCounter();
+  updateDailySummaryChart();
+}
+
+function loadTodayEntries(){
+  const date = $("#logDate").value || todayIso();
+  const filter = getPackTypeFilter();
+
+  const all = loadEntries();
+  const rowsForDate = (all || []).filter(r => r.log_date === date);
+
+  TODAY_ROWS_ALL_CACHE = rowsForDate.map(r => ({...r}));
+  const display = rowsForDate.filter(r => rowMatchesPackTypeFilter(r, filter));
+
+  TODAY_ROWS_DISPLAY_CACHE = display.map(r => ({...r}));
+  renderTableRows(display, date);
+  refreshPartSuggestions();
+  updateRealtimeValidation();
+}
+
+/* -------------------- REAL-TIME VALIDATION (LOCAL) -------------------- */
+function setRtBox(html, level){
+  const el = document.getElementById("rtValidationBox");
+  if(!el) return;
+  el.classList.remove("status-ok","status-warn","status-err");
+  if(level) el.classList.add(level === "warn" ? "status-warn" : (level === "err" ? "status-err" : "status-ok"));
+  el.innerHTML = html || "";
+}
+
+const updateRealtimeValidation = debounce(() => {
+  const date = ($("#logDate")?.value || todayIso());
+  const worker = ($("#workerName")?.value || "").trim();
+  const hourBlock = ($("#hourBlock")?.value || "").trim();
+  const qtyInput = ($("#qty")?.value || "").trim();
+  const qtyNow = qtyInput === "" ? null : Number(qtyInput);
+
+  if(!worker){
+    setRtBox("", "ok");
+    return;
+  }
+
+  const rowsForDate = (TODAY_ROWS_ALL_CACHE || []).filter(r => r.log_date === date);
+  const rowsForWorker = rowsForDate.filter(r => (r.worker_name || "") === worker);
+
+  const dayTotal = sumQty(rowsForWorker);
+  const hourCount = new Set(rowsForWorker.map(r => r.hour_block)).size;
+
+  let dupWarn = "";
+  if(hourBlock){
+    const sameHour = rowsForDate.filter(r =>
+      (r.worker_name || "") === worker &&
+      (r.hour_block || "") === hourBlock
+    );
+    if(sameHour.length >= 1){
+      dupWarn = `⚠️ This worker already has <b>${sameHour.length}</b> entry(ies) in <b>${escapeHtml(hourBlock)}</b>.`;
+    }
+  }
+
+  let qtyHtml = "";
+  if(qtyNow != null && Number.isFinite(qtyNow)){
+    qtyHtml = `This hour qty: <b>${qtyNow.toLocaleString()}</b>`;
+  }
+
+  const header = `<b>Real-time validation</b> • ${escapeHtml(worker)} • ${escapeHtml(date)}`;
+  const totals = `Day total so far: <b>${dayTotal.toLocaleString()}</b> • Hour blocks logged: <b>${hourCount}</b>`;
+
+  const parts = [
+    `<div>${header}</div>`,
+    `<div style="margin-top:4px;">${totals}</div>`,
+    dupWarn ? `<div style="margin-top:6px;">${dupWarn}</div>` : "",
+    qtyHtml ? `<div style="margin-top:6px;">${qtyHtml}</div>` : ""
+  ].filter(Boolean).join("");
+
+  const level = dupWarn ? "warn" : "ok";
+  setRtBox(parts, level);
+}, 250);
+
+/* -------------------- SAVE ENTRY (LOCAL) -------------------- */
+function uuid(){
+  return "id_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+}
+
+async function saveEntry({ stayOnWorkerHour } = { stayOnWorkerHour:false }){
+  const logDate     = $("#logDate").value || todayIso();
+  const hourBlock   = $("#hourBlock").value.trim();
+  const role        = "packer";
+  const workerName  = $("#workerName").value.trim();
+  const partNumber  = $("#partNumber").value.trim();
+  const packType    = ($("#packType")?.value || "").trim() || null;
+  const qtyStr      = $("#qty").value.trim();
+  const jobRef      = ($("#jobRef")?.value || "").trim() || null;
+  const notes       = ($("#notes")?.value || "").trim() || null;
+  const orderQtyStr = ($("#orderQty")?.value || "").trim();
+
+  ["hourBlock","workerName","partNumber","packType","qty"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.classList.remove("input-invalid");
+  });
+
+  let hasError = false;
+  if(!hourBlock){
+    $("#hourBlock")?.classList.add("input-invalid");
+    setStatus("Please select an hour block.", false);
+    hasError = true;
+  }
+  if(!workerName){
+    $("#workerName")?.classList.add("input-invalid");
+    setStatus("Please select a packer/station.", false);
+    hasError = true;
+  }
+  if(!partNumber){
+    $("#partNumber")?.classList.add("input-invalid");
+    setStatus("Part # is required.", false);
+    hasError = true;
+  }
+  if(!qtyStr){
+    $("#qty")?.classList.add("input-invalid");
+    setStatus("Qty is required.", false);
+    hasError = true;
+  }
+
+  const qty = Number(qtyStr);
+  if(qtyStr !== "" && (isNaN(qty) || qty < 0)){
+    $("#qty")?.classList.add("input-invalid");
+    setStatus("Quantity must be a non-negative number.", false);
+    hasError = true;
+  }
+
+  const order_qty = orderQtyStr === "" ? null : parseInt(orderQtyStr, 10);
+  if(orderQtyStr !== "" && (Number.isNaN(order_qty) || order_qty <= 0)){
+    $("#orderQty")?.classList.add("input-invalid");
+    setStatus("Order Qty must be a positive whole number (or leave blank).", false);
+    hasError = true;
+  }
+
+  if(hasError) return;
+
+  const rows = loadEntries();
+
+  const idx = (rows || []).findIndex(r =>
+    r.log_date === logDate &&
+    r.hour_block === hourBlock &&
+    r.worker_name === workerName &&
+    r.part_number === partNumber
+  );
+
+  if(idx >= 0){
+    rows[idx].qty = qty;
+    rows[idx].job_ref = jobRef;
+    rows[idx].order_qty = order_qty;
+    rows[idx].pack_type = packType;
+    rows[idx].notes = notes;
+  } else {
+    rows.push({
+      id: uuid(),
+      log_date: logDate,
+      hour_block: hourBlock,
+      role,
+      worker_name: workerName,
+      part_number: partNumber,
+      pack_type: packType,
+      qty,
+      job_ref: jobRef,
+      order_qty,
+      notes
+    });
+  }
+
+  saveEntries(rows);
+  setStatus("Entry saved (Local).", true);
+
+  if(!stayOnWorkerHour){
+    $("#hourBlock").value = "";
+    $("#workerName").value = "";
+    $("#partNumber").value = "";
+    $("#packType").value = "";
+    $("#jobRef").value = "";
+    $("#orderQty").value = "";
+    $("#notes").value = "";
+  } else {
+    const orderedBlocks = Object.keys(HOUR_BLOCK_ORDER).sort((a,b) => HOUR_BLOCK_ORDER[a] - HOUR_BLOCK_ORDER[b]);
+    const idx2 = orderedBlocks.indexOf(hourBlock);
+    if(idx2 >= 0 && idx2 < orderedBlocks.length - 1){
+      $("#hourBlock").value = orderedBlocks[idx2 + 1];
+    }
+  }
+
+  $("#qty").value = "";
+  loadTodayEntries();
+}
+
+/* -------------------- EDIT/DELETE (LOCAL) -------------------- */
+function showEditStatus(msg, ok=true){
+  const el = document.getElementById("editEntryStatus");
+  if(!el) return;
+  el.textContent = msg || "";
+  el.classList.remove("status-ok","status-err");
+  el.classList.add(ok ? "status-ok" : "status-err");
+}
+
+function openEditModalWithRow(row){
+  const modal = document.getElementById("editEntryModal");
+  if(!modal) return;
+
+  document.getElementById("editEntryId").value = row.id || "";
+  document.getElementById("editLogDate").value = row.log_date || todayIso();
+  document.getElementById("editHourBlock").value = row.hour_block || "7am-8am";
+  document.getElementById("editWorkerName").value = row.worker_name || "";
+  document.getElementById("editPartNumber").value = row.part_number || "";
+  document.getElementById("editPackType").value = row.pack_type || "";
+  document.getElementById("editQty").value = (row.qty ?? 0);
+  document.getElementById("editJobRef").value = row.job_ref || "";
+  document.getElementById("editOrderQty").value = (row.order_qty ?? "");
+  document.getElementById("editNotes").value = row.notes || "";
+
+  showEditStatus("", true);
+  modal.style.display = "flex";
+}
+function fetchRowByIdLocal(id){
+  const rows = loadEntries();
+  return rows.find(r => String(r.id) === String(id)) || null;
+}
+
+function saveEditedRowLocal(){
+  const id = document.getElementById("editEntryId").value;
+  if(!id){
+    showEditStatus("Missing entry id.", false);
+    return;
+  }
+
+  const payload = {
+    log_date: document.getElementById("editLogDate").value || todayIso(),
+    hour_block: document.getElementById("editHourBlock").value,
+    worker_name: document.getElementById("editWorkerName").value.trim(),
+    part_number: document.getElementById("editPartNumber").value.trim(),
+    pack_type: (document.getElementById("editPackType").value || "").trim() || null,
+    qty: Number(document.getElementById("editQty").value || 0),
+    job_ref: (document.getElementById("editJobRef").value.trim() || null),
+    order_qty: (() => {
+      const v = (document.getElementById("editOrderQty").value || "").trim();
+      if(v === "") return null;
+      const n = parseInt(v, 10);
+      return Number.isNaN(n) ? null : n;
+    })(),
+    notes: (document.getElementById("editNotes").value.trim() || null),
+  };
+
+  if(!payload.worker_name || !payload.part_number){
+    showEditStatus("Packer/Station and Part # are required.", false);
+    return;
+  }
+  if(Number.isNaN(payload.qty) || payload.qty < 0){
+    showEditStatus("Qty must be a non-negative number.", false);
+    return;
+  }
+
+  showEditStatus("Saving changes...", true);
+
+  const rows = loadEntries();
+  const idx = rows.findIndex(r => String(r.id) === String(id));
+  if(idx < 0){
+    showEditStatus("Entry not found.", false);
+    return;
+  }
+
+  rows[idx] = { ...rows[idx], ...payload };
+  saveEntries(rows);
+
+  showEditStatus("Saved.", true);
+  loadTodayEntries();
+  refreshPartSuggestions();
+  updateWeeklyCounter();
+  updateDailySummaryChart();
+  setTimeout(() => document.getElementById("editEntryModal").style.display="none", 250);
+}
+
+function deleteRowByIdLocal(id){
+  const rows = loadEntries();
+  const next = rows.filter(r => String(r.id) !== String(id));
+  saveEntries(next);
+  loadTodayEntries();
+  refreshPartSuggestions();
+  updateWeeklyCounter();
+  updateDailySummaryChart();
+}
+
+/* -------------------- QUICK QTY -------------------- */
+function initQuickQtyButtons(){
+  const container = document.querySelector(".quick-qty-row");
+  if(!container) return;
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-qty]");
+    if(!btn) return;
+    const inc = Number(btn.dataset.qty || 0);
+    const qtyInput = document.querySelector("#qty");
+    const current = Number(qtyInput.value || 0);
+    qtyInput.value = current + inc;
+    updateRealtimeValidation();
+  });
+}
+
+/* -------------------- CSV EXPORT -------------------- */
+function exportCsv(){
+  const rows = loadEntries();
+  if(!rows.length){
+    setStatus("Nothing to export yet.", false);
+    return;
+  }
+
+  const headers = [
+    "id","log_date","hour_block","worker_name","part_number","pack_type",
+    "qty","job_ref","order_qty","notes"
+  ];
+
+  const escapeCsv = (v) => {
+    const s = (v == null ? "" : String(v));
+    if(/[",\n]/.test(s)) return `"${s.replaceAll('"','""')}"`;
+    return s;
+  };
+
+  const lines = [
+    headers.join(","),
+    ...rows.map(r => headers.map(h => escapeCsv(r[h])).join(","))
+  ];
+
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `packing_log_${todayIso()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+  setStatus("CSV exported.", true);
+}
+
+/* -------------------- AUTO SELECT HOUR BLOCK -------------------- */
+function autoSelectHourBlock(){
+  const select = $("#hourBlock");
+  if(!select) return;
+
+  const now = new Date();
+  const total = now.getHours() * 60 + now.getMinutes();
+
+  const blocks = [
+    // Day shift
+    { label: "7am-8am",                        start: 7*60,       end: 8*60       },
+    { label: "8am-9am",                        start: 8*60,       end: 9*60       },
+    { label: "9am-10am (15m break)",            start: 9*60,       end: 10*60      },
+    { label: "10am-11am",                       start: 10*60,      end: 11*60      },
+    { label: "11am-12pm",                       start: 11*60,      end: 12*60      },
+    { label: "12:30pm-1:30pm",                  start: 12*60+30,   end: 13*60+30   },
+    { label: "1:30pm-2:30pm (10m break)",       start: 13*60+30,   end: 14*60+30   },
+    { label: "2:30pm-3:30pm",                   start: 14*60+30,   end: 15*60+30   },
+    // Night shift
+    { label: "4:00pm-5:00pm",                   start: 16*60,      end: 17*60      },
+    { label: "5:00pm-6:00pm",                   start: 17*60,      end: 18*60      },
+    { label: "6:00pm-6:45pm (15m break)",       start: 18*60,      end: 19*60      },
+    { label: "7:00pm-8:00pm",                   start: 19*60,      end: 20*60      },
+    { label: "8:00pm-9:00pm",                   start: 20*60,      end: 21*60      },
+    { label: "9:30pm-10:30pm",                  start: 21*60+30,   end: 22*60+30   },
+    { label: "10:30pm-11:30pm",                 start: 22*60+30,   end: 23*60+30   },
+    { label: "11:30pm-12:30am (10m break)",     start: 23*60+30,   end: 24*60+30   }
+  ];
+
+  // Handle midnight wrap for last block
+  const match = blocks.find(b => {
+    if(b.end > 24*60){
+      return total >= b.start || total < (b.end - 24*60);
+    }
+    return total >= b.start && total < b.end;
+  });
+
+  if(match) select.value = match.label;
+}
+
+/* -------------------- SIMULATOR (Lane 1 / Lane 2) -------------------- */
+function getAverageLaneRateSoFar(rowsForDate, laneNumber){
+  const laneRows = (rowsForDate || []).filter(r => laneNameMatch(r.worker_name, laneNumber));
+  if(!laneRows.length) return null;
+
+  const totalPieces = laneRows.reduce((a,r) => a + Number(r.qty || 0), 0);
+
+  const uniqueBlocks = new Set();
+  let adjustedHours = 0;
+
+  laneRows.forEach(r => {
+    const hb = (r.hour_block || "").trim();
+    if(!hb) return;
+    if(uniqueBlocks.has(hb)) return;
+    uniqueBlocks.add(hb);
+    adjustedHours += hourMultiplier(hb);
+  });
+
+  if(adjustedHours <= 0) return null;
+
+  const ratePerFullHour = totalPieces / adjustedHours;
+
+  return { lane: laneNumber, totalPieces, adjustedHours, ratePerFullHour };
+}
+
+function fillSimulatorRatesFromLog(){
+  const date = ($("#logDate")?.value || todayIso());
+  const rowsForDate = (loadEntries() || []).filter(r => r.log_date === date);
+
+  const lane1 = getAverageLaneRateSoFar(rowsForDate, 1);
+  const lane2 = getAverageLaneRateSoFar(rowsForDate, 2);
+
+  const out = [];
+
+  if(lane1){
+    const el1 = document.getElementById("simLane1Rate");
+    if(el1) el1.value = Math.round(lane1.ratePerFullHour);
+    out.push(`Lane 1: ${lane1.totalPieces} pcs / ${lane1.adjustedHours.toFixed(2)} adj hrs → ${Math.round(lane1.ratePerFullHour)}/hr`);
+  } else out.push(`Lane 1: no logged entries found to compute a rate.`);
+
+  if(lane2){
+    const el2 = document.getElementById("simLane2Rate");
+    if(el2) el2.value = Math.round(lane2.ratePerFullHour);
+    out.push(`Lane 2: ${lane2.totalPieces} pcs / ${lane2.adjustedHours.toFixed(2)} adj hrs → ${Math.round(lane2.ratePerFullHour)}/hr`);
+  } else out.push(`Lane 2: no logged entries found to compute rates.`);
+
+  const resultsEl = document.getElementById("simResults");
+  if(resultsEl){
+    resultsEl.classList.remove("status-ok","status-warn","status-err");
+    resultsEl.classList.add((lane1 || lane2) ? "status-ok" : "status-err");
+    resultsEl.innerHTML = `
+      <div><b>Auto-rate (from log)</b> • Date: <b>${escapeHtml(date)}</b></div>
+      <div style="margin-top:6px; white-space:normal;">
+        ${out.map(x => `• ${escapeHtml(x)}`).join("<br>")}
+      </div>
+      <div style="margin-top:8px; color:var(--muted); font-size:12px;">
+        "Current rate" = average pcs per FULL hour so far today for that lane (break blocks are adjusted).
+      </div>
+    `;
+  }
+
+  setStatus((lane1 || lane2) ? "Simulator rates loaded from log." : "No lane entries found to compute rates.", !!(lane1 || lane2));
+}
+
+// Full ordered block list (day + night shift)
+const DAY_BLOCKS = [
+  // Day shift
+  "7am-8am",
+  "8am-9am",
+  "9am-10am (15m break)",
+  "10am-11am",
+  "11am-12pm",
+  "12:30pm-1:30pm",
+  "1:30pm-2:30pm (10m break)",
+  "2:30pm-3:30pm",
+  // Night shift
+  "4:00pm-5:00pm",
+  "5:00pm-6:00pm",
+  "6:00pm-6:45pm (15m break)",
+  "7:00pm-8:00pm",
+  "8:00pm-9:00pm",
+  "9:30pm-10:30pm",
+  "10:30pm-11:30pm",
+  "11:30pm-12:30am (10m break)"
+];
+
+function blockIndex(block){
+  const i = DAY_BLOCKS.indexOf((block || "").trim());
+  return i >= 0 ? i : -1;
+}
+
+function autoStartBlockFromNow(){
+  const now = new Date();
+  const total = now.getHours() * 60 + now.getMinutes();
+
+  const blocks = [
+    // Day shift
+    { label: "7am-8am",                        start: 7*60,       end: 8*60       },
+    { label: "8am-9am",                        start: 8*60,       end: 9*60       },
+    { label: "9am-10am (15m break)",            start: 9*60,       end: 10*60      },
+    { label: "10am-11am",                       start: 10*60,      end: 11*60      },
+    { label: "11am-12pm",                       start: 11*60,      end: 12*60      },
+    { label: "12:30pm-1:30pm",                  start: 12*60+30,   end: 13*60+30   },
+    { label: "1:30pm-2:30pm (10m break)",       start: 13*60+30,   end: 14*60+30   },
+    { label: "2:30pm-3:30pm",                   start: 14*60+30,   end: 15*60+30   },
+    // Night shift
+    { label: "4:00pm-5:00pm",                   start: 16*60,      end: 17*60      },
+    { label: "5:00pm-6:00pm",                   start: 17*60,      end: 18*60      },
+    { label: "6:00pm-6:45pm (15m break)",       start: 18*60,      end: 19*60      },
+    { label: "7:00pm-8:00pm",                   start: 19*60,      end: 20*60      },
+    { label: "8:00pm-9:00pm",                   start: 20*60,      end: 21*60      },
+    { label: "9:30pm-10:30pm",                  start: 21*60+30,   end: 22*60+30   },
+    { label: "10:30pm-11:30pm",                 start: 22*60+30,   end: 23*60+30   },
+    { label: "11:30pm-12:30am (10m break)",     start: 23*60+30,   end: 24*60+30   }
+  ];
+
+  const match = blocks.find(b => {
+    if(b.end > 24*60){
+      return total >= b.start || total < (b.end - 24*60);
+    }
+    return total >= b.start && total < b.end;
+  });
+
+  return match ? match.label : null;
+}
+
+function laneNameMatch(workerName, laneNumber){
+  const s = String(workerName || "").toLowerCase().replace(/\s+/g, "");
+  return laneNumber === 1 ? s.includes("lane1") : s.includes("lane2");
+}
+
+function sumLaneActuals(rows, laneNumber){
+  const laneRows = (rows || []).filter(r => laneNameMatch(r.worker_name, laneNumber));
+  return laneRows.reduce((a,r) => a + Number(r.qty || 0), 0);
+}
+
+function projectedFromBlock(startBlock, ratePerFullHour){
+  const startIdx = blockIndex(startBlock);
+  if(startIdx < 0) return 0;
+
+  let projected = 0;
+  for(let i = startIdx; i < DAY_BLOCKS.length; i++){
+    const b = DAY_BLOCKS[i];
+    projected += (ratePerFullHour * hourMultiplier(b));
+  }
+  return projected;
+}
+
+function simulateTotals(){
+  const date = ($("#logDate")?.value || todayIso());
+  const all = loadEntries();
+  const rowsForDate = (all || []).filter(r => r.log_date === date);
+
+  const lane1Raw = (document.getElementById("simLane1Rate")?.value || "").trim();
+  const lane2Raw = (document.getElementById("simLane2Rate")?.value || "").trim();
+
+  let lane1Rate = lane1Raw === "" ? null : Number(lane1Raw);
+  let lane2Rate = lane2Raw === "" ? null : Number(lane2Raw);
+
+  const lane1Auto = lane1Rate == null ? getAverageLaneRateSoFar(rowsForDate, 1) : null;
+  const lane2Auto = lane2Rate == null ? getAverageLaneRateSoFar(rowsForDate, 2) : null;
+
+  if(lane1Rate == null && lane1Auto) lane1Rate = lane1Auto.ratePerFullHour;
+  if(lane2Rate == null && lane2Auto) lane2Rate = lane2Auto.ratePerFullHour;
+
+  if(lane1Rate == null || !Number.isFinite(lane1Rate) || lane1Rate < 0){
+    setStatus("Simulator: Lane 1 rate missing/invalid. Log at least one Lane 1 entry (or type a rate).", false);
+    return;
+  }
+  if(lane2Rate == null || !Number.isFinite(lane2Rate) || lane2Rate < 0){
+    setStatus("Simulator: Lane 2 rate missing/invalid. Log at least one Lane 2 entry (or type a rate).", false);
+    return;
+  }
+
+  const manualStart = ($("#simStartBlock")?.value || "").trim();
+  const startBlock = manualStart || autoStartBlockFromNow() || "7am-8am";
+
+  const mode = ($("#simMode")?.value || "withActuals").trim();
+
+  const lane1Actual = sumLaneActuals(rowsForDate, 1);
+  const lane2Actual = sumLaneActuals(rowsForDate, 2);
+  const actualTotal = lane1Actual + lane2Actual;
+
+  const lane1Proj = projectedFromBlock(startBlock, lane1Rate);
+  const lane2Proj = projectedFromBlock(startBlock, lane2Rate);
+  const projTotal = lane1Proj + lane2Proj;
+
+  const finalLane1 = mode === "withActuals" ? (lane1Actual + lane1Proj) : lane1Proj;
+  const finalLane2 = mode === "withActuals" ? (lane2Actual + lane2Proj) : lane2Proj;
+  const finalTotal = finalLane1 + finalLane2;
+
+  const resultsEl = document.getElementById("simResults");
+  if(resultsEl){
+    resultsEl.classList.remove("status-ok","status-warn","status-err");
+    resultsEl.classList.add("status-ok");
+
+    resultsEl.innerHTML = `
+      <div><b>Simulated to end of shift</b> • Date: <b>${escapeHtml(date)}</b> • Start block: <b>${escapeHtml(startBlock)}</b></div>
+      <div style="margin-top:6px;">
+        Lane 1: <b>${Math.round(finalLane1).toLocaleString()}</b> pcs
+        <span style="color:var(--muted);"> (rate ${lane1Rate.toLocaleString()}/hr)</span>
+      </div>
+      <div>
+        Lane 2: <b>${Math.round(finalLane2).toLocaleString()}</b> pcs
+        <span style="color:var(--muted);"> (rate ${lane2Rate.toLocaleString()}/hr)</span>
+      </div>
+      <div style="margin-top:6px;">
+        <b>Total:</b> <b>${Math.round(finalTotal).toLocaleString()}</b> pcs
+        <span style="color:var(--muted);">
+          ${mode === "withActuals"
+            ? `(actual so far ${actualTotal.toLocaleString()} + projected ${Math.round(projTotal).toLocaleString()})`
+            : `(projection only)`
+          }
+        </span>
+      </div>
+      <div style="margin-top:6px; color:var(--muted); font-size:12px;">
+        Break blocks are weighted (15m break = 0.75 hr, 10m break = 0.833 hr).
+        Lane actuals are detected by worker name containing "Lane 1" / "Lane 2".
+      </div>
+    `;
+  }
+
+  setStatus("Simulator ran.", true);
+}
+
+function clearSimulator(){
+  const ids = ["simLane1Rate","simLane2Rate","simStartBlock","simMode"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(el.tagName === "SELECT") el.value = (id === "simMode" ? "withActuals" : "");
+    else el.value = "";
+  });
+  const r = document.getElementById("simResults");
+  if(r) r.innerHTML = "";
+}
+
+/* -------------------- INIT -------------------- */
+document.addEventListener("DOMContentLoaded", async () => {
+  $("#logDate").value = todayIso();
+  setFreshness(`Last updated: — (Local)`);
+
+  syncFilterMirrors("packTypeFilter");
+
+  loadWorkerDirectory();
+  initQuickQtyButtons();
+  autoSelectHourBlock();
+  loadTodayEntries();
+  updateWeeklyCounter();
+  updateDailySummaryChart();
+
+  $("#submitBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:false }));
+  $("#saveAndStayBtn").addEventListener("click", () => saveEntry({ stayOnWorkerHour:true }));
+
+  $("#todayFilterBtn").addEventListener("click", async () => {
+    $("#logDate").value = todayIso();
+    loadTodayEntries();
+    updateWeeklyCounter();
+  });
+
+  const ptb = document.getElementById("printTemplateBtn");
+  if(ptb) ptb.addEventListener("click", () => alert("Print template function is below in your original file. Paste this full file over your existing one so it stays included."));
+
+  const simBtn = document.getElementById("simulateBtn");
+  if(simBtn) simBtn.addEventListener("click", simulateTotals);
+
+  const simAuto = document.getElementById("simulateAutoRateBtn");
+  if(simAuto) simAuto.addEventListener("click", fillSimulatorRatesFromLog);
+
+  const simClear = document.getElementById("simulateClearBtn");
+  if(simClear) simClear.addEventListener("click", clearSimulator);
+
+  const trendDays = document.getElementById("trendDays");
+  const trendOrder = document.getElementById("trendOrder");
+  if(trendDays) trendDays.addEventListener("change", updateDailySummaryChart);
+  if(trendOrder) trendOrder.addEventListener("change", updateDailySummaryChart);
+
+  const packTypeFilter = document.getElementById("packTypeFilter");
+  const packTypeFilterMirror = document.getElementById("packTypeFilterMirror");
+
+  if(packTypeFilter){
+    packTypeFilter.addEventListener("change", () => {
+      syncFilterMirrors("packTypeFilter");
+      loadTodayEntries();
+      updateWeeklyCounter();
+      updateDailySummaryChart();
+    });
+  }
+  if(packTypeFilterMirror){
+    packTypeFilterMirror.addEventListener("change", () => {
+      syncFilterMirrors("packTypeFilterMirror");
+      loadTodayEntries();
+      updateWeeklyCounter();
+      updateDailySummaryChart();
+    });
+  }
+
+  document.querySelectorAll("[data-metric-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.getAttribute("data-metric-toggle");
+      if(!key || !(key in DAILY_METRIC_VIS)) return;
+
+      DAILY_METRIC_VIS[key] = !DAILY_METRIC_VIS[key];
+      refreshMetricButtonsUI();
+      applyMetricVisibilityToChart();
+    });
+  });
+
+  $("#exportCsvBtn").addEventListener("click", exportCsv);
+
+  $("#wipeAllBtn").addEventListener("click", () => {
+    const ok = confirm("Wipe all local workers + entries for this dashboard on THIS computer/browser?");
+    if(!ok) return;
+    localStorage.removeItem(STORE_KEY);
+    localStorage.removeItem(WORKERS_KEY);
+    setStatus("Wiped. Reloading defaults...", true);
+    loadWorkerDirectory();
+    loadTodayEntries();
+    refreshPartSuggestions();
+    updateWeeklyCounter();
+    updateDailySummaryChart();
+  });
+
+  $("#logDate").addEventListener("change", () => {
+    loadTodayEntries();
+    updateWeeklyCounter();
+  });
+
+  ["logDate","hourBlock","workerName","qty","jobRef","orderQty"].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("input", () => updateRealtimeValidation());
+    el.addEventListener("change", () => updateRealtimeValidation());
+  });
+
+  const tbody = document.getElementById("entriesBody");
+  if(tbody){
+    tbody.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if(!btn) return;
+
+      const action = btn.getAttribute("data-action");
+      const id = btn.getAttribute("data-id");
+      if(!id) return;
+
+      if(action === "edit"){
+        const row = fetchRowByIdLocal(id);
+        if(!row){
+          setStatus("Entry not found (may have been deleted).", false);
+          return;
+        }
+        openEditModalWithRow(row);
+      }
+
+      if(action === "delete"){
+        const ok = confirm("Delete this entry? This cannot be undone.");
+        if(!ok) return;
+        deleteRowByIdLocal(id);
+        setStatus("Entry deleted.", true);
+      }
+    });
+  }
+
+  const howModal = document.getElementById("howItWorksModal");
+  const openBtn = document.getElementById("howItWorksBtn");
+  const closeBtn = document.getElementById("howItWorksCloseBtn");
+  if(openBtn && howModal){ openBtn.addEventListener("click", () => howModal.style.display = "flex"); }
+  if(closeBtn && howModal){ closeBtn.addEventListener("click", () => howModal.style.display = "none"); }
+  if(howModal){
+    howModal.addEventListener("click", (e) => { if(e.target === howModal) howModal.style.display = "none"; });
+  }
+
+  const manageModal = document.getElementById("manageWorkersModal");
+  const manageOpenBtn = document.getElementById("manageWorkersBtn");
+  const manageCloseBtn = document.getElementById("manageWorkersCloseBtn");
+  const addWorkerBtn = document.getElementById("addWorkerBtn");
+  const newWorkerInput = document.getElementById("newWorkerName");
+  const mwBody = document.getElementById("workerDirBody");
+
+  function openManageWorkers(){ if(manageModal) manageModal.style.display = "flex"; }
+  function closeManageWorkers(){ if(manageModal) manageModal.style.display = "none"; }
+
+  if(manageOpenBtn && manageModal){
+    manageOpenBtn.addEventListener("click", () => openManageWorkers());
+  }
+  if(manageCloseBtn && manageModal){
+    manageCloseBtn.addEventListener("click", () => closeManageWorkers());
+  }
+  if(manageModal){
+    manageModal.addEventListener("click", (e) => {
+      if(e.target === manageModal) closeManageWorkers();
+    });
+  }
+
+  if(addWorkerBtn){
+    addWorkerBtn.addEventListener("click", async () => {
+      const name = (newWorkerInput?.value || "").trim();
+      await addWorkerName(name);
+      if(newWorkerInput) newWorkerInput.value = "";
+    });
+  }
+  if(newWorkerInput){
+    newWorkerInput.addEventListener("keydown", async (e) => {
+      if(e.key === "Enter"){
+        e.preventDefault();
+        const name = (newWorkerInput.value || "").trim();
+        await addWorkerName(name);
+        newWorkerInput.value = "";
+      }
+    });
+  }
+
+  if(mwBody){
+    mwBody.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-wd-action]");
+      if(!btn) return;
+
+      const action = btn.getAttribute("data-wd-action");
+      const id = btn.getAttribute("data-wd-id");
+
+      if(action === "save"){
+        const input = document.querySelector(`input[data-wd-input="${CSS.escape(id)}"]`);
+        const next = input ? input.value : "";
+        await updateWorkerName(id, next);
+      }
+
+      if(action === "delete"){
+        const row = (WORKER_DIR_CACHE || []).find(x => String(x.id) === String(id));
+        const name = row?.worker_name || "this name";
+        const ok = confirm(`Delete "${name}" from the directory?`);
+        if(!ok) return;
+        await deleteWorkerName(id);
+      }
+    });
+  }
+});
+</script>
+
+<!-- EDIT ENTRY MODAL -->
+<div id="editEntryModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10000;">
+  <div style="width:min(720px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Edit entry (Local)</div>
+      <button class="btn" id="editEntryCloseBtn" type="button" onclick="document.getElementById('editEntryModal').style.display='none'">Close</button>
+    </div>
+
+    <div class="form-grid" style="margin-top:10px;">
+      <input type="hidden" id="editEntryId"/>
+
+      <div class="field">
+        <label for="editLogDate">Date</label>
+        <input type="date" id="editLogDate">
+      </div>
+
+      <div class="field">
+        <label for="editHourBlock">Hour block</label>
+        <select id="editHourBlock">
+          <optgroup label="— Day Shift —">
+            <option>7am-8am</option>
+            <option>8am-9am</option>
+            <option>9am-10am (15m break)</option>
+            <option>10am-11am</option>
+            <option>11am-12pm</option>
+            <option>12:30pm-1:30pm</option>
+            <option>1:30pm-2:30pm (10m break)</option>
+            <option>2:30pm-3:30pm</option>
+          </optgroup>
+          <optgroup label="— Night Shift —">
+            <option>4:00pm-5:00pm</option>
+            <option>5:00pm-6:00pm</option>
+            <option>6:00pm-6:45pm (15m break)</option>
+            <option>7:00pm-8:00pm</option>
+            <option>8:00pm-9:00pm</option>
+            <option>9:30pm-10:30pm</option>
+            <option>10:30pm-11:30pm</option>
+            <option>11:30pm-12:30am (10m break)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editWorkerName">Packer / Station</label>
+        <input type="text" id="editWorkerName" placeholder="Exact name/station">
+      </div>
+
+      <div class="field">
+        <label for="editPartNumber">Part #</label>
+        <input type="text" id="editPartNumber" placeholder="e.g. 0600-2436">
+      </div>
+
+      <div class="field">
+        <label for="editPackType">Pack type</label>
+        <select id="editPackType">
+          <option value="">Select...</option>
+          <option value="stock">Stock</option>
+          <option value="special">Special</option>
+          <option value="rework">Rework</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="editQty">Qty</label>
+        <input type="number" id="editQty" min="0" inputmode="numeric">
+      </div>
+
+      <div class="field">
+        <label for="editJobRef">Job Ref</label>
+        <input type="text" id="editJobRef" placeholder="Optional">
+      </div>
+
+      <div class="field">
+        <label for="editOrderQty">Order Qty (total)</label>
+        <input type="number" id="editOrderQty" min="1" step="1" inputmode="numeric" placeholder="Optional">
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <label for="editNotes">Notes</label>
+        <input type="text" id="editNotes" placeholder="Optional">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="editEntrySaveBtn" type="button" onclick="saveEditedRowLocal()">Save changes</button>
+    </div>
+
+    <div id="editEntryStatus" class="status-line"></div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS MODAL -->
+<div id="howItWorksModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:9999;">
+  <div style="width:min(720px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">How it works</div>
+      <button class="btn" id="howItWorksCloseBtn" type="button">Close</button>
+    </div>
+
+    <div style="font-size:13px; color:var(--text); line-height:1.45; margin-top:10px;">
+      <b>Local-only mode</b>
+      <ul style="margin:6px 0 10px 18px;">
+        <li>Everything is saved to <b>this browser</b> (localStorage).</li>
+        <li>No internet, no login, no database required.</li>
+        <li>Use <b>Export CSV</b> if you need to share or archive.</li>
+      </ul>
+
+      <b>Logging flow</b>
+      <ol style="margin:6px 0 10px 18px;">
+        <li>Select <b>Date</b>, <b>Hour block</b>, and <b>Packer/Station</b>.</li>
+        <li>Enter <b>Part #</b>, choose <b>Pack type</b>, then enter <b>Qty</b>.</li>
+        <li>Optional: add <b>Job Ref</b>, <b>Order Qty</b>, and <b>Notes</b>.</li>
+        <li>Click <b>Save entry</b> (or <b>Save &amp; stay</b> to advance the hour block).</li>
+      </ol>
+
+      <b>Shift schedules</b>
+      <div style="margin-top:6px;">
+        The hour block dropdown is split into <b>Day Shift</b> (7am–3:30pm) and <b>Night Shift</b> (4pm–12:30am).
+        The current block is auto-selected based on the time of day.
+        <b>Save &amp; stay</b> advances through all blocks in order across both shifts.
+      </div>
+
+      <b>Daily totals</b>
+      <div style="margin-top:6px;">
+        Totals uses <b>adjusted hours</b> (break blocks are weighted) to calculate pcs/adj-hr.
+        Break multipliers: 15m break = 0.75 hr, 10m break = 0.833 hr.
+      </div>
+
+      <div style="margin-top:10px;">
+        <b>Pack type filter</b>
+        <ul style="margin:6px 0 0 18px;">
+          <li>The filter (All / Stock / Special / Rework) affects: Today's table, Today totals, the weekly counter, weekly target planner, and the daily summary graph.</li>
+          <li>The weekly planner assumes a <b>Mon–Sat</b> workweek with a weekly target of <b>2,500</b>.</li>
+          <li>Edit/Delete always applies to the underlying entry (even if you're filtered).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE WORKERS MODAL -->
+<div id="manageWorkersModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); z-index:10001;">
+  <div style="width:min(760px, 100%); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,.18);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <div class="card-title" style="margin:0;">Manage packers / stations</div>
+      <button class="btn" id="manageWorkersCloseBtn" type="button">Close</button>
+    </div>
+
+    <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+      Add / rename / delete names here. The dropdown updates automatically.
+      <span class="tag" style="margin-left:6px;">Local-only</span>
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+      <input id="newWorkerName" type="text" placeholder="New packer/station name"
+             style="flex:1; min-width:240px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-size:14px;" />
+      <button class="btn btn-primary" id="addWorkerBtn" type="button">Add</button>
+    </div>
+
+    <div id="workerDirStatus" class="status-line" style="margin-top:8px;"></div>
+
+    <div class="table-wrap" style="margin-top:10px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:55%;">Name</th>
+            <th style="width:45%;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="workerDirBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
