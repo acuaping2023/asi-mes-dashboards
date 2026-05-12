@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Packing Hourly Logger (Local v1)</title>
+  <title>Packing Hourly Logger (Local v1.1)</title>
 
   <!-- Chart.js (Daily Summary Graph) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -504,10 +504,12 @@
   </div>
 
   <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
-    <div class="tag">Local v1</div>
+    <div class="tag">Local v1.1</div>
     <div class="tag" id="freshnessTag">Last updated: —</div>
     <button class="btn" id="howItWorksBtn" type="button">How it works</button>
     <button class="btn" id="exportCsvBtn" type="button">Export CSV</button>
+    <button class="btn" id="importCsvBtn" type="button">Import CSV</button>
+    <input type="file" id="importCsvInput" accept=".csv,text/csv" style="display:none;">
     <button class="btn btn-danger" id="wipeAllBtn" type="button">Wipe all (local)</button>
   </div>
 </header>
@@ -2162,6 +2164,226 @@ function exportCsv(){
   setStatus("CSV exported.", true);
 }
 
+/* -------------------- CSV IMPORT -------------------- */
+function parseCsvText(text){
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for(let i = 0; i < text.length; i++){
+    const char = text[i];
+    const next = text[i + 1];
+
+    if(char === '"' && inQuotes && next === '"'){
+      cell += '"';
+      i++;
+      continue;
+    }
+
+    if(char === '"'){
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if(char === "," && !inQuotes){
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if((char === "\n" || char === "\r") && !inQuotes){
+      if(char === "\r" && next === "\n") i++;
+
+      row.push(cell);
+
+      const hasContent = row.some(v => String(v || "").trim() !== "");
+      if(hasContent) rows.push(row);
+
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell);
+  const hasContent = row.some(v => String(v || "").trim() !== "");
+  if(hasContent) rows.push(row);
+
+  return rows;
+}
+
+function normalizeCsvHeader(h){
+  return String(h || "")
+    .trim()
+    .replace(/^﻿/, "")
+    .toLowerCase();
+}
+
+function cleanImportedEntry(raw){
+  const logDate = String(raw.log_date || "").trim();
+  const hourBlock = String(raw.hour_block || "").trim();
+  const workerName = String(raw.worker_name || "").trim();
+  const partNumber = String(raw.part_number || "").trim();
+
+  const qtyRaw = String(raw.qty ?? "").trim();
+  const qty = Number(qtyRaw);
+
+  if(!logDate || !hourBlock || !workerName || !partNumber) return null;
+  if(!Number.isFinite(qty) || qty < 0) return null;
+
+  const orderQtyRaw = String(raw.order_qty ?? "").trim();
+  let orderQty = null;
+  if(orderQtyRaw !== ""){
+    const parsedOrderQty = parseInt(orderQtyRaw, 10);
+    orderQty = Number.isFinite(parsedOrderQty) && parsedOrderQty > 0 ? parsedOrderQty : null;
+  }
+
+  return {
+    id: String(raw.id || "").trim() || uuid(),
+    log_date: logDate,
+    hour_block: hourBlock,
+    role: String(raw.role || "packer").trim() || "packer",
+    worker_name: workerName,
+    part_number: partNumber,
+    pack_type: String(raw.pack_type || "").trim() || null,
+    qty,
+    job_ref: String(raw.job_ref || "").trim() || null,
+    order_qty: orderQty,
+    notes: String(raw.notes || "").trim() || null
+  };
+}
+
+function entryMergeKey(row){
+  return [
+    String(row.log_date || "").trim(),
+    String(row.hour_block || "").trim(),
+    String(row.worker_name || "").trim().toLowerCase(),
+    String(row.part_number || "").trim().toLowerCase()
+  ].join("||");
+}
+
+function importCsvText(text){
+  const parsed = parseCsvText(text);
+
+  if(!parsed.length || parsed.length < 2){
+    setStatus("CSV import failed: file is empty or missing data rows.", false);
+    return;
+  }
+
+  const headers = parsed[0].map(normalizeCsvHeader);
+
+  const requiredHeaders = ["log_date","hour_block","worker_name","part_number","qty"];
+  const missing = requiredHeaders.filter(h => !headers.includes(h));
+
+  if(missing.length){
+    setStatus(`CSV import failed: missing required column(s): ${missing.join(", ")}`, false);
+    return;
+  }
+
+  const importedRows = [];
+
+  for(let i = 1; i < parsed.length; i++){
+    const values = parsed[i];
+    const raw = {};
+
+    headers.forEach((h, idx) => {
+      raw[h] = values[idx] ?? "";
+    });
+
+    const cleaned = cleanImportedEntry(raw);
+    if(cleaned) importedRows.push(cleaned);
+  }
+
+  if(!importedRows.length){
+    setStatus("CSV import failed: no valid packing rows found.", false);
+    return;
+  }
+
+  const existingRows = loadEntries();
+  const byId = new Map();
+  const byMergeKey = new Map();
+
+  existingRows.forEach((row, idx) => {
+    if(row.id) byId.set(String(row.id), idx);
+    byMergeKey.set(entryMergeKey(row), idx);
+  });
+
+  let added = 0;
+  let updated = 0;
+
+  importedRows.forEach(row => {
+    const idKey = String(row.id || "");
+    const mergeKey = entryMergeKey(row);
+
+    if(idKey && byId.has(idKey)){
+      const idx = byId.get(idKey);
+      existingRows[idx] = { ...existingRows[idx], ...row };
+      byMergeKey.set(mergeKey, idx);
+      updated++;
+      return;
+    }
+
+    if(byMergeKey.has(mergeKey)){
+      const idx = byMergeKey.get(mergeKey);
+      existingRows[idx] = { ...existingRows[idx], ...row, id: existingRows[idx].id || row.id };
+      updated++;
+      return;
+    }
+
+    existingRows.push(row);
+    const newIdx = existingRows.length - 1;
+    if(row.id) byId.set(String(row.id), newIdx);
+    byMergeKey.set(mergeKey, newIdx);
+    added++;
+  });
+
+  saveEntries(existingRows);
+
+  // Automatically add imported packer/station names to the dropdown directory.
+  const currentWorkers = loadWorkers();
+  const importedWorkers = importedRows
+    .map(r => r.worker_name)
+    .filter(Boolean);
+
+  saveWorkers([...currentWorkers, ...importedWorkers]);
+
+  loadWorkerDirectory();
+  loadTodayEntries();
+  refreshPartSuggestions();
+  updateWeeklyCounter();
+  updateDailySummaryChart();
+
+  setStatus(`CSV imported. Added ${added} row(s), updated ${updated} row(s).`, true);
+}
+
+function handleCsvImportFile(file){
+  if(!file){
+    setStatus("No CSV file selected.", false);
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function(e){
+    try{
+      const text = String(e.target.result || "");
+      importCsvText(text);
+    } catch(err){
+      console.error(err);
+      setStatus("CSV import failed. Check the file format and try again.", false);
+    }
+  };
+
+  reader.onerror = function(){
+    setStatus("CSV import failed. Could not read the selected file.", false);
+  };
+
+  reader.readAsText(file);
+}
+
 /* -------------------- AUTO SELECT HOUR BLOCK -------------------- */
 function autoSelectHourBlock(){
   const select = $("#hourBlock");
@@ -2511,6 +2733,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   $("#exportCsvBtn").addEventListener("click", exportCsv);
+
+  const importCsvBtn = document.getElementById("importCsvBtn");
+  const importCsvInput = document.getElementById("importCsvInput");
+
+  if(importCsvBtn && importCsvInput){
+    importCsvBtn.addEventListener("click", () => {
+      importCsvInput.value = "";
+      importCsvInput.click();
+    });
+
+    importCsvInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      handleCsvImportFile(file);
+    });
+  }
 
   $("#wipeAllBtn").addEventListener("click", () => {
     const ok = confirm("Wipe all local workers + entries for this dashboard on THIS computer/browser?");
