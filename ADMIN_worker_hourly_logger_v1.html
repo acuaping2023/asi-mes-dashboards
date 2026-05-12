@@ -618,10 +618,10 @@ function renderDailyTotals(rows){
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WEEKLY ASSEMBLY REPORT — v1.7
-// Pulls Monday–Saturday assembler totals from worker_hourly_log and reuses the
-// same adjusted-hour calculation used by the daily totals.
-// Includes formatted Outlook email table, packing table template, and subject.
+// WEEKLY PRODUCTION REPORT — v1.8
+// Pulls Monday–Saturday assembler totals from worker_hourly_log.
+// Pulls packing totals from the Packing Hourly Logger localStorage key.
+// Includes formatted Outlook email table, packing table, and subject.
 // ─────────────────────────────────────────────────────────────────────────────
 let WEEKLY_REPORT_CACHE = [];
 let WEEKLY_EMAIL_HTML = "";
@@ -717,6 +717,32 @@ async function fetchAssemblerRowsForDate(date) {
   return data || [];
 }
 
+const PACKING_LOCAL_STORAGE_KEY = "PACKING_LOG_ENTRIES_v1";
+
+function loadPackingEntriesFromLocalStorage() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(PACKING_LOCAL_STORAGE_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch (_err) {
+    return [];
+  }
+}
+
+function fetchPackingRowsForDate(date) {
+  return loadPackingEntriesFromLocalStorage()
+    .filter(r => String(r.log_date || "").trim() === date)
+    .map(r => ({
+      ...r,
+      role: (r.role || "packer"),
+      qty: Number(r.qty || 0)
+    }));
+}
+
+function hasPackingLocalData() {
+  return loadPackingEntriesFromLocalStorage().length > 0;
+}
+
+
 function buildWeeklyExcelRows(reportRows) {
   return (reportRows || []).map(r => [
     r.dateLabel,
@@ -750,12 +776,12 @@ function buildWeeklyEmailText(reportRows) {
   const avgPph = totalHrs > 0 ? totalPcs / totalHrs : 0;
 
   const dailyLines = reportRows.map(r => {
-    return `${formatDateWithDayAbbrev(r.dateLabel)} | 1st Shift: ${r.dayPieces.toLocaleString()} pcs / ${r.dayHours.toFixed(2)} hrs | 2nd Shift: ${r.nightPieces.toLocaleString()} pcs / ${r.nightHours.toFixed(2)} hrs | Daily Total: ${r.totalPieces.toLocaleString()} pcs / ${r.totalHours.toFixed(2)} hrs`;
+    return `${formatDateWithDayAbbrev(r.dateLabel)} | Assembly: ${r.totalPieces.toLocaleString()} pcs / ${r.totalHours.toFixed(2)} hrs | Packing: ${r.packTotalPieces.toLocaleString()} pcs / ${r.packTotalHours.toFixed(2)} hrs`;
   }).join("\n");
 
   return `Good morning,
 
-Below is the Mirror Department production summary from the Worker Hourly Logger for the week of ${start}–${end}.
+Below is the Mirror Department production summary for the week of ${start}–${end}.
 
 WEEKLY ASSEMBLY SUMMARY
 
@@ -810,12 +836,12 @@ function buildWeeklyEmailHtml(reportRows) {
   const packingRows = reportRows.map(r => `
     <tr>
       <td style="${dateCellStyle}">${formatDateWithDayAbbrev(r.dateLabel)}</td>
-      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
-      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
-      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
-      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
-      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
-      <td style="${blankCellStyle}width:${numColWidth};">&nbsp;</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.packDayPieces.toLocaleString()}</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.packDayHours.toFixed(2)}</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.packNightPieces.toLocaleString()}</td>
+      <td style="${cellStyle}width:${numColWidth};">${r.packNightHours.toFixed(2)}</td>
+      <td style="${totalCellStyle}width:${numColWidth};">${r.packTotalPieces.toLocaleString()}</td>
+      <td style="${totalCellStyle}width:${numColWidth};">${r.packTotalHours.toFixed(2)}</td>
     </tr>
   `).join("");
 
@@ -838,7 +864,7 @@ function buildWeeklyEmailHtml(reportRows) {
     <p style="margin:0 0 8px 0;">Good morning,</p>
 
     <p style="margin:0 0 10px 0;">
-      Below is the Mirror Department production summary from the Worker Hourly Logger for the week of 
+      Below is the Mirror Department production summary from the week of 
       <b>${start}–${end}</b>.
     </p>
 
@@ -910,6 +936,10 @@ async function generateWeeklyAssemblyReport() {
       const day = calculateShiftTotals(rows, DAY_SHIFT_BLOCKS);
       const night = calculateShiftTotals(rows, NIGHT_SHIFT_BLOCKS);
 
+      const packingRows = fetchPackingRowsForDate(date);
+      const packDay = calculateShiftTotals(packingRows, DAY_SHIFT_BLOCKS);
+      const packNight = calculateShiftTotals(packingRows, NIGHT_SHIFT_BLOCKS);
+
       reportRows.push({
         isoDate: date,
         dateLabel: formatDateMDY(date),
@@ -918,7 +948,13 @@ async function generateWeeklyAssemblyReport() {
         nightPieces: night.totalPieces,
         nightHours: night.adjustedHours,
         totalPieces: day.totalPieces + night.totalPieces,
-        totalHours: day.adjustedHours + night.adjustedHours
+        totalHours: day.adjustedHours + night.adjustedHours,
+        packDayPieces: packDay.totalPieces,
+        packDayHours: packDay.adjustedHours,
+        packNightPieces: packNight.totalPieces,
+        packNightHours: packNight.adjustedHours,
+        packTotalPieces: packDay.totalPieces + packNight.totalPieces,
+        packTotalHours: packDay.adjustedHours + packNight.adjustedHours
       });
     }
 
@@ -957,7 +993,7 @@ async function generateWeeklyAssemblyReport() {
 
     WEEKLY_EMAIL_HTML = buildWeeklyEmailHtml(reportRows);
 
-    setWeeklyReportStatus("Weekly report generated. You can copy the subject, Excel rows, or formatted email.", true);
+    setWeeklyReportStatus(hasPackingLocalData() ? "Weekly report generated with assembly + packing totals." : "Weekly report generated. No packing localStorage data found on this browser/origin.", true);
   } catch (err) {
     console.error("Weekly report error:", err);
     setWeeklyReportStatus(`Error generating weekly report: ${err.message || err}`, false);
