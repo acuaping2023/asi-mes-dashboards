@@ -191,6 +191,8 @@ let lastRows=[];
 let demoMode=false;
 let rtChannel=null;
 let refreshTimer=null;
+let livePollTimer=null;
+let efficiencyBroadcastChannel=null;
 
 // ── Shift map: loaded ONCE before first render, then kept fresh via realtime ──
 // Key: worker_name.trim().toLowerCase()  Value: "day"|"night"|"both"
@@ -227,10 +229,52 @@ function subscribeShiftMapRealtime(){
   }).subscribe();
 }
 
-function scheduleLiveRefresh(){
+function scheduleLiveRefresh(reason="live update"){
   if(demoMode) return;
   if(refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer=setTimeout(()=>loadAndRender(),450);
+  refreshTimer=setTimeout(()=>{
+    console.log(`[Efficiency Dashboard] Refreshing from ${reason}`);
+    loadAndRender();
+  },450);
+}
+
+function startCrossTabRefreshListener(){
+  // Fast same-origin refresh when the Worker Hourly Logger saves/edits/deletes a row.
+  // This works even when Supabase realtime is disabled for the table.
+  try{
+    if("BroadcastChannel" in window){
+      if(efficiencyBroadcastChannel) efficiencyBroadcastChannel.close();
+      efficiencyBroadcastChannel=new BroadcastChannel("asi-efficiency-refresh");
+      efficiencyBroadcastChannel.onmessage=(event)=>{
+        const msg=event.data||{};
+        if(msg.type==="worker_hourly_log_changed"&&isDateInsideCurrentRange(msg.log_date)){
+          scheduleLiveRefresh("logger BroadcastChannel event");
+        }
+      };
+    }
+  }catch(e){ console.warn("BroadcastChannel setup failed:",e); }
+
+  window.addEventListener("storage",(event)=>{
+    if(event.key!=="ASI_WORKER_HOURLY_LOG_LAST_CHANGE") return;
+    try{
+      const msg=JSON.parse(event.newValue||"{}");
+      if(isDateInsideCurrentRange(msg.log_date)){
+        scheduleLiveRefresh("logger localStorage event");
+      }
+    }catch(_e){
+      scheduleLiveRefresh("logger localStorage event");
+    }
+  });
+}
+
+function startLivePolling(){
+  // Safety net: if Supabase realtime is not enabled/allowed, dashboard still updates automatically.
+  if(livePollTimer) clearInterval(livePollTimer);
+  if(demoMode) return;
+  livePollTimer=setInterval(()=>{
+    if(document.visibilityState!=="hidden") scheduleLiveRefresh("polling fallback");
+  },10000);
+  window.addEventListener("focus",()=>scheduleLiveRefresh("window focus"));
 }
 
 function isDateInsideCurrentRange(dateValue){
@@ -250,13 +294,19 @@ function startRealtime(){
     .channel("we-live-efficiency-refresh")
     .on("postgres_changes",{event:"*",schema:"public",table:"worker_hourly_log"},(payload)=>{
       const d=(payload.new?.log_date||payload.old?.log_date||"").slice(0,10);
-      if(isDateInsideCurrentRange(d)) scheduleLiveRefresh();
+      if(isDateInsideCurrentRange(d)) scheduleLiveRefresh("Supabase realtime worker_hourly_log");
     })
     .on("postgres_changes",{event:"*",schema:"public",table:"worker_daily_log"},(payload)=>{
       const d=(payload.new?.log_date||payload.old?.log_date||"").slice(0,10);
-      if(isDateInsideCurrentRange(d)) scheduleLiveRefresh();
+      if(isDateInsideCurrentRange(d)) scheduleLiveRefresh("Supabase realtime worker_daily_log");
     })
-    .subscribe();
+    .subscribe((status,err)=>{
+      console.log("[Efficiency Dashboard] Supabase realtime status:",status,err||"");
+      if(status==="SUBSCRIBED") setFreshness(`Live updates connected • Last loaded: ${nowStamp()}`);
+      if(status==="CHANNEL_ERROR"||status==="TIMED_OUT"||status==="CLOSED"){
+        console.warn("[Efficiency Dashboard] Realtime issue; polling fallback remains active.",status,err||"");
+      }
+    });
 }
 
 function dateToLocalIso(d){
@@ -819,8 +869,11 @@ document.addEventListener("DOMContentLoaded",()=>{
     demoToggle.checked=demoMode;
     demoToggle.addEventListener("change",()=>{
       demoMode=!!demoToggle.checked; localStorage.setItem(DEMO_KEY,demoMode?"true":"false");
-      if(demoMode){ if(rtChannel){try{supabase.removeChannel(rtChannel);}catch(e){}rtChannel=null;} }
-      else{ shiftMapLoaded=false; startRealtime(); }
+      if(demoMode){
+        if(rtChannel){try{supabase.removeChannel(rtChannel);}catch(e){}rtChannel=null;}
+        if(livePollTimer){clearInterval(livePollTimer);livePollTimer=null;}
+      }
+      else{ shiftMapLoaded=false; startRealtime(); startLivePolling(); }
       loadAndRender();
     });
   }
@@ -831,8 +884,9 @@ document.addEventListener("DOMContentLoaded",()=>{
   document.getElementById("howItWorksCloseBtn")?.addEventListener("click",()=>{ if(modal) modal.style.display="none"; });
   if(modal){ modal.addEventListener("click",(e)=>{ if(e.target===modal) modal.style.display="none"; }); document.addEventListener("keydown",(e)=>{ if(e.key==="Escape"&&modal) modal.style.display="none"; }); }
 
-  // Start realtime + load
-  if(!demoMode){ startRealtime(); subscribeShiftMapRealtime(); }
+  // Start realtime + fallback refresh + cross-tab logger notifications
+  startCrossTabRefreshListener();
+  if(!demoMode){ startRealtime(); subscribeShiftMapRealtime(); startLivePolling(); }
   loadAndRender();
 });
 
