@@ -726,6 +726,42 @@ function getWeekDatesMondayToSaturday(selectedDateStr) {
   return dates;
 }
 
+async function fetchWorkerHourlyRowsPaged({date,fields="*",role=null,orderByIdDesc=false,label="worker hourly rows"}) {
+  const pageSize = 1000;
+  const maxPages = 50;
+  let page = 0;
+  let allRows = [];
+
+  while (page < maxPages) {
+    let query = sb.from("worker_hourly_log")
+      .select(fields)
+      .eq("log_date", date)
+      .range(page * pageSize, page * pageSize + pageSize - 1);
+
+    if (role) query = query.eq("role", role);
+    query = orderByIdDesc ? query.order("id", { ascending: false }) : query.order("id", { ascending: true });
+
+    const { data, error } = await withTimeoutRetry(
+      () => query,
+      { ms: 25000, label, retries: 1, backoffMs: 900 }
+    );
+
+    if (error) throw error;
+
+    const rows = data || [];
+    allRows = allRows.concat(rows);
+
+    if (rows.length < pageSize) break;
+    page++;
+  }
+
+  if (page >= maxPages) {
+    throw new Error(`${label} returned more than ${maxPages * pageSize} rows for ${date}. Narrow the date or raise maxPages.`);
+  }
+
+  return allRows;
+}
+
 async function fetchAssemblerRowsForDate(date) {
   if (demoMode) {
     return loadDemoEntries().filter(
@@ -739,17 +775,13 @@ async function fetchAssemblerRowsForDate(date) {
     throw new Error("Sign in to generate the weekly report.");
   }
 
-  const { data, error } = await withTimeoutRetry(() =>
-    sb.from("worker_hourly_log")
-      .select("id,log_date,hour_block,role,worker_name,qty")
-      .eq("log_date", date)
-      .eq("role", "assembler")
-      .limit(1000),
-    { ms: 25000, label: "weekly assembly report load", retries: 1, backoffMs: 900 }
-  );
-
-  if (error) throw error;
-  return data || [];
+  return await fetchWorkerHourlyRowsPaged({
+    date,
+    fields: "id,log_date,hour_block,role,worker_name,qty",
+    role: "assembler",
+    orderByIdDesc: false,
+    label: "weekly assembly report load"
+  });
 }
 
 const PACKING_LOCAL_STORAGE_KEY = "PACKING_LOG_ENTRIES_v1";
@@ -1407,10 +1439,14 @@ async function loadTodayEntries(){
   const{data:{session}}=await sb.auth.getSession();
   if(!session?.user){ tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:8px;">Sign in to view entries.</td></tr>'; if(tag) tag.textContent=""; renderDailyTotals([]); return; }
   try{
-    const q=sb.from("worker_hourly_log").select("id,log_date,hour_block,role,worker_name,part_number,mirror_type,mirror_class,job_ref,order_qty,qty").eq("log_date",date).order("id",{ascending:false}).limit(250);
-    const{data,error}=await withTimeoutRetry(()=>q,{ms:25000,label:"today entries load",retries:1,backoffMs:900});
+    const data = await fetchWorkerHourlyRowsPaged({
+      date,
+      fields: "id,log_date,hour_block,role,worker_name,part_number,mirror_type,mirror_class,job_ref,order_qty,qty",
+      role: null,
+      orderByIdDesc: true,
+      label: "today entries load"
+    });
     if(reqId!==ENTRIES_REQ) return;
-    if(error){ console.error("Today entries error:",error); tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:8px;">Error loading entries.</td></tr>'; if(tag) tag.textContent=""; setFreshness(`Last updated: ${nowStamp()} (Error)`); return; }
     if(!data||!data.length){ tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:8px;">No entries for this date yet.</td></tr>'; if(tag) tag.textContent=date; renderDailyTotals([]); setFreshness(`Last updated: ${nowStamp()}`); return; }
     TODAY_ROWS_CACHE=(data||[]).map(r=>({...r}));
     data.sort((a,b)=>{ const oa=getHourBlockSortValue(a.hour_block||""),ob=getHourBlockSortValue(b.hour_block||""); if(oa!==ob) return oa-ob; return(a.worker_name||"").toLowerCase().localeCompare((b.worker_name||"").toLowerCase()); });
