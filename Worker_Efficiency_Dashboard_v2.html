@@ -233,18 +233,39 @@ function scheduleLiveRefresh(){
   refreshTimer=setTimeout(()=>loadAndRender(),450);
 }
 
-function startRealtime(){
-  if(rtChannel){ try{supabase.removeChannel(rtChannel);}catch(e){} rtChannel=null; }
-  rtChannel=supabase.channel("we-live-worker-daily-log").on("postgres_changes",{event:"*",schema:"public",table:"worker_daily_log"},(payload)=>{
-    const from=$("#fromDate")?.value; const to=$("#toDate")?.value;
-    const d=(payload.new?.log_date||payload.old?.log_date||"").slice(0,10);
-    if(!d) return;
-    if((!from||d>=from)&&(!to||d<=to)) scheduleLiveRefresh();
-  }).subscribe();
+function isDateInsideCurrentRange(dateValue){
+  const from=$("#fromDate")?.value;
+  const to=$("#toDate")?.value;
+  const d=String(dateValue||"").slice(0,10);
+  if(!d) return true;
+  return (!from||d>=from)&&(!to||d<=to);
 }
 
-function todayIso(){ return new Date().toISOString().slice(0,10); }
-function isoNDaysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
+function startRealtime(){
+  if(rtChannel){ try{supabase.removeChannel(rtChannel);}catch(e){} rtChannel=null; }
+  // Listen to both possible sources:
+  // - worker_hourly_log is what the Hourly Logger writes to
+  // - worker_daily_log is kept here for compatibility if your SQL view/table uses it
+  rtChannel=supabase
+    .channel("we-live-efficiency-refresh")
+    .on("postgres_changes",{event:"*",schema:"public",table:"worker_hourly_log"},(payload)=>{
+      const d=(payload.new?.log_date||payload.old?.log_date||"").slice(0,10);
+      if(isDateInsideCurrentRange(d)) scheduleLiveRefresh();
+    })
+    .on("postgres_changes",{event:"*",schema:"public",table:"worker_daily_log"},(payload)=>{
+      const d=(payload.new?.log_date||payload.old?.log_date||"").slice(0,10);
+      if(isDateInsideCurrentRange(d)) scheduleLiveRefresh();
+    })
+    .subscribe();
+}
+
+function dateToLocalIso(d){
+  const copy=new Date(d);
+  copy.setMinutes(copy.getMinutes()-copy.getTimezoneOffset());
+  return copy.toISOString().slice(0,10);
+}
+function todayIso(){ return dateToLocalIso(new Date()); }
+function isoNDaysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return dateToLocalIso(d); }
 function nowStamp(){ return new Date().toLocaleString(); }
 function setFreshness(text){ const el=document.getElementById("freshnessTag"); if(el) el.textContent=text; }
 
@@ -281,9 +302,52 @@ function getDemoRows(){
 }
 
 // ── main load ──
+async function fetchEfficiencyRowsPaged(from,to){
+  // Supabase/PostgREST commonly caps each response. Long date ranges need pagination,
+  // otherwise the dashboard silently stops at the first returned chunk of rows.
+  const pageSize=1000;
+  const maxPages=100;
+  let page=0;
+  let allRows=[];
+
+  while(page<maxPages){
+    let query=supabase
+      .from('v_worker_daily_efficiency')
+      .select('*')
+      .order('log_date',{ascending:true})
+      .order('worker_name',{ascending:true})
+      .order('role',{ascending:true})
+      .order('part_number',{ascending:true})
+      .range(page*pageSize,page*pageSize+pageSize-1);
+
+    if(from) query=query.gte('log_date',from);
+    if(to) query=query.lte('log_date',to);
+
+    const{data,error}=await query;
+    if(error) throw error;
+
+    const rows=data||[];
+    allRows=allRows.concat(rows);
+
+    if(rows.length<pageSize) break;
+    page++;
+  }
+
+  if(page>=maxPages){
+    throw new Error(`Date range returned more than ${maxPages*pageSize} rows. Narrow the range or raise maxPages.`);
+  }
+
+  return allRows;
+}
+
 async function loadAndRender(){
   const from=$("#fromDate").value||null;
   const to=$("#toDate").value||null;
+
+  if(from&&to&&from>to){
+    alert("From date cannot be after To date.");
+    return;
+  }
 
   if(demoMode){
     const data=getDemoRows().filter(r=>(!from||r.log_date>=from)&&(!to||r.log_date<=to)).sort((a,b)=>a.log_date>b.log_date?1:-1);
@@ -293,22 +357,24 @@ async function loadAndRender(){
     lastRows.forEach(r=>{ if(r.worker_name&&r._shift) WORKER_SHIFT_MAP[r.worker_name.toLowerCase()]=r._shift; });
     shiftMapLoaded=true;
     populateWorkerFilter(lastRows); renderAll(lastRows);
-    setFreshness(`Last updated: ${nowStamp()} (Demo)`); return;
+    setFreshness(`Last updated: ${nowStamp()} (Demo) • rows loaded: ${lastRows.length.toLocaleString()}`); return;
   }
 
-  // ── KEY FIX: await shift map BEFORE rendering, so filter is ready ──
+  // Load shift assignments before rendering so worker shift filtering is ready.
   await ensureShiftMap();
 
-  let query=supabase.from('v_worker_daily_efficiency').select('*').order('log_date',{ascending:true}).order('worker_name',{ascending:true});
-  if(from) query=query.gte('log_date',from);
-  if(to) query=query.lte('log_date',to);
-  const{data,error}=await query;
-  if(error){ console.error("Supabase error:",error.message); alert("Error loading data. Check console."); setFreshness(`Last updated: ${nowStamp()} (Error)`); return; }
-  lastRows=data||[];
-  const shape=validateViewShape(lastRows);
-  if(!shape.ok){ console.warn("View missing fields:",shape.missing); alert("View schema mismatch. Missing fields:\n- "+shape.missing.join("\n- ")); }
-  populateWorkerFilter(lastRows); renderAll(lastRows);
-  setFreshness(`Last updated: ${nowStamp()} • latest log_date: ${lastRows.length?lastRows[lastRows.length-1].log_date:"—"}`);
+  try{
+    const data=await fetchEfficiencyRowsPaged(from,to);
+    lastRows=data||[];
+    const shape=validateViewShape(lastRows);
+    if(!shape.ok){ console.warn("View missing fields:",shape.missing); alert("View schema mismatch. Missing fields:\n- "+shape.missing.join("\n- ")); }
+    populateWorkerFilter(lastRows); renderAll(lastRows);
+    setFreshness(`Last updated: ${nowStamp()} • rows loaded: ${lastRows.length.toLocaleString()} • latest log_date: ${lastRows.length?lastRows[lastRows.length-1].log_date:"—"}`);
+  }catch(error){
+    console.error("Supabase error:",error.message||error);
+    alert("Error loading data. Check console.");
+    setFreshness(`Last updated: ${nowStamp()} (Error)`);
+  }
 }
 
 // ── filters ──
@@ -329,7 +395,11 @@ function applyBaseFilters(rows){
     return true;
   });
 }
-function applyNonZeroFilter(rows){ return(rows||[]).filter(r=>{ const e=getEff(r); return e==null||e>0; }); }
+function applyNonZeroFilter(rows){
+  // Do not hide workers with 0% efficiency.
+  // A true zero is still important data and should appear in the dashboard.
+  return rows||[];
+}
 function getBaselineMode(){ return($("#baselineMode")?.value||"75"); }
 function getEff(row){ const v=getBaselineMode()==="100"?Number(row.daily_efficiency_pct_100):Number(row.daily_efficiency_pct_75); return isNaN(v)?null:v; }
 function getTarget(row){ const raw=getBaselineMode()==="100"?row.target_100:row.target_75; if(raw==null||raw==="") return null; const v=Number(raw); return(isNaN(v)||v<=0)?null:v; }
