@@ -268,6 +268,24 @@ function nowStamp(){ return new Date().toLocaleString(); }
 function escapeHtml(str){ return String(str||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
 function setFreshness(text){ const el=document.getElementById("freshnessTag"); if(el) el.textContent=text; }
 
+function notifyEfficiencyDashboard(change){
+  const payload={
+    type:"worker_hourly_log_changed",
+    ts:Date.now(),
+    log_date:change?.log_date||document.getElementById("logDate")?.value||todayIso(),
+    worker_name:change?.worker_name||document.getElementById("workerName")?.value||"",
+    action:change?.action||"save"
+  };
+  try{ localStorage.setItem("ASI_WORKER_HOURLY_LOG_LAST_CHANGE",JSON.stringify(payload)); }catch(_e){}
+  try{
+    if("BroadcastChannel" in window){
+      const bc=new BroadcastChannel("asi-efficiency-refresh");
+      bc.postMessage(payload);
+      setTimeout(()=>bc.close(),250);
+    }
+  }catch(_e){}
+}
+
 function withTimeout(promise,ms=15000,label="Request"){
   return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error(`${label} timed out after ${ms}ms`)),ms))]);
 }
@@ -1619,7 +1637,7 @@ async function saveEntry({stayOnWorkerHour}={stayOnWorkerHour:false}){
       const idx=(rows||[]).findIndex(r=>r.log_date===logDate&&r.hour_block===hourBlock&&r.role===role&&r.worker_name===workerName&&r.part_number===partNumber&&r.mirror_type===mirrorType&&r.mirror_class===mirrorClass);
       if(idx>=0){ rows[idx].qty=qty; rows[idx].job_ref=job_ref; rows[idx].order_qty=order_qty; }
       else{ rows.push({log_date:logDate,hour_block:hourBlock,role,worker_name:workerName,part_number:partNumber,mirror_type:mirrorType,mirror_class:mirrorClass,qty,job_ref,order_qty}); }
-      saveDemoEntries(rows); setStatus("Entry saved (Demo mode).",true);
+      saveDemoEntries(rows); notifyEfficiencyDashboard({log_date:logDate,worker_name:workerName,action:"demo-save"}); setStatus("Entry saved (Demo mode).",true);
       if(!stayOnWorkerHour){ ["hourBlock","workerName","partNumber","mirrorType","mirrorClass","jobRef","orderQty"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; }); }
       else{ const idx2=ORDERED_BLOCKS.indexOf(hourBlock); if(idx2>=0&&idx2<ORDERED_BLOCKS.length-1) $("#hourBlock").value=ORDERED_BLOCKS[idx2+1]; }
       $("#qty").value=""; await loadTodayEntries(); refreshPartSuggestions(); return;
@@ -1637,6 +1655,7 @@ async function saveEntry({stayOnWorkerHour}={stayOnWorkerHour:false}){
       saveErr=insErr;
     }
     if(saveErr){ console.error("Save error:",saveErr); setStatus("Error saving entry. Check console for details.",false); return; }
+    notifyEfficiencyDashboard({log_date:logDate,worker_name:workerName,action:(existing&&existing.length)?"update":"insert"});
     setStatus("Entry saved.",true);
     if(!stayOnWorkerHour){ ["hourBlock","workerName","partNumber","mirrorType","mirrorClass","jobRef","orderQty"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; }); }
     else{ const idx=ORDERED_BLOCKS.indexOf(hourBlock); if(idx>=0&&idx<ORDERED_BLOCKS.length-1) $("#hourBlock").value=ORDERED_BLOCKS[idx+1]; }
@@ -1687,12 +1706,16 @@ async function saveEditedRow(){
   try{
     const{error}=await withTimeoutRetry(()=>sb.from("worker_hourly_log").update(payload).eq("id",id),{ms:20000,label:"save edited row",retries:1,backoffMs:900});
     if(error){ console.error("Edit save error:",error); showEditStatus("Error saving changes. Check console.",false); return; }
+    notifyEfficiencyDashboard({log_date:payload.log_date,worker_name:payload.worker_name,action:"edit"});
     showEditStatus("Saved.",true); await loadTodayEntries(); refreshPartSuggestions(); setTimeout(()=>closeEditModal(),350);
   }catch(err){ console.error("Edit save timeout:",err); showEditStatus("Timed out saving changes. Try again.",false); }
 }
 async function deleteRowById(id){
+  let oldRow=null;
+  try{ oldRow=await fetchRowById(id); }catch(_e){}
   const{error}=await withTimeoutRetry(()=>sb.from("worker_hourly_log").delete().eq("id",id),{ms:20000,label:"delete row",retries:1,backoffMs:900});
   if(error) throw error;
+  notifyEfficiencyDashboard({log_date:oldRow?.log_date,worker_name:oldRow?.worker_name,action:"delete"});
   await loadTodayEntries(); refreshPartSuggestions();
 }
 
